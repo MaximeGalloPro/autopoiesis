@@ -2,9 +2,21 @@
 #include "autopoiesis/renderer.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <thread>
 
 namespace apo {
+static int report_interval_from_env() {
+  const char* configured=std::getenv("REPORT_EVERY_CYCLES");
+  if(!configured) return 1;
+  try {
+    int interval=std::stoi(configured);
+    return interval>0 ? interval : 1;
+  } catch(...) {
+    return 1;
+  }
+}
+
 Decision LocalDecider::decide(const Perception& p) {
   const auto& me=p.value["self"];
   auto acts=p.value["available_actions"].get<std::vector<std::string>>();
@@ -15,7 +27,7 @@ Decision LocalDecider::decide(const Perception& p) {
   return {DecisionType::Action,"move",{{"direction",dirs[std::uniform_int_distribution<size_t>(0,3)(rng_)]}},"I explore"};
 }
 
-Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed){
+Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),report_every_cycles_(report_interval_from_env()){
   agents_={{"a1","Ada",{3,2},100,45,20,{90,20,30,30,40}},{"a2","Borin",{10,5},100,55,15,{25,85,70,90,40}},{"a3","Cyra",{16,7},100,35,60,{40,45,95,55,90}}};
 }
 

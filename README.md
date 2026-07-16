@@ -52,6 +52,8 @@ Pour utiliser OpenAI ou un serveur compatible, renseignez `LLM_API_KEY` et `OPEN
 
 Chaque tentative HTTP consomme une unité du budget `LIMIT_LLM_API_CALLS` (100 par défaut), y compris les retries et les bilans IA de fin de cycle. Les actions quotidiennes locales ne consomment aucun appel API. Le compteur est conservé dans `/data/api_budget.json` et verrouillé entre processus. Pour reprendre le même budget après un redémarrage, utilisez le même `AUTOPOIESIS_RUN_ID` ; sinon un nouvel identifiant de run est créé.
 
+Les réglages de cycle et de modèles sont centralisés dans `.env` : `REPORT_EVERY_CYCLES=3` déclenche les bilans IA tous les trois cycles, `OPENAI_MODEL` choisit le modèle des bilans, et `CODEX_VALIDATOR_MODEL`, `CODEX_VALIDATOR_REASONING_EFFORT`, `CODEX_GOD_MODEL` et `CODEX_GOD_REASONING_EFFORT` choisissent les modèles des deux instances Codex.
+
 La commande manuelle équivalente reste :
 
 ```bash

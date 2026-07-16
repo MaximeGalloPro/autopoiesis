@@ -7,6 +7,7 @@ services:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       LIMIT_LLM_API_CALLS: ${LIMIT_LLM_API_CALLS:-100}
       AUTOPOIESIS_RUN_ID: ${AUTOPOIESIS_RUN_ID:-}
+      REPORT_EVERY_CYCLES: ${REPORT_EVERY_CYCLES:-1}
     volumes:
       - ./data:/data
     stdin_open: true

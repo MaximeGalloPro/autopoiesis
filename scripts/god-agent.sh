@@ -7,13 +7,18 @@ if [[ $# -ne 1 ]]; then
 fi
 
 ROOT="$(git rev-parse --show-toplevel)"
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  source "$ROOT/.env"
+  set +a
+fi
 REQUEST_ID="$1"
 DATA_DIR="${DATA_DIR:-$ROOT/data}"
 RUN_DIR="$DATA_DIR/evolution_runs/$REQUEST_ID"
 WORKTREE="$ROOT/worktrees/god-$REQUEST_ID"
 CODEX_BIN="${CODEX_BIN:-codex}"
-CODEX_MODEL="${CODEX_MODEL:-gpt-5.6-sol}"
-CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-low}"
+CODEX_MODEL="${CODEX_GOD_MODEL:-${CODEX_MODEL:-gpt-5.6-sol}}"
+CODEX_REASONING_EFFORT="${CODEX_GOD_REASONING_EFFORT:-${CODEX_REASONING_EFFORT:-low}}"
 
 if [[ ! -s "$DATA_DIR/approved_feature_requests.jsonl" ]]; then
   echo "Aucune demande approuvee" >&2

@@ -2,6 +2,7 @@
 #include "autopoiesis/feature_request.hpp"
 #include "autopoiesis/simulation.hpp"
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 using namespace apo;
 struct Fake : IDecider { Decision d; Decision decide(const Perception&) override{return d;} };
@@ -16,6 +17,13 @@ struct CountingReporter : ICycleReporter {
   }
 };
 int main(){World w;assert(!w.in_bounds({0,-1}));assert(!w.passable({0,0}));assert(!w.passable({5,2}));assert(w.passable({14,2}));Agent a{"a","A",{14,2}};std::vector<Agent> as{a};assert(w.eat_berries(a.position));assert(w.berries(a.position)==7);std::string e;assert(validate_decision({DecisionType::Action,"move",{{"direction","north"}}},a,w,as,e));assert(!validate_decision({DecisionType::Action,"hack",json::object()},a,w,as,e));assert(!validate_decision({DecisionType::Action,"move",{{"direction","up"}}},a,w,as,e));a.hunger=98;a.health=5;Fake f;f.d={DecisionType::Action,"wait",json::object(),""};Logger l("/tmp/autopoiesis-tests");Simulation s(42,f,l);s.cycle();CountingReporter reporter;Simulation reported(42,f,l,&reporter);reported.run(2,0,0);assert(reporter.calls==6);assert(reporter.cycles[0]==1);assert(reporter.cycles[3]==2);std::mt19937 local_rng(42);LocalDecider local(local_rng);(void)local;Decision parsed;assert(parse_decision({{"type","action"},{"action","wait"},{"parameters",json::object()},{"reason","ok"}},parsed,e));assert(parse_decision({{"type","action"},{"action","unknown"},{"parameters",json::object()}},parsed,e));assert(!validate_decision(parsed,a,w,as,e));
+  setenv("REPORT_EVERY_CYCLES","3",1);
+  CountingReporter every_three;
+  Simulation configured(42,f,l,&every_three);
+  configured.run(3,0,0);
+  assert(every_three.calls==3);
+  assert(every_three.cycles[0]==3);
+  unsetenv("REPORT_EVERY_CYCLES");
   json request={{"requested",true},{"title","Chasser le lapin"},{"need","Manger"},{"obstacle","Les baies ne suffisent pas"},{"proposed_change","Ajouter une chasse locale"},{"mechanism",{{"name","chasse_du_lapin"},{"summary","Un personnage peut chasser un lapin voisin"},{"resources",json::array({"lapin"})},{"actions",json::array({"hunt_rabbit"})},{"preconditions",json::array({"lapin adjacent"})},{"deterministic_effects",json::array({"le lapin est retire et la faim diminue"})}}},{"acceptance_tests",json::array({"Une chasse valide diminue la faim","Une chasse sans lapin est refusee"})}};
   assert(validate_feature_request(request,e));
   request["mechanism"]["preconditions"]=json::array();

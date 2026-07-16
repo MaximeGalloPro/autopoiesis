@@ -17,8 +17,8 @@ class Simulation {
   void cycle();
   const World& world() const { return world_; } const std::vector<Agent>& agents() const { return agents_; }
  private:
-  static constexpr int actions_per_cycle_=240, report_every_cycles_=1;
-  World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; int cycle_{0};
+  static constexpr int actions_per_cycle_=240;
+  World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; int report_every_cycles_{1}; int cycle_{0};
   std::map<std::string,std::vector<std::string>> action_history_;
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
 };
