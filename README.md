@@ -122,7 +122,7 @@ Les lanceurs séparés sont désormais :
 ./scripts/verify-evolution.sh <feature-request-id>
 ```
 
-Le premier lance une instance Codex en lecture seule. Le second lance Dieu avec `codex exec` dans `worktrees/god-<id>`, sans fusionner ses changements. Le troisième compile et teste ce worktree, puis écrit un rapport `verification.json`. Aucun de ces lanceurs n'active automatiquement la modification.
+Le premier lance une instance Codex en lecture seule. Le second lance Dieu avec `codex exec` dans `worktrees/god-<id>`, sans fusionner ses changements. Les deux utilisent par défaut `gpt-5.6-sol` avec `model_reasoning_effort=low`, réglages surchargeables par `CODEX_MODEL` et `CODEX_REASONING_EFFORT`. Le troisième compile et teste ce worktree, puis écrit un rapport `verification.json`. Aucun de ces lanceurs n'active automatiquement la modification.
 
 Pour un fonctionnement périodique sur macOS, `scripts/evolution-daemon.sh` traite une demande à la fois. Le modèle de tâche `scripts/launchd/com.autopoiesis.evolution.plist.example` peut être copié dans `~/Library/LaunchAgents` après remplacement des deux chemins absolus. Le daemon valide automatiquement les nouvelles demandes, mais ne franchit pas la garde `pending → approved` sans autorisation conforme à la politique active.
 

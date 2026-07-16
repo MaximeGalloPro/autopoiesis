@@ -11,6 +11,8 @@ REQUEST_ID="$1"
 DATA_DIR="${DATA_DIR:-$ROOT/data}"
 RUN_DIR="$DATA_DIR/evolution_runs/$REQUEST_ID"
 CODEX_BIN="${CODEX_BIN:-codex}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.6-sol}"
+CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-low}"
 SCHEMA="$ROOT/scripts/schemas/validator-result.json"
 
 mkdir -p "$RUN_DIR"
@@ -55,6 +57,8 @@ PY
 
 "$CODEX_BIN" exec \
   --cd "$ROOT" \
+  --model "$CODEX_MODEL" \
+  -c "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"" \
   --sandbox read-only \
   --ask-for-approval never \
   --ephemeral \

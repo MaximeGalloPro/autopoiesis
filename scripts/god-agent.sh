@@ -12,6 +12,8 @@ DATA_DIR="${DATA_DIR:-$ROOT/data}"
 RUN_DIR="$DATA_DIR/evolution_runs/$REQUEST_ID"
 WORKTREE="$ROOT/worktrees/god-$REQUEST_ID"
 CODEX_BIN="${CODEX_BIN:-codex}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.6-sol}"
+CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-low}"
 
 if [[ ! -s "$DATA_DIR/approved_feature_requests.jsonl" ]]; then
   echo "Aucune demande approuvee" >&2
@@ -69,6 +71,8 @@ PY
 git -C "$ROOT" worktree add --detach "$WORKTREE" HEAD
 "$CODEX_BIN" exec \
   --cd "$WORKTREE" \
+  --model "$CODEX_MODEL" \
+  -c "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"" \
   --sandbox workspace-write \
   --ask-for-approval never \
   --ephemeral \
