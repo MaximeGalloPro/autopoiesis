@@ -21,3 +21,11 @@ Compilation Docker GCC 12/CMake 3.25 réussie. Tests `autopoiesis_tests` réussi
 - [x] Augmenter les baies, ajouter trois cycles de grâce contre la faim critique et arrêter la simulation quand tous sont morts.
 - [x] Ajouter le bilan IA de fin de cycle et le flux de proposition d'évolution à valider humainement.
 - [x] Ajouter un budget API persistant et verrouillé par run, configurable par `LIMIT_LLM_API_CALLS`.
+
+## Priorité actuelle
+
+- [x] Produire les bilans IA et demandes potentielles à chaque fin de cycle.
+- [ ] Faire de Dieu un architecte contrôlé : il propose des mécanismes, mais ne modifie jamais directement le monde ou le code.
+- [ ] Formaliser chaque évolution en TDD : test échouant, implémentation minimale, tests verts, revue.
+- [ ] Construire la progression par mécanismes : baies/chasse, bois, haches, fer, fabrication, nouveaux besoins et nouvelles capacités.
+- [ ] Concevoir un registre déterministe des mécanismes ajoutables au moteur.

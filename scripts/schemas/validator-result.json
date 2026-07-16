@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {"type": "string"},
+    "decision": {"type": "string", "enum": ["approve", "reject", "reformulate"]},
+    "reason": {"type": "string"},
+    "scope": {"type": "string"},
+    "risks": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["request_id", "decision", "reason", "scope", "risks"]
+}

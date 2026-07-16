@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.autopoiesis.evolution</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/ABSOLUTE/PATH/TO/autopoiesis/scripts/evolution-daemon.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/ABSOLUTE/PATH/TO/autopoiesis</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CODEX_BIN</key>
+    <string>/ABSOLUTE/PATH/TO/codex</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>60</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/autopoiesis-evolution.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/autopoiesis-evolution.error.log</string>
+</dict>
+</plist>

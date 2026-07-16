@@ -1,6 +1,9 @@
 /build/
 /data/*
 !.gitkeep
+/worktrees/
+scripts/__pycache__/
+*.pyc
 *.log
 *.jsonl
 .env

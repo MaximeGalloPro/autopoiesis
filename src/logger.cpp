@@ -1,4 +1,5 @@
 #include "autopoiesis/logger.hpp"
+#include "autopoiesis/feature_request.hpp"
 #include <filesystem>
 namespace apo {
 Logger::Logger(const std::string& directory) : directory_(directory) { std::error_code ec; std::filesystem::create_directories(directory,ec); readable_.open(directory+"/simulation.log",std::ios::app); structured_.open(directory+"/events.jsonl",std::ios::app); }
@@ -13,9 +14,15 @@ void Logger::ai_report(int cycle,const Agent& agent,const json& report) {
   json event={{"cycle",cycle},{"type","ai_cycle_report"},{"agent_id",agent.id},{"report",report}};
   std::ofstream out(directory_+"/ai_reports.jsonl",std::ios::app); if(out) out<<event.dump()<<'\n';
   message("Bilan IA de "+agent.name+" : "+report.value("day_summary","indisponible"));
+  if(!report.contains("feature_request")) return;
   const auto& request=report["feature_request"];
   if(request.is_object() && request.value("requested",false)) {
-    json pending={{"id","cycle-"+std::to_string(cycle)+"-"+agent.id+"-ai-"+std::to_string(++request_counter_)},{"status","pending"},{"source","ai_cycle_report"},{"cycle",cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"title",request.value("title","")},{"need",request.value("need","")},{"proposed_change",request.value("proposed_change","")},{"acceptance_tests",request.value("acceptance_tests",json::array())}};
+    std::string error;
+    if(!validate_feature_request(request,error)) {
+      message("Demande IA rejetee : "+error);
+      return;
+    }
+    json pending={{"id","cycle-"+std::to_string(cycle)+"-"+agent.id+"-ai-"+std::to_string(++request_counter_)},{"status","pending"},{"source","ai_cycle_report"},{"cycle",cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"title",request["title"]},{"need",request["need"]},{"obstacle",request["obstacle"]},{"proposed_change",request["proposed_change"]},{"mechanism",request["mechanism"]},{"acceptance_tests",request["acceptance_tests"]}};
     std::ofstream requests(directory_+"/feature_requests.jsonl",std::ios::app); if(requests) requests<<pending.dump()<<'\n';
     message("Demande à Dieu à valider "+pending["id"].get<std::string>()+" : "+pending["title"].get<std::string>());
   }

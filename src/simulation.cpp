@@ -8,6 +8,7 @@ namespace apo {
 Decision LocalDecider::decide(const Perception& p) {
   const auto& me=p.value["self"];
   auto acts=p.value["available_actions"].get<std::vector<std::string>>();
+  if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food"};
   if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"eat_berries")!=acts.end()) return {DecisionType::Action,"eat_berries",json::object(),"I need food"};
   if(me["fatigue"]>=75) return {DecisionType::Action,"sleep",json::object(),"I need rest"};
   static const std::vector<std::string> dirs{"north","south","east","west"};
@@ -20,7 +21,7 @@ Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* repor
 
 Perception Simulation::perceive(Agent& a) {
   json cells=json::array();
-  for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx){Position p{a.position.x+dx,a.position.y+dy};if(std::abs(dx)+std::abs(dy)<=3&&world_.in_bounds(p)){auto terrain=world_.terrain(p);a.remember_map(p,terrain);cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"rabbit",p==world_.rabbit()}});}}
+  for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx){Position p{a.position.x+dx,a.position.y+dy};if(std::abs(dx)+std::abs(dy)<=3&&world_.in_bounds(p)){auto terrain=world_.terrain(p);a.remember_map(p,terrain);cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()}});}}
   json known=json::array();for(const auto&[position,terrain]:a.map_memory)known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)}});
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&std::abs(o.position.x-a.position.x)+std::abs(o.position.y-a.position.y)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
@@ -35,6 +36,7 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="wait"||d.action=="observe"){a.remember(d.action=="wait"?"J'ai attendu.":"J'ai observe mon environnement.");return "attend";}
   if(d.action=="sleep"){a.sleeping_cycles=2;a.fatigue=clamp_stat(a.fatigue-20);a.remember("Je commence a dormir.");return "commence a dormir";}
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
+  if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
   if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=a.position;if(dir=="north")--p.y;if(dir=="south")++p.y;if(dir=="east")++p.x;if(dir=="west")--p.x;if(world_.passable(p)){a.position=p;a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
   if(d.action=="talk"){auto id=d.parameters["target_agent_id"].get<std::string>();for(auto&o:agents_)if(o.id==id){std::string msg=d.parameters.value("message","Bonjour.");a.remember("J'ai parle a "+o.name+" : "+msg);o.remember(a.name+" m'a parle : "+msg);return "parle a "+o.name;}}
   return "attend";
