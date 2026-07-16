@@ -1,0 +1,13 @@
+services:
+  autopoiesis:
+    build: .
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      LIMIT_LLM_API_CALLS: ${LIMIT_LLM_API_CALLS:-100}
+      AUTOPOIESIS_RUN_ID: ${AUTOPOIESIS_RUN_ID:-}
+    volumes:
+      - ./data:/data
+    stdin_open: true
+    tty: true

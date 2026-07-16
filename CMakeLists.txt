@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.20)
+project(autopoiesis VERSION 0.1 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(CURL REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
+add_library(autopoiesis_core
+    src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
+    src/renderer.cpp src/openai_client.cpp)
+target_include_directories(autopoiesis_core PUBLIC include)
+target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json)
+target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(autopoiesis src/main.cpp)
+target_link_libraries(autopoiesis PRIVATE autopoiesis_core)
+
+enable_testing()
+add_executable(autopoiesis_tests tests/test_core.cpp)
+target_link_libraries(autopoiesis_tests PRIVATE autopoiesis_core)
+add_test(NAME core COMMAND autopoiesis_tests)
+add_executable(autopoiesis_budget_tests tests/budget_test.cpp)
+target_link_libraries(autopoiesis_budget_tests PRIVATE autopoiesis_core)
+add_test(NAME api_budget COMMAND autopoiesis_budget_tests)
