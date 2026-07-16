@@ -1,6 +1,22 @@
 # Autopoiesis
 
-Autopoiesis est un prototype C++20 de simulation déterministe : trois individus perçoivent une petite portion d'un monde ASCII, choisissent une action autorisée (localement ou via l'API Responses d'OpenAI), puis le moteur valide et exécute cette action.
+Autopoiesis est une expérience de simulation évolutive à long terme. Des personnages vivent dans un monde persistant, perçoivent une partie limitée de ce monde, prennent des décisions locales et accumulent une mémoire. Le projet cherche à explorer une séparation stricte entre un moteur local déterministe et une intelligence capable de proposer l'évolution de ses propres possibilités.
+
+Le principe directeur est le suivant :
+
+```text
+État du monde
+→ perception locale
+→ décision du personnage
+→ validation par le moteur
+→ exécution déterministe
+→ nouvel état
+→ bilan et éventuelle demande d'évolution
+```
+
+Le moteur local reste reproductible à graine identique : règles physiques, déplacements, besoins, collisions, consommation des ressources et exécution des actions sont calculés localement. L'IA est le **décideur** et la **personnification** ; l'algorithme déterministe est le **moteur d'exécution**. Le décideur propose une intention parmi les actions autorisées, puis le moteur la valide et l'applique. Le décideur peut aussi formuler une demande à « Dieu », le générateur futur du monde et des capacités.
+
+En mode `--no-api`, toute la boucle est locale et déterministe. En mode API, le moteur reste déterministe pour une décision donnée, mais les réponses de l'IA peuvent varier ; la reproductibilité complète nécessite donc de rejouer des décisions enregistrées ou d'utiliser un faux client.
 
 Le MVP inclut besoins, personnalité, mémoire FIFO de dix éléments, baies limitées, sommeil, conversation adjacente, lapin visible mais impossible à attraper, journaux JSONL et reprise sur erreur API. Il n'inclut ni chasse, combat, inventaire, craft, apprentissage ou modification de code.
 
@@ -15,7 +31,7 @@ La commande la plus simple (mode local, sans clé API) est :
 Elle accepte les options du programme, par exemple `./run.sh --cycles 20 --seed 42 --delay-ms 100`.
 Pour utiliser OpenAI ou un serveur compatible, renseignez `LLM_API_KEY` et `OPENAI_MODEL` dans `.env`, puis lancez `USE_API=1 ./run.sh --cycles 20`.
 
-Chaque tentative HTTP consomme une unité du budget `LIMIT_LLM_API_CALLS` (100 par défaut), y compris les retries et les bilans de fin de cycle. Le compteur est conservé dans `/data/api_budget.json` et verrouillé entre processus. Pour reprendre le même budget après un redémarrage, utilisez le même `AUTOPOIESIS_RUN_ID` ; sinon un nouvel identifiant de run est créé.
+Chaque tentative HTTP consomme une unité du budget `LIMIT_LLM_API_CALLS` (100 par défaut), y compris les retries et les bilans IA tous les cinq cycles. Les actions quotidiennes locales ne consomment aucun appel API. Le compteur est conservé dans `/data/api_budget.json` et verrouillé entre processus. Pour reprendre le même budget après un redémarrage, utilisez le même `AUTOPOIESIS_RUN_ID` ; sinon un nouvel identifiant de run est créé.
 
 La commande manuelle équivalente reste :
 
@@ -37,25 +53,33 @@ cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on
 
 Les fichiers `data/simulation.log` et `data/events.jsonl` sont montés dans `/data`. Arrêtez une exécution avec Ctrl-C. Les appels API consomment des tokens et peuvent être facturés ; utilisez `--no-api` pour les essais gratuits et reproductibles.
 
-## Cycles, bilans et évolution du moteur
+## Architecture conceptuelle et évolution
 
-Actuellement, un cycle correspond à un tour de décision des trois individus : chacun effectue au plus une action, puis le monde est rendu et journalisé. Il ne contient donc pas encore 240 actions. Pour passer à 240 actions, il faut définir si ce nombre représente 240 actions globales ou 240 actions par individu, puis ajouter une notion de sous-tour et un bilan à la fin du cycle. Ce changement modifierait le rythme de la simulation et le coût API ; il vaut mieux le faire après mesure du MVP.
+Un cycle représente une journée de simulation. Chaque personnage dispose de 240 créneaux d'action par journée. Les besoins évoluent par petites touches au fil de ces créneaux, afin d'éviter les changements brusques : la faim augmente toutes les 80 actions et la fatigue toutes les 12 actions, ce qui rend le sommeil pertinent vers la fin de la journée. Le décideur local est utilisé pour ces actions quotidiennes, y compris lorsque le mode API est activé.
 
 Chaque personnage possède également une mémoire spatiale de la carte. Les cases observées sont conservées dans sa perception sous `known_map` et restent disponibles aux itérations suivantes, même lorsqu'elles sont hors de son rayon actuel. Cette mémoire contient uniquement les cases effectivement explorées par ce personnage.
 
 Les buissons contiennent huit portions de baies et sont régénérés uniquement lorsqu'ils sont configurés au démarrage. Lorsqu'un personnage atteint une faim critique (90), il bénéficie de trois cycles complets avant que sa santé ne commence à diminuer. La simulation s'arrête automatiquement dès que les trois personnages sont morts.
 
-Le moteur actuel ne peut pas être mis à jour par l'API, volontairement. L'API peut uniquement retourner une décision structurée (`action` ou `blocked`) ; elle ne reçoit ni accès au dépôt, ni outil d'écriture, ni permission d'exécuter du code. Le moteur valide cette décision et reste le seul composant qui modifie l'état du monde.
+Le projet est conçu en trois couches :
 
-Une évolution sûre serait :
+- **Noyau déterministe local / moteur d'exécution** : monde, règles, besoins, mémoire, validation et exécution. Il doit produire le même résultat avec la même graine et les mêmes entrées.
+- **Personnification et observateur IA** : tous les cinq cycles, l'IA reçoit l'historique pertinent d'un personnage, rédige son bilan à la première personne et peut exprimer un besoin ou une demande d'évolution.
+- **Boucle d'évolution contrôlée** : une demande validée par l'humain pourra, à terme, modifier les actions disponibles, les algorithmes d'exécution, les règles du monde ou son contenu. Cette évolution devra être testée, revue et intégrée comme une nouvelle version du moteur.
 
-1. produire un bilan JSON en fin de cycle ;
-2. demander à l'IA un objet `feature_request` séparé, décrivant un besoin, une justification et des critères de test ;
-3. enregistrer cette demande dans `/data/feature_requests.jsonl` ;
-4. faire relire et implémenter la modification par un développeur ;
-5. compiler et exécuter les tests avant de déployer une nouvelle image Docker.
+Dans le MVP actuel, seule la deuxième couche est connectée à l'API. Le code du moteur, ses actions et son monde restent fixes. L'API n'a ni accès au dépôt, ni outil d'écriture, ni permission d'exécuter du code ; elle ne peut donc pas encore appliquer une évolution.
 
-Une mise à jour automatique du code nécessiterait un agent séparé, un dépôt de travail isolé, des permissions explicites, une revue humaine et une pipeline de tests. Ce n'est pas une extension à activer directement dans le MVP.
+Le flux prévu pour l'évolution est :
+
+1. exécuter 240 actions locales par personnage pendant une journée ;
+2. tous les cinq cycles, produire un bilan JSON pour chaque personnage ;
+3. demander à l'IA un objet `feature_request` séparé, décrivant un besoin, une justification et des critères de test ;
+4. enregistrer cette demande dans `/data/feature_requests.jsonl` ;
+5. faire valider la proposition dans le terminal ;
+6. laisser Codex préparer une modification isolée du moteur ;
+7. compiler, tester et relire la modification avant de déployer une nouvelle image Docker.
+
+Une mise à jour automatique du code nécessitera un agent séparé, un dépôt de travail isolé, des permissions explicites, une revue humaine et une pipeline de tests. Cette capacité est une direction du projet, pas une permission accordée au personnage pendant une simulation.
 
 Lorsqu'un agent signale `blocked`, le moteur ajoute une demande dans `data/feature_requests.jsonl` et l'affiche dans le terminal. Après validation humaine :
 
