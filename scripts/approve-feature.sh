@@ -23,7 +23,12 @@ found = None
 for line in pending.read_text().splitlines():
     if not line.strip():
         continue
-    item = json.loads(line)
+    try:
+        item = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if not isinstance(item, dict):
+        continue
     if item.get("id") == request_id:
         found = item
         break
@@ -32,7 +37,13 @@ if found is None:
 
 if approved.exists():
     for line in approved.read_text().splitlines():
-        if line.strip() and json.loads(line).get("id") == request_id:
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict) and item.get("id") == request_id:
             print(f"Déjà approuvée: {request_id}")
             raise SystemExit(0)
 

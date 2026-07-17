@@ -34,8 +34,14 @@ if not source.exists():
 
 request = None
 for line in source.read_text(encoding="utf-8").splitlines():
-    if line.strip() and json.loads(line).get("id") == request_id:
-        request = json.loads(line)
+    if not line.strip():
+        continue
+    try:
+        candidate = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if isinstance(candidate, dict) and candidate.get("id") == request_id:
+        request = candidate
         break
 if request is None:
     raise SystemExit(f"Demande inconnue: {request_id}")
