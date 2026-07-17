@@ -6,8 +6,15 @@
 #include <unistd.h>
 using namespace apo;
 
+static int simulation_delay_from_env() {
+  const char* configured=std::getenv("SIMULATION_DELAY_MS");
+  if(!configured) return 500;
+  try { int delay=std::stoi(configured); return delay>=0 ? delay : 500; }
+  catch(...) { return 500; }
+}
+
 int main(int argc,char** argv){
-  int cycles=100,delay=500,render_every=1;unsigned seed=42;bool no_api=false;
+  int cycles=100,delay=simulation_delay_from_env(),render_every=1;unsigned seed=42;bool no_api=false;
   for(int i=1;i<argc;++i){std::string a=argv[i];auto next=[&](auto&v){if(i+1>=argc)throw std::runtime_error("missing argument for "+a);v=std::remove_cvref_t<decltype(v)>(std::stoll(argv[++i]));};if(a=="--cycles")next(cycles);else if(a=="--seed")next(seed);else if(a=="--delay-ms")next(delay);else if(a=="--render-every")next(render_every);else if(a=="--no-api")no_api=true;else{std::cerr<<"Unknown option: "<<a<<'\n';return 2;}}
   try{
     Logger logger;std::mt19937 local_rng(seed);LocalDecider local(local_rng);std::unique_ptr<OpenAIClient> reporter;

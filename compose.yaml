@@ -9,6 +9,7 @@ services:
       AUTOPOIESIS_RUN_ID: ${AUTOPOIESIS_RUN_ID:-}
       REPORT_EVERY_CYCLES: ${REPORT_EVERY_CYCLES:-1}
       FEATURE_REQUESTS_REQUIRED: ${FEATURE_REQUESTS_REQUIRED:-1}
+      SIMULATION_DELAY_MS: ${SIMULATION_DELAY_MS:-500}
     volumes:
       - ./data:/data
     stdin_open: true

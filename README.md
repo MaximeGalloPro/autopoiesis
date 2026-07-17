@@ -28,11 +28,13 @@ Avec l'API, renseigner `.env`, puis lancer :
 ./run.sh --cycles 3 --delay-ms 0 --render-every 0
 ```
 
-Avec `REPORT_EVERY_CYCLES=3`, les bilans IA sont produits tous les trois cycles. Avec `FEATURE_REQUESTS_REQUIRED=1`, chaque bilan doit contenir une demande d'évolution structurée.
+Avec `REPORT_EVERY_CYCLES=3`, les bilans IA sont produits tous les trois cycles. Avec `FEATURE_REQUESTS_REQUIRED=1`, chaque bilan doit contenir une demande d'évolution structurée. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
 
 Les demandes apparaissent dans `data/feature_requests.jsonl`. Les bilans sont conservés dans `data/ai_reports.jsonl`.
 
 Depuis un terminal interactif, `run.sh` ouvre automatiquement l'interface de validation lorsqu'une demande attend une décision. En mode automatisé ou sans demande, il se termine sans attendre une saisie.
+
+Une option donnée au lancement est prioritaire sur `.env`, par exemple `./run.sh --delay-ms 0` ne modifie pas la configuration persistante.
 
 ## Évolution contrôlée
 
