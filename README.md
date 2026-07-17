@@ -34,7 +34,7 @@ Sans API, pour un essai reproductible :
 USE_API=0 ./run.sh --cycles 3 --delay-ms 0 --render-every 0
 ```
 
-Dans le MVP, un cycle représente une journée complète de 240 actions par personnage. Avec `REPORT_EVERY_CYCLES=3`, chaque personnage envoie donc un bilan après trois journées, soit trois appels API par fenêtre de bilan. Avec `FEATURE_REQUESTS_REQUIRED=1`, chaque bilan doit contenir une demande d'évolution structurée. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
+Dans le MVP, un cycle représente une journée complète de 240 actions par personnage. Avec `REPORT_EVERY_CYCLES=3`, chaque personnage déclenche exactement deux appels après trois journées : un bilan, puis une demande d'évolution liée à ce bilan. Avec trois personnages, cela fait six appels API par fenêtre ; aucune décision quotidienne n'est envoyée à l'API et aucun retry HTTP n'est effectué. Avec `FEATURE_REQUESTS_REQUIRED=1`, la demande d'évolution est obligatoire. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
 
 Les demandes apparaissent dans `data/feature_requests.jsonl`. Les bilans sont conservés dans `data/ai_reports.jsonl`.
 

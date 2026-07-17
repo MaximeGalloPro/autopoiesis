@@ -18,6 +18,11 @@ static int report_interval_from_env() {
   }
 }
 
+static bool feature_requests_required() {
+  const char* configured=std::getenv("FEATURE_REQUESTS_REQUIRED");
+  return !configured || std::string(configured)!="0";
+}
+
 Decision LocalDecider::decide(const Perception& p) {
   const auto& me=p.value["self"];
   auto acts=p.value["available_actions"].get<std::vector<std::string>>();
@@ -99,7 +104,7 @@ void Simulation::cycle(){
 void Simulation::run(int cycles,int delay_ms,int render_every){
   for(int i=0;i<cycles;++i){
     cycle();
-    if(reporter_&&cycle_%report_every_cycles_==0) for(auto& agent:agents_){auto report=reporter_->report_cycle(cycle_,agent,action_history_[agent.id]);if(!report.is_null())logger_.ai_report(cycle_,agent,report);action_history_[agent.id].clear();}
+    if(reporter_&&cycle_%report_every_cycles_==0) for(auto& agent:agents_){auto& history=action_history_[agent.id];auto report=reporter_->report_cycle(cycle_,agent,history);if(!report.is_null()){logger_.ai_report(cycle_,agent,report);if(feature_requests_required()||report.value("ask_god",false)){auto request=reporter_->request_evolution(cycle_,agent,history,report);if(!request.is_null())logger_.ai_feature_request(cycle_,agent,report,request);}}history.clear();}
     bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;}); if(all_dead)logger_.message("Simulation arrêtée : tous les personnages sont morts."); if((render_every>0&&cycle_%render_every==0)||all_dead)render(cycle_,world_,agents_,logger_); if(all_dead)break; if(delay_ms>0)std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
   }
 }

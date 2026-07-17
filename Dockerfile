@@ -9,4 +9,5 @@ COPY --from=build /src/build/autopoiesis /usr/local/bin/autopoiesis
 COPY --from=build /src/build/autopoiesis_tests /usr/local/bin/autopoiesis_tests
 COPY --from=build /src/build/autopoiesis_budget_tests /usr/local/bin/autopoiesis_budget_tests
 COPY --from=build /src/build/autopoiesis_goal_tests /usr/local/bin/autopoiesis_goal_tests
+COPY --from=build /src/build/autopoiesis_reporting_tests /usr/local/bin/autopoiesis_reporting_tests
 ENTRYPOINT ["/usr/local/bin/autopoiesis"]

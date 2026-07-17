@@ -5,7 +5,12 @@
 
 namespace apo {
 class IDecider { public: virtual ~IDecider() = default; virtual Decision decide(const Perception&) = 0; };
-class ICycleReporter { public: virtual ~ICycleReporter() = default; virtual json report_cycle(int cycle, const Agent& agent, const std::vector<std::string>& history) = 0; };
+class ICycleReporter {
+ public:
+  virtual ~ICycleReporter() = default;
+  virtual json report_cycle(int cycle, const Agent& agent, const std::vector<std::string>& history) = 0;
+  virtual json request_evolution(int, const Agent&, const std::vector<std::string>&, const json&) { return nullptr; }
+};
 class LocalDecider final : public IDecider {
  public: explicit LocalDecider(std::mt19937& rng) : rng_(rng) {} Decision decide(const Perception&) override;
  private: std::mt19937& rng_;
