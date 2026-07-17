@@ -16,17 +16,17 @@ std::vector<json> read_jsonl(const path& file, std::ostream& output) {
   std::ifstream input(file);
   if (!input) return items;
   std::string line;
-  std::size_t line_number = 0;
+  std::size_t invalid_lines = 0;
   while (std::getline(input, line)) {
-    ++line_number;
     if (line.empty()) continue;
     try {
       items.push_back(json::parse(line));
     } catch (const json::parse_error&) {
-      output << "Ligne JSON invalide ignoree dans " << file.filename().string()
-             << " (ligne " << line_number << ").\n";
+      ++invalid_lines;
     }
   }
+  if (invalid_lines>0) output << invalid_lines << " ligne(s) JSON invalide(s) ignoree(s) dans "
+                              << file.filename().string() << ".\n";
   return items;
 }
 
@@ -83,6 +83,8 @@ HumanValidation::HumanValidation(std::string data_directory, std::istream& input
 
 bool HumanValidation::review_window(int day, int simulation_cycle) {
   const path data_directory(data_directory_);
+  std::size_t selected_index=0;
+  bool decision_made = false;
   while (true) {
     auto requests = current_requests(data_directory, day, simulation_cycle, output_);
     output_ << "\n=== VALIDATION HUMAINE ===\n"
@@ -90,15 +92,23 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
     if (requests.empty()) {
       output_ << "Aucune demande en attente pour cette fenêtre.\n"
                << "Tapez o pour reprendre, q ou exit pour arrêter.\n> " << std::flush;
-    } else {
-      output_ << requests.size() << " demande(s) à valider :\n";
+    } else if(selected_index==0 && !decision_made) {
+      output_ << requests.size() << " proposition(s) disponibles :\n";
       for (std::size_t index=0; index<requests.size(); ++index) {
         const auto& request=requests[index];
         output_ << "[" << index+1 << "] " << request.value("id", "?") << " — "
                  << request.value("agent_name", "?") << " — "
                  << request.value("title", "(sans titre)") << '\n';
       }
-      output_ << "Commandes : a N approuver, r N refuser, d N détail, o reprendre, q/exit arrêter.\n> " << std::flush;
+      output_ << "Choisissez une proposition (1-" << requests.size()
+              << ") ou n pour aucune, d N détail, q/exit arrêter.\n> " << std::flush;
+    } else if(selected_index>0 && !decision_made) {
+      const auto& request=requests[selected_index-1];
+      output_ << "Proposition sélectionnée : " << request.value("title", "(sans titre)") << '\n'
+              << "[a] approuver  [r] refuser  [b] revenir au choix  [d] détail  [q/exit] arrêter.\n> " << std::flush;
+    } else {
+      output_ << requests.size() << " proposition(s) restantes, conservées pending.\n"
+               << "Tapez o pour reprendre, d N détail, q ou exit pour arrêter.\n> " << std::flush;
     }
 
     std::string line;
@@ -107,36 +117,75 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
     std::string action;
     command >> action;
     if (action=="o" || action=="O") {
-      if (requests.empty()) return true;
-      output_ << "Chaque demande doit être approuvée ou refusée avant la reprise.\n";
+      if (requests.empty() || decision_made) return true;
+      output_ << "Choisissez d'abord une proposition, ou n pour n'en valider aucune.\n";
+      continue;
+    }
+    if (action=="n" || action=="N") {
+      if(selected_index==0 && !decision_made) {
+        output_ << "Aucune proposition sélectionnée ; les demandes restent pending.\n";
+        return true;
+      }
+      output_ << "Commande indisponible à cette étape.\n";
       continue;
     }
     if (action=="q" || action=="Q" || action=="exit" || action=="quit") return false;
-    std::size_t index=0;
-    command >> index;
-    if (index==0 || index>requests.size()) {
-      output_ << "Commande inconnue.\n";
+
+    if (selected_index==0 && !decision_made) {
+      if (action=="d" || action=="D") {
+        std::size_t index=0;
+        command >> index;
+        if(index>0 && index<=requests.size()) output_ << requests[index-1].dump(2) << '\n';
+        else output_ << "Numéro de proposition invalide.\n";
+        continue;
+      }
+      try { selected_index=std::stoul(action); }
+      catch (...) { selected_index=0; }
+      if(selected_index==0 || selected_index>requests.size()) {
+        selected_index=0;
+        output_ << "Choisissez une proposition valide ou n.\n";
+      }
       continue;
     }
-    auto& request=requests[index-1];
+
+    if (selected_index>0 && !decision_made) {
+      const auto& request=requests[selected_index-1];
+      if (action=="b" || action=="B") {
+        selected_index=0;
+        continue;
+      }
+      if (action=="d" || action=="D") {
+        output_ << request.dump(2) << '\n';
+        continue;
+      }
+      if (action!="a" && action!="A" && action!="r" && action!="R") {
+        output_ << "Choisissez a, r, b ou d.\n";
+        continue;
+      }
+      const bool approve=action=="a" || action=="A";
+      const auto request_id=request.value("id", "unknown");
+      auto decided=request;
+      decided["status"] = approve ? "approved" : "rejected";
+      decided[approve?"approved_at":"rejected_at"] = timestamp();
+      decided[approve?"approval_mode":"rejection_mode"] = "human";
+      if (!approve) decided["rejection_reason"] = "Refus explicite dans l'interface intégrée";
+      append_jsonl(data_directory / (approve ? "approved_feature_requests.jsonl" : "rejected_feature_requests.jsonl"), decided);
+      write_validation_record(data_directory, decided, approve?"approve":"reject",
+                              approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
+      output_ << (approve ? "Demande approuvée : " : "Demande refusée : ") << request_id << '\n';
+      selected_index=0;
+      decision_made=true;
+      continue;
+    }
+
     if (action=="d" || action=="D") {
-      output_ << request.dump(2) << '\n';
+      std::size_t index=0;
+      command >> index;
+      if(index>0 && index<=requests.size()) output_ << requests[index-1].dump(2) << '\n';
+      else output_ << "Numéro de proposition invalide.\n";
       continue;
     }
-    if (action!="a" && action!="A" && action!="r" && action!="R") {
-      output_ << "Commande inconnue.\n";
-      continue;
-    }
-    const bool approve=action=="a" || action=="A";
-    const auto request_id=request.value("id", "unknown");
-    request["status"] = approve ? "approved" : "rejected";
-    request[approve?"approved_at":"rejected_at"] = timestamp();
-    request[approve?"approval_mode":"rejection_mode"] = "human";
-    if (!approve) request["rejection_reason"] = "Refus explicite dans l'interface intégrée";
-    append_jsonl(data_directory / (approve ? "approved_feature_requests.jsonl" : "rejected_feature_requests.jsonl"), request);
-    write_validation_record(data_directory, request, approve?"approve":"reject",
-                            approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
-    output_ << (approve ? "Demande approuvée : " : "Demande refusée : ") << request_id << '\n';
+    output_ << "Une seule proposition peut être traitée par fenêtre. Tapez o pour reprendre.\n";
   }
 }
 }

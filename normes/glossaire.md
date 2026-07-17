@@ -60,13 +60,13 @@ Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `240` par dé
 
 Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
 
-Après chaque fenêtre IA, le moteur s'arrête et attend une confirmation humaine. La reprise est explicite (`o`) ; l'arrêt est explicite (`q`). Cette garde est active par défaut via `WAIT_FOR_HUMAN_VALIDATION=1`.
+Après chaque fenêtre IA, le moteur s'arrête et attend une confirmation humaine. La validation traite au maximum une demande parmi celles de la fenêtre ; les autres restent `pending`. La reprise est explicite (`o`) ; l'arrêt est explicite (`q`). Cette garde est active par défaut via `WAIT_FOR_HUMAN_VALIDATION=1`.
 
 ## Règles d'architecture
 
 1. Le décideur IA propose ; le moteur d'exécution dispose.
 2. Les cycles élémentaires sont exécutés localement ; à la fin de chaque fenêtre IA configurée, l'IA reçoit d'abord un bilan puis produit une demande d'évolution dans un second appel lié pour chaque personnage. Aucun appel IA ne décide les actions quotidiennes.
-3. La simulation ne franchit jamais une fenêtre IA sans passer par la garde de confirmation humaine, sauf désactivation explicite pour un run automatisé.
+3. La simulation ne franchit jamais une fenêtre IA sans passer par la garde de confirmation humaine d'au plus une demande, sauf désactivation explicite pour un run automatisé.
 4. Aucune réponse textuelle, justification ou demande IA ne peut modifier directement une variable du monde.
 5. Toute action est refusée par défaut si elle est inconnue, mal paramétrée ou indisponible.
 6. Une erreur IA ou réseau ne doit pas arrêter la simulation.
@@ -103,7 +103,7 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 ### Interface de validation
 
-Vue terminal minimale intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. Elle lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, affiche les données structurées et écrit directement les transitions humaines `approved` ou `rejected`. Elle ne devient jamais une source d'état parallèle et ne nécessite pas de script lancé dans un autre terminal.
+Vue terminal minimale intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. Elle lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, demande d'abord de sélectionner une proposition ou `aucune`, permet ensuite de traiter au plus une demande et écrit directement les transitions humaines `approved` ou `rejected`. Elle ne devient jamais une source d'état parallèle et ne nécessite pas de script lancé dans un autre terminal.
 
 Après approbation, elle persiste la transition et rend la main à la simulation. L'orchestration de Dieu et la vérification restent des étapes séparées du workflow d'évolution ; l'interface intégrée n'exécute aucune règle du moteur et ne fusionne aucun worktree.
 

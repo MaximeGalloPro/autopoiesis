@@ -20,7 +20,7 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
 - Le terminal affiche l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
-- La validation est intégrée au même terminal : `a N` approuve, `r N` refuse, `d N` affiche le détail, `o` reprend et `q` ou `exit` arrête proprement.
+- La validation est intégrée au même terminal et traite au maximum une demande par fenêtre : choisir `1`, `2`, `3` ou `n` pour aucune, puis `a` approuve ou `r` refuse la proposition sélectionnée. `o` reprend et `q` ou `exit` arrête proprement. Les autres demandes restent `pending`.
 
 Les décisions quotidiennes utilisent actuellement le décideur local. Une réponse
 IA ne modifie jamais directement le monde ni le code ; le moteur valide toute
@@ -60,8 +60,8 @@ Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 ## Évolution contrôlée
 
 1. Après la fenêtre de trois journées, la personnification produit un bilan puis une demande structurée.
-2. Le moteur se met en pause et attend la confirmation humaine de la validation à effectuer.
-3. Le Validator contrôle la demande en lecture seule et recommande `approve`, `reject` ou `reformulate`.
+2. Le moteur se met en pause et attend la confirmation humaine d'une seule validation à effectuer.
+3. Le Validator contrôle la demande sélectionnée en lecture seule et recommande `approve`, `reject` ou `reformulate`.
 4. L'approbation humaine explicite autorise Dieu à travailler sur cette seule demande.
 5. Dieu applique le TDD dans un worktree isolé : test rouge, changement minimal, test vert.
 6. Le vérificateur lance les tests, la compilation et le build Docker avant toute activation.
