@@ -50,12 +50,12 @@ Proposition structurée indiquant un besoin, un obstacle, un mécanisme souhait�
 
 ### Cycle
 
-Une journée de simulation contenant 240 créneaux d'action par personnage. Les bilans IA et les éventuelles demandes d'évolution sont produits à chaque fin de cycle.
+Dans le MVP, un cycle représente une journée complète de simulation contenant 240 créneaux d'action par personnage. Les bilans IA sont produits selon `REPORT_EVERY_CYCLES`; la valeur `3` regroupe donc trois journées avant d'envoyer un bilan par personnage.
 
 ## Règles d'architecture
 
 1. Le décideur IA propose ; le moteur d'exécution dispose.
-2. Les 240 actions quotidiennes sont exécutées localement ; les appels IA sont réservés aux bilans et demandes d'évolution périodiques.
+2. Les 240 actions quotidiennes sont exécutées localement ; les appels IA sont réservés aux bilans et demandes d'évolution à la fréquence configurée.
 3. Aucune réponse textuelle, justification ou demande IA ne peut modifier directement une variable du monde.
 4. Toute action est refusée par défaut si elle est inconnue, mal paramétrée ou indisponible.
 5. Une erreur IA ou réseau ne doit pas arrêter la simulation.

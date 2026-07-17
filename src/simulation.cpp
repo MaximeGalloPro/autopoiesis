@@ -27,6 +27,14 @@ Decision LocalDecider::decide(const Perception& p) {
   return {DecisionType::Action,"move",{{"direction",dirs[std::uniform_int_distribution<size_t>(0,3)(rng_)]}},"I explore"};
 }
 
+static bool action_succeeded(const Decision& decision, const std::string& result) {
+  if (decision.type == DecisionType::Blocked) return false;
+  if (decision.action == "move") return result != "deplacement bloque";
+  if (decision.action == "eat_berries") return result == "mange des baies";
+  if (decision.action == "hunt_rabbit") return result == "chasse le lapin";
+  return true;
+}
+
 Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),report_every_cycles_(report_interval_from_env()){
   agents_={{"a1","Ada",{3,2},100,45,20,{90,20,30,30,40}},{"a2","Borin",{10,5},100,55,15,{25,85,70,90,40}},{"a3","Cyra",{16,7},100,35,60,{40,45,95,55,90}}};
 }
@@ -60,7 +68,7 @@ void Simulation::cycle(){
   for(int action_index=0;action_index<actions_per_cycle_;++action_index) for(auto& agent:agents_) if(agent.alive&&agent.sleeping_cycles==0){
     advance_action_needs(agent,action_index); Agent before=agent; Decision d=decider_.decide(perceive(agent)); std::string e;
     if(!validate_decision(d,agent,world_,agents_,e)){d={DecisionType::Action,"wait",json::object(),"invalid decision"};logger_.message("Cycle "+std::to_string(cycle_)+" — "+agent.name+" decision invalide : "+e);}
-    if(d.type==DecisionType::Blocked) logger_.feature_request(cycle_,agent,d); auto result=execute(agent,d); auto& history=action_history_[agent.id]; history.push_back((d.type==DecisionType::Blocked?"blocked":d.action)+" -> "+result); if(history.size()>1200)history.erase(history.begin()); logger_.event(cycle_,before,d,result,agent);
+    if(d.type==DecisionType::Blocked) logger_.feature_request(cycle_,agent,d); auto result=execute(agent,d); auto& history=action_history_[agent.id]; std::string entry="cycle="+std::to_string(cycle_)+" action="+(d.type==DecisionType::Blocked?"blocked":d.action)+" outcome="+(action_succeeded(d,result)?"success":"failure")+" result="+result; if(!d.reason.empty()) entry+=" reason="+d.reason; if(!d.need.empty()) entry+=" need="+d.need; if(!d.obstacle.empty()) entry+=" obstacle="+d.obstacle; if(!d.desired_result.empty()) entry+=" desired_result="+d.desired_result; history.push_back(entry); if(history.size()>1200)history.erase(history.begin()); logger_.event(cycle_,before,d,result,agent);
   }
   for(auto& agent:agents_) if(agent.alive) update_needs(agent);
 }

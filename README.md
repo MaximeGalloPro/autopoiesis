@@ -34,7 +34,7 @@ Sans API, pour un essai reproductible :
 USE_API=0 ./run.sh --cycles 3 --delay-ms 0 --render-every 0
 ```
 
-Avec `REPORT_EVERY_CYCLES=3`, les bilans IA sont produits tous les trois cycles. Avec `FEATURE_REQUESTS_REQUIRED=1`, chaque bilan doit contenir une demande d'évolution structurée. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
+Dans le MVP, un cycle représente une journée complète de 240 actions par personnage. Avec `REPORT_EVERY_CYCLES=3`, chaque personnage envoie donc un bilan après trois journées, soit trois appels API par fenêtre de bilan. Avec `FEATURE_REQUESTS_REQUIRED=1`, chaque bilan doit contenir une demande d'évolution structurée. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
 
 Les demandes apparaissent dans `data/feature_requests.jsonl`. Les bilans sont conservés dans `data/ai_reports.jsonl`.
 
