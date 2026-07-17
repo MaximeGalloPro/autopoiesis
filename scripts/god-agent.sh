@@ -74,12 +74,11 @@ Demande approuvee :
 PY
 
 git -C "$ROOT" worktree add --detach "$WORKTREE" HEAD
-"$CODEX_BIN" exec \
+"$CODEX_BIN" --ask-for-approval never exec \
   --cd "$WORKTREE" \
   --model "$CODEX_MODEL" \
   -c "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"" \
   --sandbox workspace-write \
-  --ask-for-approval never \
   --ephemeral \
   --output-last-message "$RUN_DIR/god-result.txt" \
   - < "$RUN_DIR/god-prompt.txt" \
@@ -90,3 +89,4 @@ git -C "$WORKTREE" add -N -- .
 git -C "$WORKTREE" diff --binary > "$RUN_DIR/god.patch"
 git -C "$WORKTREE" diff --name-only > "$RUN_DIR/changed-files.txt"
 printf '%s\n' "$WORKTREE" > "$RUN_DIR/worktree.path"
+python3 "$ROOT/scripts/write-god-changelog.py" "$RUN_DIR" "$DATA_DIR/god-changelog.md"

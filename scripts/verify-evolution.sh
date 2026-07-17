@@ -54,6 +54,8 @@ result = {
 }
 (run_dir / "verification.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(result))
-if result["status"] != "verified":
-    raise SystemExit(1)
 PY
+"$ROOT/scripts/write-god-changelog.py" "$RUN_DIR" "$DATA_DIR/god-changelog.md"
+if [[ "$cmake_status" != "passed" || "$tests_status" != "passed" || "$docker_status" != "passed" ]]; then
+  exit 1
+fi

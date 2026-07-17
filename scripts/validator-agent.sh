@@ -51,6 +51,7 @@ Lis AGENTS.md et normes/glossaire.md. Examine uniquement la demande ci-dessous.
 Controle : contrat de demande complet, besoin comprehensible, mecanisme unique, perimetre minimal, preconditions deterministes, effets testables, compatibilite avec les invariants et criteres d'acceptation executables.
 Decide `approve` uniquement si la demande est suffisamment precise pour etre implementee sans inventer de regle importante. Sinon utilise `reject` ou `reformulate`.
 Une recommandation `approve` n'active rien et ne remplace pas l'autorisation prevue par la politique du projet.
+Si tu choisis `reformulate`, fournis dans `reformulated_request` une demande complete et corrigee. Elle doit contenir un titre, un besoin, un obstacle, un changement propose, un mecanisme unique complet et des tests d'acceptation executables. Si tu choisis `approve` ou `reject`, utilise null.
 
 Reponds exclusivement selon le schema fourni.
 
@@ -60,12 +61,11 @@ Demande :
 (run_dir / "validator-prompt.txt").write_text(prompt, encoding="utf-8")
 PY
 
-"$CODEX_BIN" exec \
+"$CODEX_BIN" --ask-for-approval never exec \
   --cd "$ROOT" \
   --model "$CODEX_MODEL" \
   -c "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"" \
   --sandbox read-only \
-  --ask-for-approval never \
   --ephemeral \
   --output-schema "$SCHEMA" \
   --output-last-message "$RUN_DIR/validator-result.json" \
@@ -86,6 +86,8 @@ if result.get("request_id") != request_id:
     raise SystemExit("La réponse Validator ne correspond pas à la demande")
 if result.get("decision") not in {"approve", "reject", "reformulate"}:
     raise SystemExit("Décision Validator invalide")
+if result.get("decision") == "reformulate" and not isinstance(result.get("reformulated_request"), dict):
+    raise SystemExit("Une reformulation Validator doit fournir une demande complete")
 record = {"request_id": request_id, "status": "validated", "recommendation": result}
 (run_dir / "validation-record.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(record, ensure_ascii=False))

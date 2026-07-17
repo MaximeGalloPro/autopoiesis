@@ -1,0 +1,6 @@
+.git
+.env
+build
+data
+worktrees
+*.log

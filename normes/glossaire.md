@@ -46,7 +46,7 @@ Action ou aptitude disponible pour un personnage lorsque ses préconditions loca
 
 ### Demande d'évolution
 
-Proposition structurée indiquant un besoin, un obstacle, un mécanisme souhaité et des critères d'acceptation. Son statut initial est `pending`. Elle ne peut devenir `approved` qu'après le contrôle de l'instance validatrice et l'autorisation prévue par la politique active. La politique actuelle exige une validation humaine explicite.
+Proposition structurée indiquant un besoin, un obstacle, un mécanisme souhaité et des critères d'acceptation. Son statut initial est `pending`. Elle ne peut devenir `approved` qu'après le contrôle de l'instance validatrice et l'autorisation prévue par la politique active. La politique actuelle exige une validation humaine explicite. Le Validator peut être humain (`VALIDATOR_MODE=human`) ou Codex (`VALIDATOR_MODE=codex`), mais le mode Codex ne fait qu'émettre une recommandation et ne franchit jamais cette garde.
 
 ### Cycle
 
@@ -82,6 +82,18 @@ La mémoire narrative et la mémoire spatiale sont stockées séparément. La pr
 ### Évolution contrôlée
 
 Une demande suit le flux `pending → approved → implementation → tests → verification → nouvelle version`. Aucune transition ne doit être implicite. `approved` autorise Dieu à travailler sur la demande ; il n'autorise pas à ignorer les tests ni à activer un résultat non vérifié.
+
+Une recommandation `reformulate` crée une nouvelle demande liée à la précédente. Le nombre maximal de reformulations est `VALIDATOR_MAX_REFORMULATIONS` et vaut `3` par défaut. Une demande qui dépasse cette limite devient `rejected` et ne peut pas être transmise à Dieu.
+
+### Changelog de Dieu
+
+Journal généré pour chaque exécution de Dieu. Il décrit la demande approuvée, le mécanisme visé, les fichiers modifiés et le résultat de la vérification. Il est conservé dans les artefacts d'exécution et ne constitue ni un commit ni une autorisation d'activation.
+
+### Interface de validation
+
+Vue terminal minimale lancée après une simulation interactive lorsqu'une demande attend une décision humaine. Elle affiche les données structurées et délègue toute transition aux scripts existants ; elle ne devient jamais une source d'état parallèle.
+
+Après approbation, elle orchestre l'observation d'une seule évolution : démarrage de Dieu, attente de son compte rendu, lancement de la vérification, affichage du bilan, puis choix de revenir aux demandes. Elle n'exécute aucune règle du moteur et ne fusionne aucun worktree.
 
 ### Protocole d'intervention
 

@@ -6,7 +6,32 @@
     "decision": {"type": "string", "enum": ["approve", "reject", "reformulate"]},
     "reason": {"type": "string"},
     "scope": {"type": "string"},
-    "risks": {"type": "array", "items": {"type": "string"}}
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "reformulated_request": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "need": {"type": "string"},
+        "obstacle": {"type": "string"},
+        "proposed_change": {"type": "string"},
+        "mechanism": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {"type": "string"},
+            "summary": {"type": "string"},
+            "resources": {"type": "array", "items": {"type": "string"}},
+            "actions": {"type": "array", "items": {"type": "string"}},
+            "preconditions": {"type": "array", "items": {"type": "string"}},
+            "deterministic_effects": {"type": "array", "items": {"type": "string"}}
+          },
+          "required": ["name", "summary", "resources", "actions", "preconditions", "deterministic_effects"]
+        },
+        "acceptance_tests": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["title", "need", "obstacle", "proposed_change", "mechanism", "acceptance_tests"]
+    }
   },
-  "required": ["request_id", "decision", "reason", "scope", "risks"]
+  "required": ["request_id", "decision", "reason", "scope", "risks", "reformulated_request"]
 }
