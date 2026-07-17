@@ -16,6 +16,6 @@ class Logger {
   void message(const std::string& line);
   const std::vector<std::string>& recent() const { return recent_; }
  private:
-  std::ofstream readable_, structured_; std::vector<std::string> recent_; std::string directory_; unsigned long request_counter_{0};
+  std::ofstream readable_, structured_; std::vector<std::string> recent_; std::string directory_, request_prefix_; unsigned long request_counter_{0};
 };
 }

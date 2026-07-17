@@ -11,7 +11,8 @@ namespace apo {
 namespace {
 using path = std::filesystem::path;
 
-std::vector<json> read_jsonl(const path& file, std::ostream& output) {
+std::vector<json> read_jsonl(const path& file, std::ostream& output,
+                             std::set<std::string>& notices) {
   std::vector<json> items;
   std::ifstream input(file);
   if (!input) return items;
@@ -25,8 +26,10 @@ std::vector<json> read_jsonl(const path& file, std::ostream& output) {
       ++invalid_lines;
     }
   }
-  if (invalid_lines>0) output << invalid_lines << " ligne(s) JSON invalide(s) ignoree(s) dans "
-                              << file.filename().string() << ".\n";
+  const auto notice_key="invalid:"+file.string();
+  if (invalid_lines>0 && notices.insert(notice_key).second)
+    output << invalid_lines << " ligne(s) JSON invalide(s) ignoree(s) dans "
+           << file.filename().string() << ".\n";
   return items;
 }
 
@@ -62,17 +65,23 @@ void write_validation_record(const path& data_directory, const json& request,
 }
 
 std::vector<json> current_requests(const path& data_directory, int day, int simulation_cycle,
-                                    std::ostream& output) {
-  const auto requests = read_jsonl(data_directory / "feature_requests.jsonl", output);
-  const auto approved = ids_from(read_jsonl(data_directory / "approved_feature_requests.jsonl", output));
-  const auto rejected = ids_from(read_jsonl(data_directory / "rejected_feature_requests.jsonl", output));
+                                    std::ostream& output, std::set<std::string>& notices) {
+  const auto requests = read_jsonl(data_directory / "feature_requests.jsonl", output, notices);
+  const auto approved = ids_from(read_jsonl(data_directory / "approved_feature_requests.jsonl", output, notices));
+  const auto rejected = ids_from(read_jsonl(data_directory / "rejected_feature_requests.jsonl", output, notices));
   std::vector<json> current;
+  std::set<std::string> seen_ids;
+  std::size_t duplicates=0;
   for (const auto& request : requests) {
     const auto id = request.value("id", "");
     if (id.empty() || request.value("status", "") != "pending" || approved.contains(id) || rejected.contains(id)) continue;
     if (request.value("day", -1) != day || request.value("simulation_cycle", -1) != simulation_cycle) continue;
+    if (!seen_ids.insert(id).second) { ++duplicates; continue; }
     current.push_back(request);
   }
+  const auto notice_key="duplicates:"+std::to_string(day)+":"+std::to_string(simulation_cycle);
+  if (duplicates>0 && notices.insert(notice_key).second)
+    output << duplicates << " doublon(s) de demande ignore(s) pour cette fenêtre.\n";
   return current;
 }
 }
@@ -86,7 +95,7 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
   std::size_t selected_index=0;
   bool decision_made = false;
   while (true) {
-    auto requests = current_requests(data_directory, day, simulation_cycle, output_);
+    auto requests = current_requests(data_directory, day, simulation_cycle, output_, notices_);
     output_ << "\n=== VALIDATION HUMAINE ===\n"
             << "Jour " << day << " | Cycle elementaire " << simulation_cycle << "\n";
     if (requests.empty()) {
@@ -172,7 +181,9 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
       append_jsonl(data_directory / (approve ? "approved_feature_requests.jsonl" : "rejected_feature_requests.jsonl"), decided);
       write_validation_record(data_directory, decided, approve?"approve":"reject",
                               approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
-      output_ << (approve ? "Demande approuvée : " : "Demande refusée : ") << request_id << '\n';
+      output_ << (approve ? "Demande approuvée : " : "Demande refusée : ") << request_id << '\n'
+              << "Statut enregistré : " << (approve ? "approved" : "rejected")
+              << ". Le workflow de Dieu pourra maintenant traiter cette demande.\n";
       selected_index=0;
       decision_made=true;
       continue;

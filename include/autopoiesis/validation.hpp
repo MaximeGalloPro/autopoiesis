@@ -2,6 +2,7 @@
 
 #include "types.hpp"
 #include <iosfwd>
+#include <set>
 #include <string>
 
 namespace apo {
@@ -14,5 +15,6 @@ class HumanValidation {
   std::string data_directory_;
   std::istream& input_;
   std::ostream& output_;
+  std::set<std::string> notices_;
 };
 }
