@@ -31,14 +31,4 @@ if [[ "$simulation_status" -ne 0 ]]; then
   exit "$simulation_status"
 fi
 
-if [[ -t 0 && -t 1 ]]; then
-  if python3 scripts/evolution-ui.py --has-work; then
-    exec python3 scripts/evolution-ui.py
-  else
-    ui_status=$?
-    if [[ "$ui_status" -ne 1 ]]; then
-      exit "$ui_status"
-    fi
-  fi
-  printf '\nSimulation terminee : aucune demande ou evolution en attente.\n'
-fi
+printf '\nSimulation terminee proprement.\n'

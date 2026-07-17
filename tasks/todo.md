@@ -10,21 +10,21 @@
 
 ## Revue
 
-Compilation Docker GCC 12/CMake 3.25 réussie. Tests `autopoiesis_tests` réussis. Simulation Docker `--no-api --cycles 2` réussie après correction de la durée de vie du RNG local. Une exécution de trois cycles a produit 15 événements JSONL et 15 lignes lisibles dans `data/`.
+Compilation Docker GCC 12/CMake 3.25 réussie. Tests `autopoiesis_tests` réussis. Une journée contient 240 cycles élémentaires ; une fenêtre IA de trois journées atteint le cycle élémentaire 720 et déclenche deux appels par personnage.
 
 ## Extension demandée
 
 - [x] Ajouter `run.sh` pour lancer simplement le mode local ou, avec `USE_API=1`, le mode API.
-- [x] Documenter le sens actuel d'un cycle et la stratégie sûre de demandes de fonctionnalités.
+- [x] Documenter la différence entre cycle élémentaire, journée et fenêtre IA.
 - [x] Ajouter les demandes `blocked`, l'approbation terminale et le point d'entrée de hook Codex.
 - [x] Ajouter une mémoire spatiale persistante par personnage (`known_map`).
-- [x] Augmenter les baies, ajouter trois cycles de grâce contre la faim critique et arrêter la simulation quand tous sont morts.
-- [x] Ajouter le bilan IA de fin de cycle et le flux de proposition d'évolution à valider humainement.
+- [x] Augmenter les baies, ajouter trois journées de grâce contre la faim critique et arrêter la simulation quand tous sont morts.
+- [x] Ajouter le bilan IA et la demande d'évolution en deux appels à la fin d'une fenêtre IA.
 - [x] Ajouter un budget API persistant et verrouillé par run, configurable par `LIMIT_LLM_API_CALLS`.
 
 ## Priorité actuelle
 
-- [x] Produire les bilans IA et demandes potentielles à chaque fin de cycle.
+- [x] Produire un bilan puis une demande par personnage à chaque fin de fenêtre IA.
 - [ ] Faire de Dieu un architecte contrôlé : il propose des mécanismes, mais ne modifie jamais directement le monde ou le code.
 - [ ] Formaliser chaque évolution en TDD : test échouant, implémentation minimale, tests verts, revue.
 - [ ] Construire la progression par mécanismes : baies/chasse, bois, haches, fer, fabrication, nouveaux besoins et nouvelles capacités.

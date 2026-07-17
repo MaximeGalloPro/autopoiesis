@@ -48,22 +48,34 @@ Action ou aptitude disponible pour un personnage lorsque ses préconditions loca
 
 Proposition structurée indiquant un besoin, un obstacle, un mécanisme souhaité et des critères d'acceptation. Son statut initial est `pending`. Elle ne peut devenir `approved` qu'après le contrôle de l'instance validatrice et l'autorisation prévue par la politique active. La politique actuelle exige une validation humaine explicite. Le Validator peut être humain (`VALIDATOR_MODE=human`) ou Codex (`VALIDATOR_MODE=codex`), mais le mode Codex ne fait qu'émettre une recommandation et ne franchit jamais cette garde.
 
-### Cycle
+### Cycle élémentaire
 
-Dans le MVP, un cycle représente une journée complète de simulation contenant 240 créneaux d'action par personnage. Les appels IA sont produits selon `REPORT_EVERY_CYCLES`; la valeur `3` regroupe donc trois journées avant d'envoyer, pour chaque personnage, un bilan puis une demande d'évolution liée. Aucun retry HTTP ne doit ajouter un appel au quota.
+Un cycle élémentaire est un créneau pendant lequel chaque personnage vivant et éveillé reçoit au plus une décision locale. Il ne déclenche aucun appel API.
+
+### Journée
+
+Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `240` par défaut. Le paramètre `SIMULATION_DAYS` indique le nombre de journées exécutées par le programme.
+
+### Fenêtre IA
+
+Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
+
+Après chaque fenêtre IA, le moteur s'arrête et attend une confirmation humaine. La reprise est explicite (`o`) ; l'arrêt est explicite (`q`). Cette garde est active par défaut via `WAIT_FOR_HUMAN_VALIDATION=1`.
 
 ## Règles d'architecture
 
 1. Le décideur IA propose ; le moteur d'exécution dispose.
-2. Les 240 actions quotidiennes sont exécutées localement ; à la fréquence configurée, l'IA reçoit d'abord un bilan puis produit une demande d'évolution dans un second appel lié. Aucun appel IA ne décide les actions quotidiennes.
-3. Aucune réponse textuelle, justification ou demande IA ne peut modifier directement une variable du monde.
-4. Toute action est refusée par défaut si elle est inconnue, mal paramétrée ou indisponible.
-5. Une erreur IA ou réseau ne doit pas arrêter la simulation.
-6. Le mode local doit rester utilisable sans réseau ni clé et doit être reproductible avec une graine identique.
-7. La carte complète et les états invisibles ne doivent pas être transmis au décideur ou à l'observateur IA.
-8. Les propositions d'évolution sont journalisées, contrôlées par l'instance validatrice, puis seulement transmises à Dieu après l'autorisation prévue par la politique d'approbation.
-9. Les secrets restent dans l'environnement et ne sont jamais committés.
-10. Toute évolution du moteur suit le TDD : test échouant d'abord, implémentation minimale, tests verts, puis revue.
+2. Les cycles élémentaires sont exécutés localement ; à la fin de chaque fenêtre IA configurée, l'IA reçoit d'abord un bilan puis produit une demande d'évolution dans un second appel lié pour chaque personnage. Aucun appel IA ne décide les actions quotidiennes.
+3. La simulation ne franchit jamais une fenêtre IA sans passer par la garde de confirmation humaine, sauf désactivation explicite pour un run automatisé.
+4. Aucune réponse textuelle, justification ou demande IA ne peut modifier directement une variable du monde.
+5. Toute action est refusée par défaut si elle est inconnue, mal paramétrée ou indisponible.
+6. Une erreur IA ou réseau ne doit pas arrêter la simulation.
+7. Le mode local doit rester utilisable sans réseau ni clé et doit être reproductible avec une graine identique.
+8. La carte complète et les états invisibles ne doivent pas être transmis au décideur ou à l'observateur IA.
+9. Les propositions d'évolution sont journalisées, contrôlées par l'instance validatrice, puis seulement transmises à Dieu après l'autorisation prévue par la politique d'approbation.
+10. Les secrets restent dans l'environnement et ne sont jamais committés.
+11. Toute évolution du moteur suit le TDD : test échouant d'abord, implémentation minimale, tests verts, puis revue.
+12. Toute session de modification terminée doit se conclure par la compilation, les tests, un commit Git et un push vers le dépôt distant. Une modification non poussée n'est pas considérée comme livrée, car elle ne peut pas être récupérée pour lancer le jeu.
 
 ## Patterns
 
@@ -91,15 +103,15 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 ### Interface de validation
 
-Vue terminal minimale lancée après une simulation interactive lorsqu'une demande attend une décision humaine ou lorsqu'une évolution déjà approuvée attend Dieu. Elle affiche les données structurées et délègue toute transition aux scripts existants ; elle ne devient jamais une source d'état parallèle.
+Vue terminal minimale intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. Elle lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, affiche les données structurées et écrit directement les transitions humaines `approved` ou `rejected`. Elle ne devient jamais une source d'état parallèle et ne nécessite pas de script lancé dans un autre terminal.
 
-Après approbation, elle orchestre l'observation d'une seule évolution : démarrage de Dieu, attente de son compte rendu, lancement de la vérification, affichage du bilan, puis choix de revenir aux demandes. Elle n'exécute aucune règle du moteur et ne fusionne aucun worktree.
+Après approbation, elle persiste la transition et rend la main à la simulation. L'orchestration de Dieu et la vérification restent des étapes séparées du workflow d'évolution ; l'interface intégrée n'exécute aucune règle du moteur et ne fusionne aucun worktree.
 
 ### Protocole d'intervention
 
 Le protocole d'une évolution est une expérience complète, et non l'ajout direct d'une capacité :
 
-1. La personnification d'un personnage formule une demande d'évolution structurée à la fin d'un cycle.
+1. Après chaque fenêtre IA, la personnification d'un personnage formule un bilan puis une demande d'évolution structurée.
 2. L'instance validatrice examine le besoin, le périmètre, le mécanisme et les critères d'acceptation en lecture seule. Elle peut accepter, refuser ou demander une reformulation.
 3. Une demande acceptée par la politique d'approbation passe explicitement de `pending` à `approved`. Cette transition constitue l'autorisation donnée à Dieu.
 4. Dieu, l'orchestrateur d'évolution, transforme uniquement cette demande approuvée en test et en modification isolée du moteur. Il ne traite pas les autres demandes en attente.
@@ -114,7 +126,7 @@ Le projet conserve actuellement une validation humaine explicite comme garde d'a
 
 ### Demande à Dieu
 
-À chaque fin de cycle, l'observateur IA reçoit l'historique pertinent d'un personnage. Il peut transformer un besoin récurrent ou un obstacle en proposition concrète d'évolution du monde, des capacités ou des algorithmes. La proposition n'est jamais exécutée dans la simulation en cours : elle attend le contrôle de l'instance validatrice, l'autorisation donnée à Dieu et une intégration vérifiée dans une version ultérieure du moteur.
+À chaque fin de fenêtre IA, l'observateur IA reçoit l'historique pertinent d'un personnage. Il peut transformer un besoin récurrent ou un obstacle en proposition concrète d'évolution du monde, des capacités ou des algorithmes. La proposition n'est jamais exécutée dans la simulation en cours : elle attend le contrôle de l'instance validatrice, l'autorisation donnée à Dieu et une intégration vérifiée dans une version ultérieure du moteur.
 
 Une demande `pending` doit identifier un titre, le besoin, l'obstacle, le changement proposé et un mécanisme unique. Ce mécanisme décrit ses ressources, actions, préconditions, effets déterministes et tests d'acceptation non vides. Une demande IA qui ne respecte pas ce contrat est journalisée comme rejetée et ne devient pas `pending`.
 
@@ -125,6 +137,10 @@ La simulation se complexifie par petites extensions testées. Un personnage peut
 ### Reproductibilité
 
 Tout hasard du moteur local passe par une graine configurable. Les réponses IA ne sont pas considérées comme déterministes ; pour les rejouer, il faut enregistrer ou simuler les décisions.
+
+### Livraison obligatoire
+
+Après chaque run de modifications : vérifier le diff et l'absence de secrets, compiler, exécuter les tests, construire Docker, committer les changements avec un message explicite, puis pousser la branche courante vers le dépôt distant. Si le commit ou le push échoue, le travail reste ouvert et l'échec doit être signalé ; il ne faut pas déclarer la modification terminée.
 
 ## Ajouts futurs
 

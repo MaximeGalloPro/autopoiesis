@@ -8,8 +8,10 @@ class IDecider { public: virtual ~IDecider() = default; virtual Decision decide(
 class ICycleReporter {
  public:
   virtual ~ICycleReporter() = default;
-  virtual json report_cycle(int cycle, const Agent& agent, const std::vector<std::string>& history) = 0;
-  virtual json request_evolution(int, const Agent&, const std::vector<std::string>&, const json&) { return nullptr; }
+  virtual json report_period(int simulation_cycle, int day, const Agent& agent,
+                             const std::vector<std::string>& history) = 0;
+  virtual json request_evolution(int, int, const Agent&, const std::vector<std::string>&,
+                                 const json&) { return nullptr; }
 };
 class LocalDecider final : public IDecider {
  public: explicit LocalDecider(std::mt19937& rng) : rng_(rng) {} Decision decide(const Perception&) override;
@@ -17,13 +19,15 @@ class LocalDecider final : public IDecider {
 };
 class Simulation {
  public:
+  using ValidationGate = std::function<bool(int day, int simulation_cycle)>;
   Simulation(unsigned seed, IDecider& decider, Logger& logger, ICycleReporter* reporter = nullptr);
-  void run(int cycles, int delay_ms, int render_every);
-  void cycle();
+  void run(int days, int delay_ms, int render_every_days,
+           const ValidationGate& validation_gate = {});
+  void run_day();
   const World& world() const { return world_; } const std::vector<Agent>& agents() const { return agents_; }
  private:
-  static constexpr int actions_per_cycle_=240;
-  World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; int report_every_cycles_{1}; int cycle_{0};
+  World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_;
+  int cycles_per_day_{240}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
   std::map<std::string,std::vector<std::string>> action_history_;
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
 };

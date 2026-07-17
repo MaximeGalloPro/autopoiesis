@@ -1,87 +1,78 @@
 # Autopoiesis
 
-Autopoiesis simule des personnages dans un monde déterministe. Ils perçoivent leur environnement, agissent selon leurs besoins, puis peuvent formuler des demandes d'évolution à la fin d'une période.
-
-Le principe est strict :
+Autopoiesis simule des personnages dans un monde déterministe. Le moteur local
+fait avancer leurs besoins et leurs actions ; l'IA intervient seulement pour
+faire le bilan d'une période et proposer une évolution contrôlée.
 
 ```text
-perception → décision IA → validation locale → exécution déterministe
-                                      ↓
-                         demande d'évolution pending
-                                      ↓
-                   Validator → approbation humaine → Dieu → tests
+actions locales → 3 journées → bilan IA → demande IA à Dieu
+                                  (2 appels par personnage)
+                                  → Validator → approbation → Dieu → tests
 ```
 
-L'IA propose. Le moteur décide de ce qui est possible. Dieu ne travaille que sur une demande approuvée et vérifiée.
+## Horloge et appels API
+
+- Un **cycle élémentaire** est un créneau d'action pour chaque personnage.
+- Une **journée** contient `CYCLES_PER_DAY=240` cycles élémentaires.
+- La fenêtre IA par défaut est `REPORT_EVERY_DAYS=3`, donc `720` cycles élémentaires.
+- À la fin de cette fenêtre, chaque personnage déclenche exactement deux appels, dans cet ordre : bilan, puis demande d'évolution.
+- Avec trois personnages, cela représente six appels API au cycle élémentaire `720`.
+- Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
+- Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
+- Le terminal affiche l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
+- La validation est intégrée au même terminal : `a N` approuve, `r N` refuse, `d N` affiche le détail, `o` reprend et `q` ou `exit` arrête proprement.
+
+Les décisions quotidiennes utilisent actuellement le décideur local. Une réponse
+IA ne modifie jamais directement le monde ni le code ; le moteur valide toute
+action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 
 ## Démarrage
 
-Le lancement normal utilise `.env` et appelle l'API :
+Le lancement normal lit `.env` et utilise l'API :
 
 ```bash
 ./run.sh
 ```
 
-Les valeurs par défaut sont définies par `SIMULATION_CYCLES`, `SIMULATION_DELAY_MS` et `SIMULATION_RENDER_EVERY` dans `.env`. Une option donnée au lancement est prioritaire, par exemple :
+Les valeurs par défaut sont `SIMULATION_DAYS=100`, `CYCLES_PER_DAY=240`,
+`SIMULATION_DELAY_MS=500`, `SIMULATION_RENDER_EVERY_DAYS=1` et
+`REPORT_EVERY_DAYS=3`. Les options de commande sont prioritaires :
 
 ```bash
-./run.sh --cycles 3 --delay-ms 0 --render-every 0
+./run.sh --days 3 --delay-ms 0 --render-every-days 1
 ```
 
-Sans API, pour un essai reproductible :
+Pour un run local sans réseau :
 
 ```bash
-USE_API=0 ./run.sh --cycles 3 --delay-ms 0 --render-every 0
+USE_API=0 ./run.sh --days 3 --delay-ms 0 --render-every-days 1
 ```
 
-Dans le MVP, un cycle représente une journée complète de 240 actions par personnage. Avec `REPORT_EVERY_CYCLES=3`, chaque personnage déclenche exactement deux appels après trois journées : un bilan, puis une demande d'évolution liée à ce bilan. Avec trois personnages, cela fait six appels API par fenêtre ; aucune décision quotidienne n'est envoyée à l'API et aucun retry HTTP n'est effectué. Avec `FEATURE_REQUESTS_REQUIRED=1`, la demande d'évolution est obligatoire. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
+Le délai est appliqué entre deux journées. `SIMULATION_DELAY_MS=0` lance le
+moteur à pleine vitesse. Le budget API est indépendant de l'horloge ; avec
+`LIMIT_LLM_API_CALLS=100`, il s'arrête lorsque cette limite est atteinte.
+`WAIT_FOR_HUMAN_VALIDATION=1` active la pause et l'interface de validation
+intégrée à chaque fin de fenêtre ; `0` est réservé aux runs automatisés.
 
-Les demandes apparaissent dans `data/feature_requests.jsonl`. Les bilans sont conservés dans `data/ai_reports.jsonl`.
-
-Depuis un terminal interactif, `run.sh` ouvre automatiquement l'interface lorsqu'une demande attend une décision ou qu'une évolution approuvée attend Dieu. En mode automatisé ou sans demande, il se termine après avoir affiché l'état final.
-
-`USE_API=0` désactive l'API pour un run local ; cette variable peut être définie dans `.env` ou préfixer la commande.
+Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
+`data/feature_requests.jsonl`.
 
 ## Évolution contrôlée
 
-1. L'IA formule une demande `pending`.
-2. Le Validator vérifie son contrat, son périmètre et sa testabilité en lecture seule.
-3. L'utilisateur approuve ou refuse explicitement la demande.
-4. Dieu travaille dans `worktrees/god-<id>` et applique le TDD : test rouge, changement minimal, test vert.
-5. Le vérificateur exécute CMake, les tests et le build Docker.
-6. Le résultat est conservé dans `data/evolution_runs/<id>/` et `data/god-changelog.md`.
+1. Après la fenêtre de trois journées, la personnification produit un bilan puis une demande structurée.
+2. Le moteur se met en pause et attend la confirmation humaine de la validation à effectuer.
+3. Le Validator contrôle la demande en lecture seule et recommande `approve`, `reject` ou `reformulate`.
+4. L'approbation humaine explicite autorise Dieu à travailler sur cette seule demande.
+5. Dieu applique le TDD dans un worktree isolé : test rouge, changement minimal, test vert.
+6. Le vérificateur lance les tests, la compilation et le build Docker avant toute activation.
 
-Le Validator ne modifie ni le code ni le statut de la demande. Dieu ne fusionne rien et aucune capacité n'est active avant la revue finale.
+`VALIDATOR_MODE=human` attend la décision dans l'interface intégrée. `VALIDATOR_MODE=codex`
+lance Codex en lecture seule, mais la garde d'approbation humaine reste active.
+`VALIDATOR_MAX_REFORMULATIONS=3` limite les reformulations successives.
 
-### Choisir le Validator
-
-Dans `.env` :
-
-```dotenv
-VALIDATOR_MODE=human
-```
-
-`human` laisse la demande en attente et attend :
-
-```bash
-./scripts/approve-feature.sh <feature-request-id>
-```
-
-`codex` lance une instance Codex en lecture seule. Elle écrit une recommandation dans `data/evolution_runs/<id>/validation-record.json`, puis attend toujours l'approbation humaine.
-
-L'interface affiche la demande et l'avis du Validator. Les choix sont `a` pour approuver, `r` pour refuser, `d` pour afficher le JSON complet et `q` pour quitter. Elle appelle les scripts d'approbation existants ; elle ne contient pas de logique métier.
-
-Après une approbation, elle reste ouverte : elle suit le démarrage de Dieu, son travail dans le worktree, la vérification CMake/tests/Docker, affiche le bilan puis demande si une autre évolution doit être lancée.
-
-Avec `VALIDATOR_MAX_REFORMULATIONS=3`, une recommandation `reformulate` peut créer jusqu'à trois nouvelles versions liées de la demande. Au-delà, elle est classée `rejected`.
-
-Le daemon macOS `launchd` exécute cette chaîne périodiquement avec :
-
-```bash
-./scripts/evolution-daemon.sh
-```
-
-Les commandes manuelles sont :
+L'interface terminal est affichée directement par le binaire après chaque
+fenêtre IA. Les hooks restent disponibles pour l'automatisation du Validator
+et de Dieu, mais ne sont plus nécessaires pour valider une demande :
 
 ```bash
 ./scripts/validator-feature-hook.sh <feature-request-id>
@@ -89,9 +80,10 @@ Les commandes manuelles sont :
 ./scripts/verify-evolution.sh <feature-request-id>
 ```
 
-## Configuration
+Chaque évolution est journalisée dans `data/evolution_runs/<id>/` et
+`data/god-changelog.md`.
 
-Les modèles sont séparés par rôle :
+## Configuration des modèles
 
 ```dotenv
 OPENAI_MODEL=gpt-5.6-terra
@@ -101,13 +93,8 @@ CODEX_GOD_MODEL=gpt-5.6-sol
 CODEX_GOD_REASONING_EFFORT=low
 ```
 
-`LLM_API_KEY` reste uniquement dans `.env`. Il n'est jamais écrit dans le code, les journaux ou l'image Docker.
-
-## État du MVP
-
-Le moteur contient actuellement les besoins, les baies, le sommeil, la conversation adjacente et la chasse au lapin. Les personnages utilisent encore le décideur local pour leurs actions quotidiennes ; l'API intervient dans les bilans et les demandes d'évolution.
-
-La croissance prévue reste incrémentale : couper des arbres, fabriquer une hache, extraire du fer, fabriquer des outils, construire, puis ajouter de nouveaux besoins. Chaque mécanisme doit rester déterministe, localement validé et livré avec des tests.
+`LLM_API_KEY` reste dans `.env` et n'est jamais écrit dans le code, les logs ou
+l'image Docker.
 
 ## Vérifier
 
@@ -118,4 +105,10 @@ ctest --test-dir build --output-on-failure
 docker compose build
 ```
 
-Les règles d'architecture et le protocole complet sont dans [`normes/glossaire.md`](normes/glossaire.md). Les secrets et les données d'exécution sont exclus de Git.
+Une modification n'est livrée qu'après ces vérifications, un commit Git et un
+push vers le dépôt distant. Cette étape est obligatoire pour que le jeu soit
+récupérable et lançable depuis ton environnement.
+
+Le vocabulaire et les invariants complets sont dans
+[`normes/glossaire.md`](normes/glossaire.md). Le suivi de reprise est dans
+[`TODO.md`](TODO.md).

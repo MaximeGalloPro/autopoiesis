@@ -12,7 +12,15 @@ import time
 def read_jsonl(path):
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    items = []
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError as error:
+            print(f"Ligne JSON invalide ignoree dans {path.name} (ligne {number}): {error}", file=sys.stderr)
+    return items
 
 
 def load_state(root):

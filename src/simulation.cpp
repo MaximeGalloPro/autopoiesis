@@ -3,24 +3,20 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <iostream>
 #include <limits>
 #include <thread>
 
 namespace apo {
-static int report_interval_from_env() {
-  const char* configured=std::getenv("REPORT_EVERY_CYCLES");
-  if(!configured) return 1;
+static int positive_int_from_env(const char* name, int fallback) {
+  const char* configured=std::getenv(name);
+  if(!configured) return fallback;
   try {
-    int interval=std::stoi(configured);
-    return interval>0 ? interval : 1;
+    int value=std::stoi(configured);
+    return value>0 ? value : fallback;
   } catch(...) {
-    return 1;
+    return fallback;
   }
-}
-
-static bool feature_requests_required() {
-  const char* configured=std::getenv("FEATURE_REQUESTS_REQUIRED");
-  return !configured || std::string(configured)!="0";
 }
 
 Decision LocalDecider::decide(const Perception& p) {
@@ -63,7 +59,7 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   return true;
 }
 
-Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),report_every_cycles_(report_interval_from_env()){
+Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",240)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)){
   agents_={{"a1","Ada",{3,2},100,45,20,{90,20,30,30,40}},{"a2","Borin",{10,5},100,55,15,{25,85,70,90,40}},{"a3","Cyra",{16,7},100,35,60,{40,45,95,55,90}}};
 }
 
@@ -77,12 +73,12 @@ Perception Simulation::perceive(Agent& a) {
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);if(action_index%12==0)a.fatigue=clamp_stat(a.fatigue+1);}
-void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_cycles;if(a.critical_hunger_cycles>3)a.health=clamp_stat(a.health-5);}else a.critical_hunger_cycles=0;if(a.health==0)a.alive=false;}
+void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_days;if(a.critical_hunger_days>3)a.health=clamp_stat(a.health-5);}else a.critical_hunger_days=0;if(a.health==0)a.alive=false;}
 
 std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.type==DecisionType::Blocked){a.remember("I reported a blockage: "+d.obstacle);return "signale un blocage : "+d.obstacle;}
   if(d.action=="wait"||d.action=="observe"){a.remember(d.action=="wait"?"J'ai attendu.":"J'ai observe mon environnement.");return "attend";}
-  if(d.action=="sleep"){a.sleeping_cycles=2;a.fatigue=clamp_stat(a.fatigue-20);a.remember("Je commence a dormir.");return "commence a dormir";}
+  if(d.action=="sleep"){a.sleeping_days=2;a.fatigue=clamp_stat(a.fatigue-20);a.remember("Je commence a dormir.");return "commence a dormir";}
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
   if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
   if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=a.position;if(dir=="north")--p.y;if(dir=="south")++p.y;if(dir=="east")++p.x;if(dir=="west")--p.x;if(world_.passable(p)){a.position=p;a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
@@ -90,22 +86,59 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   return "attend";
 }
 
-void Simulation::cycle(){
-  ++cycle_; world_.advance_nature(rng_);
-  for(auto& agent:agents_) if(agent.alive&&agent.sleeping_cycles>0){--agent.sleeping_cycles;agent.fatigue=clamp_stat(agent.fatigue-15);logger_.message("Cycle "+std::to_string(cycle_)+" — "+agent.name+" dort.");}
-  for(int action_index=0;action_index<actions_per_cycle_;++action_index) for(auto& agent:agents_) if(agent.alive&&agent.sleeping_cycles==0){
+void Simulation::run_day(){
+  ++day_; world_.advance_nature(rng_);
+  for(auto& agent:agents_) if(agent.alive&&agent.sleeping_days>0){--agent.sleeping_days;agent.fatigue=clamp_stat(agent.fatigue-15);logger_.message("Jour "+std::to_string(day_)+" / cycle elementaire "+std::to_string(simulation_cycle_)+" — "+agent.name+" dort.");}
+  for(int action_index=0;action_index<cycles_per_day_;++action_index){
+    ++simulation_cycle_;
+    for(auto& agent:agents_) if(agent.alive&&agent.sleeping_days==0){
     advance_action_needs(agent,action_index); Agent before=agent; Decision d=decider_.decide(perceive(agent)); std::string e;
-    if(!validate_decision(d,agent,world_,agents_,e)){d={DecisionType::Action,"wait",json::object(),"invalid decision"};logger_.message("Cycle "+std::to_string(cycle_)+" — "+agent.name+" decision invalide : "+e);}
-    if(d.type==DecisionType::Blocked) logger_.feature_request(cycle_,agent,d); auto result=execute(agent,d); auto& history=action_history_[agent.id]; std::string entry="cycle="+std::to_string(cycle_)+" action="+(d.type==DecisionType::Blocked?"blocked":d.action)+" outcome="+(action_succeeded(d,result)?"success":"failure")+" result="+result; if(!d.reason.empty()) entry+=" reason="+d.reason; if(!d.need.empty()) entry+=" need="+d.need; if(!d.obstacle.empty()) entry+=" obstacle="+d.obstacle; if(!d.desired_result.empty()) entry+=" desired_result="+d.desired_result; history.push_back(entry); if(history.size()>1200)history.erase(history.begin()); logger_.event(cycle_,before,d,result,agent);
+    if(!validate_decision(d,agent,world_,agents_,e)){d={DecisionType::Action,"wait",json::object(),"invalid decision"};logger_.message("Jour "+std::to_string(day_)+" / cycle elementaire "+std::to_string(simulation_cycle_)+" — "+agent.name+" decision invalide : "+e);}
+    if(d.type==DecisionType::Blocked) logger_.feature_request(simulation_cycle_,day_,agent,d); auto result=execute(agent,d); auto& history=action_history_[agent.id]; std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+" action="+(d.type==DecisionType::Blocked?"blocked":d.action)+" outcome="+(action_succeeded(d,result)?"success":"failure")+" result="+result; if(!d.reason.empty()) entry+=" reason="+d.reason; if(!d.need.empty()) entry+=" need="+d.need; if(!d.obstacle.empty()) entry+=" obstacle="+d.obstacle; if(!d.desired_result.empty()) entry+=" desired_result="+d.desired_result; history.push_back(entry); if(history.size()>1200)history.erase(history.begin()); logger_.event(simulation_cycle_,day_,before,d,result,agent);
+    }
   }
   for(auto& agent:agents_) if(agent.alive) update_needs(agent);
 }
 
-void Simulation::run(int cycles,int delay_ms,int render_every){
-  for(int i=0;i<cycles;++i){
-    cycle();
-    if(reporter_&&cycle_%report_every_cycles_==0) for(auto& agent:agents_){auto& history=action_history_[agent.id];auto report=reporter_->report_cycle(cycle_,agent,history);if(!report.is_null()){logger_.ai_report(cycle_,agent,report);if(feature_requests_required()||report.value("ask_god",false)){auto request=reporter_->request_evolution(cycle_,agent,history,report);if(!request.is_null())logger_.ai_feature_request(cycle_,agent,report,request);}}history.clear();}
-    bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;}); if(all_dead)logger_.message("Simulation arrêtée : tous les personnages sont morts."); if((render_every>0&&cycle_%render_every==0)||all_dead)render(cycle_,world_,agents_,logger_); if(all_dead)break; if(delay_ms>0)std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate){
+  for(int i=0;i<days;++i){
+    run_day();
+    bool period_complete=day_%report_every_days_==0;
+    bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
+    if(all_dead) logger_.message("Simulation arrêtée : tous les personnages sont morts.");
+    if((render_every_days>0&&day_%render_every_days==0)||all_dead) render(day_,simulation_cycle_,world_,agents_,logger_);
+
+    if(period_complete){
+      std::cout << "\n=== FENETRE IA : Jour " << day_ << " / Cycle elementaire "
+                << simulation_cycle_ << " ===\n" << std::flush;
+      if(!reporter_){
+        std::cout << "API désactivée : aucun appel à effectuer.\n" << std::flush;
+      } else {
+        const auto total_calls=agents_.size()*2;
+        std::size_t call_number=0;
+        for(auto& agent:agents_){
+          auto& history=action_history_[agent.id];
+          std::cout << "Appel " << ++call_number << "/" << total_calls
+                    << " — bilan de " << agent.name << " (en cours...)\n" << std::flush;
+          auto report=reporter_->report_period(simulation_cycle_,day_,agent,history);
+          std::cout << "Appel " << call_number << "/" << total_calls << " — bilan de "
+                    << agent.name << (report.is_null()?" indisponible":" terminé") << "\n" << std::flush;
+          if(!report.is_null()) logger_.ai_report(simulation_cycle_,day_,agent,report);
+
+          std::cout << "Appel " << ++call_number << "/" << total_calls
+                    << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;
+          auto request=reporter_->request_evolution(simulation_cycle_,day_,agent,history,report);
+          std::cout << "Appel " << call_number << "/" << total_calls << " — demande d'évolution pour "
+                    << agent.name << (request.is_null()?" indisponible":" terminée") << "\n" << std::flush;
+          if(!request.is_null()) logger_.ai_feature_request(simulation_cycle_,day_,agent,report,request);
+          history.clear();
+        }
+        std::cout << "Fenêtre IA terminée : " << total_calls << " appels tentés.\n" << std::flush;
+      }
+    }
+    if(all_dead) break;
+    if(period_complete&&validation_gate&&!validation_gate(day_,simulation_cycle_)){logger_.message("Simulation mise en pause après la validation humaine.");break;}
+    if(delay_ms>0) std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
   }
 }
 }

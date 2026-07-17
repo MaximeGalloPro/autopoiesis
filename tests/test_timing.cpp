@@ -6,13 +6,13 @@
 
 using namespace apo;
 
-struct WaitDecider final : IDecider {
+struct TimingDecider final : IDecider {
   Decision decide(const Perception&) override {
     return {DecisionType::Action, "wait", json::object(), "rest"};
   }
 };
 
-struct SplitReporter final : ICycleReporter {
+struct TimingReporter final : ICycleReporter {
   std::vector<std::string> events;
 
   json report_period(int simulation_cycle, int day, const Agent& agent,
@@ -39,10 +39,11 @@ int main() {
   setenv("CYCLES_PER_DAY", "240", 1);
   setenv("REPORT_EVERY_DAYS", "3", 1);
 
-  WaitDecider decider;
-  Logger logger("/tmp/autopoiesis-reporting-tests");
-  SplitReporter reporter;
+  TimingDecider decider;
+  Logger logger("/tmp/autopoiesis-timing-tests");
+  TimingReporter reporter;
   Simulation simulation(42, decider, logger, &reporter);
+
   simulation.run(2, 0, 0);
   assert(reporter.events.empty());
 
@@ -54,6 +55,15 @@ int main() {
   assert(reporter.events[3] == "request:a2:3:720");
   assert(reporter.events[4] == "report:a3:3:720");
   assert(reporter.events[5] == "request:a3:3:720");
+
+  int validation_gates = 0;
+  simulation.run(3, 0, 0, [&](int day, int simulation_cycle) {
+    ++validation_gates;
+    assert(day == 6);
+    assert(simulation_cycle == 1440);
+    return false;
+  });
+  assert(validation_gates == 1);
 
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");

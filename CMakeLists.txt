@@ -10,7 +10,7 @@ find_package(nlohmann_json REQUIRED)
 
 add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
-    src/renderer.cpp src/openai_client.cpp src/feature_request.cpp)
+    src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
@@ -31,3 +31,9 @@ add_test(NAME goal_decision COMMAND autopoiesis_goal_tests)
 add_executable(autopoiesis_reporting_tests tests/test_reporting.cpp)
 target_link_libraries(autopoiesis_reporting_tests PRIVATE autopoiesis_core)
 add_test(NAME reporting_pipeline COMMAND autopoiesis_reporting_tests)
+add_executable(autopoiesis_timing_tests tests/test_timing.cpp)
+target_link_libraries(autopoiesis_timing_tests PRIVATE autopoiesis_core)
+add_test(NAME ai_timing COMMAND autopoiesis_timing_tests)
+add_executable(autopoiesis_validation_tests tests/test_validation.cpp)
+target_link_libraries(autopoiesis_validation_tests PRIVATE autopoiesis_core)
+add_test(NAME human_validation COMMAND autopoiesis_validation_tests)

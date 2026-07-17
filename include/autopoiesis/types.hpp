@@ -14,7 +14,7 @@ enum class DecisionType { Action, Blocked };
 struct Personality { int curiosity{}; int prudence{}; int sociability{}; int patience{}; int empathy{}; };
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};
-  Personality personality; std::deque<std::string> memories; bool alive{true}; int sleeping_cycles{0}; int critical_hunger_cycles{0};
+  Personality personality; std::deque<std::string> memories; bool alive{true}; int sleeping_days{0}; int critical_hunger_days{0};
   void remember(const std::string& s) { memories.push_back(s); while (memories.size() > 10) memories.pop_front(); }
   std::map<std::pair<int,int>, Terrain> map_memory;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }

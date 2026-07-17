@@ -55,14 +55,14 @@ Decision OpenAIClient::decide(const Perception& p){
   Decision fallback; fallback.reason="API unavailable or call limit reached"; return fallback;
 }
 
-json OpenAIClient::report_cycle(int cycle,const Agent& agent,const std::vector<std::string>& history){
-  json context={{"cycle",cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
+json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history){
+  json context={{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
   std::string instructions="Personify this character and write a report for the completed simulation period. Explain the period from its perspective and assess its state. Include only the character voice, day summary, state assessment, and whether an evolution request should follow. Do not propose or claim any code or world change in this call.";
   return post_response(budget_,key_,model_,base_url_,instructions,context,report_schema());
 }
 
-json OpenAIClient::request_evolution(int cycle,const Agent& agent,const std::vector<std::string>& history,const json& report){
-  json context={{"cycle",cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
+json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report){
+  json context={{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
   std::string instructions="Using the completed character report and its verified action history, formulate exactly one human-reviewed evolution request. Describe one incremental deterministic mechanism with resources, actions, preconditions, deterministic effects, and executable acceptance tests. Never implement or activate anything; this output is only a pending proposal for the Validator and God.";
   return post_response(budget_,key_,model_,base_url_,instructions,context,feature_request_schema());
 }
