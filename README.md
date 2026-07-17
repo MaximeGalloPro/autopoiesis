@@ -89,6 +89,8 @@ Chaque évolution est journalisée dans `data/evolution_runs/<id>/` et
 `GOD_WAIT_TIMEOUT_SECONDS=300` borne l'attente interactive ; en cas de dépassement,
 le daemon continue et l'exécution peut reprendre. Les logs détaillés restent dans
 `data/evolution_runs/<id>/` et le résumé du daemon dans `data/evolution-daemon.log`.
+Le runner cherche automatiquement Codex dans le `PATH` puis dans l'installation
+VS Code ; `CODEX_BIN` permet de fournir un chemin absolu si nécessaire.
 
 ## Configuration des modèles
 

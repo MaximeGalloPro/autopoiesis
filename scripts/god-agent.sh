@@ -16,7 +16,7 @@ REQUEST_ID="$1"
 DATA_DIR="${DATA_DIR:-$ROOT/data}"
 RUN_DIR="$DATA_DIR/evolution_runs/$REQUEST_ID"
 WORKTREE="$ROOT/worktrees/god-$REQUEST_ID"
-CODEX_BIN="${CODEX_BIN:-codex}"
+CODEX_BIN="$($ROOT/scripts/find-codex.sh)"
 CODEX_MODEL="${CODEX_GOD_MODEL:-${CODEX_MODEL:-gpt-5.6-sol}}"
 CODEX_REASONING_EFFORT="${CODEX_GOD_REASONING_EFFORT:-${CODEX_REASONING_EFFORT:-low}}"
 
@@ -27,6 +27,12 @@ fi
 if ! git -C "$ROOT" diff --quiet || ! git -C "$ROOT" diff --cached --quiet; then
   echo "Le depot principal doit etre propre avant de creer le worktree de Dieu" >&2
   exit 1
+fi
+if [[ -f "$RUN_DIR/god-failed" ]]; then
+  git -C "$ROOT" worktree remove --force "$WORKTREE" 2>/dev/null || true
+  rm -f "$RUN_DIR/god-failed" "$RUN_DIR/god-started" "$RUN_DIR/god-finished" \
+    "$RUN_DIR/god-result.txt" "$RUN_DIR/god.stdout.log" "$RUN_DIR/god.stderr.log" \
+    "$RUN_DIR/worktree.path" "$RUN_DIR/changed-files.txt" "$RUN_DIR/god.patch"
 fi
 if [[ -e "$WORKTREE" ]]; then
   echo "Worktree deja present: $WORKTREE" >&2

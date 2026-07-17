@@ -36,6 +36,7 @@ trap cleanup EXIT
 
 if [[ "$evolution_autostart" == "1" ]]; then
   mkdir -p "$ROOT/data"
+  touch "$ROOT/data/evolution-session-started"
   (
     while true; do
       "$ROOT/scripts/evolution-daemon.sh" >> "$ROOT/data/evolution-daemon.log" 2>&1 || true

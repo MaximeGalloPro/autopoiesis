@@ -29,13 +29,15 @@ trap 'rmdir "$LOCK_DIR"' EXIT
 python3 "$ROOT/scripts/reformulate-feature.py" "$DATA_DIR" "$VALIDATOR_MAX_REFORMULATIONS"
 
 # Une approbation humaine est prioritaire sur les demandes encore pending.
-priority_approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" <<'PY'
+priority_approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/evolution-session-started" <<'PY'
 import json
 import pathlib
 import sys
 
 approved_path = pathlib.Path(sys.argv[1])
 runs_dir = pathlib.Path(sys.argv[2])
+session_path = pathlib.Path(sys.argv[3])
+session_started = session_path.stat().st_mtime if session_path.exists() else 0
 if not approved_path.exists():
     raise SystemExit(0)
 for line in reversed(approved_path.read_text(encoding="utf-8").splitlines()):
@@ -49,7 +51,9 @@ for line in reversed(approved_path.read_text(encoding="utf-8").splitlines()):
         continue
     request_id = request.get("id")
     run_dir = runs_dir / request_id if request_id else runs_dir / "__invalid__"
-    if request_id and not (run_dir / "worktree.path").exists() and not (run_dir / "god-failed").exists():
+    failed = run_dir / "god-failed"
+    retryable_failed = failed.exists() and failed.stat().st_mtime < session_started
+    if request_id and not (run_dir / "worktree.path").exists() and (not failed.exists() or retryable_failed):
         print(request_id)
         break
 PY
@@ -102,13 +106,15 @@ if [[ -n "$pending_id" ]]; then
   exit 0
 fi
 
-approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" <<'PY'
+approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/evolution-session-started" <<'PY'
 import json
 import pathlib
 import sys
 
 approved_path = pathlib.Path(sys.argv[1])
 runs_dir = pathlib.Path(sys.argv[2])
+session_path = pathlib.Path(sys.argv[3])
+session_started = session_path.stat().st_mtime if session_path.exists() else 0
 if not approved_path.exists():
     raise SystemExit(0)
 for line in approved_path.read_text(encoding="utf-8").splitlines():
@@ -119,7 +125,9 @@ for line in approved_path.read_text(encoding="utf-8").splitlines():
     except json.JSONDecodeError:
         continue
     run_dir = runs_dir / request_id
-    if request_id and not (run_dir / "worktree.path").exists() and not (run_dir / "god-failed").exists():
+    failed = run_dir / "god-failed"
+    retryable_failed = failed.exists() and failed.stat().st_mtime < session_started
+    if request_id and not (run_dir / "worktree.path").exists() and (not failed.exists() or retryable_failed):
         print(request_id)
         break
 PY
