@@ -60,5 +60,24 @@ int main() {
   assert(progress_output.str().find("Dieu") != std::string::npos);
   assert(progress_output.str().find("verified") != std::string::npos);
   unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory);
+  std::ofstream recent_requests(directory / "feature_requests.jsonl");
+  for (int index = 1; index <= 4; ++index) {
+    recent_requests << R"({"id":"recent-)" << index
+                    << R"(","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a1","agent_name":"Ada","title":"Recent )"
+                    << index << R"(","need":"Food","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["food"],"actions":["eat"],"preconditions":["hungry"],"deterministic_effects":["fed"]},"acceptance_tests":["It works"]})"
+                    << '\n';
+  }
+  recent_requests.close();
+  std::istringstream recent_input("exit\n");
+  std::ostringstream recent_output;
+  HumanValidation recent(directory.string(), recent_input, recent_output);
+  assert(!recent.review_window(3, 720));
+  assert(recent_output.str().find("recent-1") == std::string::npos);
+  assert(recent_output.str().find("recent-2") == std::string::npos);
+  assert(recent_output.str().find("recent-3") != std::string::npos);
+  assert(recent_output.str().find("recent-4") != std::string::npos);
   std::filesystem::remove_all(directory);
 }

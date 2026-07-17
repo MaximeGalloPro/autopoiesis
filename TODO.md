@@ -9,6 +9,8 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [ ] Améliorer le regroupement des événements pertinents transmis à l’IA pour chaque personnage.
 - [ ] Finaliser le format des demandes d’évolution adressées à Dieu avec critères d’acceptation testables.
 - [x] Relier l'approbation humaine au daemon de Dieu et afficher son suivi dans le même terminal.
+- [x] Limiter l'interface aux trois propositions les plus récentes et ajouter la correction TDD bornée de Dieu.
+- [x] Activer automatiquement une évolution vérifiée par commit et push.
 - [ ] Effectuer un run de bout en bout avec une demande approuvée et vérifier les logs de Dieu.
 - [ ] Concevoir le registre des actions, ressources, outils et capacités ajoutables au moteur.
 - [ ] Implémenter l’application isolée d’une évolution validée, avec test échouant avant activation.

@@ -33,6 +33,12 @@ def build_entry(run_dir: pathlib.Path) -> str:
             "verified": "verified, prête pour revue finale",
             "rejected": "rejected, vérification échouée",
         }.get(status, status)
+    activation_path = run_dir / "activation.json"
+    if activation_path.exists():
+        activation = load_json(activation_path)
+        if markdown_value(activation.get("status")) == "activated":
+            status = "activated"
+            status_label = "activated, poussée sur main"
 
     files = "\n".join(f"  - `{path}`" for path in changed) or "  - Aucun fichier modifié"
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()

@@ -40,6 +40,7 @@ if [[ -e "$WORKTREE" ]]; then
 fi
 
 mkdir -p "$RUN_DIR" "$ROOT/worktrees"
+touch "$RUN_DIR/activation-eligible"
 python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$REQUEST_ID" "$RUN_DIR" <<'PY'
 import json
 import pathlib
@@ -76,7 +77,7 @@ Regles imperatives :
 - conserve la separation entre decideur IA et moteur deterministe ;
 - ne lis ni ne modifies .env, secrets, scripts d'orchestration ou journaux de donnees ;
 - n'ajoute aucun mecanisme voisin, refactor ou amelioration opportuniste ;
-- ne committe rien et n'active rien ;
+- ne committe pas manuellement : l'orchestrateur committera et activera uniquement apres verification ;
 - termine par un compte rendu concis des fichiers modifies et des tests executes.
 
 Demande approuvee :
@@ -105,6 +106,7 @@ if [[ "$codex_status" -ne 0 ]]; then
   exit "$codex_status"
 fi
 date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/god-finished"
+printf '0\n' > "$RUN_DIR/correction-count"
 
 git -C "$WORKTREE" add -N -- .
 git -C "$WORKTREE" diff --binary > "$RUN_DIR/god.patch"

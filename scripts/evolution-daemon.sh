@@ -11,12 +11,17 @@ DATA_DIR="${DATA_DIR:-$ROOT/data}"
 LOCK_DIR="$DATA_DIR/evolution-daemon.lock"
 VALIDATOR_MODE="${VALIDATOR_MODE:-human}"
 VALIDATOR_MAX_REFORMULATIONS="${VALIDATOR_MAX_REFORMULATIONS:-3}"
+GOD_MAX_CORRECTIONS="${GOD_MAX_CORRECTIONS:-2}"
 if [[ "$VALIDATOR_MODE" != "human" && "$VALIDATOR_MODE" != "codex" ]]; then
   echo "VALIDATOR_MODE doit valoir human ou codex" >&2
   exit 2
 fi
 if ! [[ "$VALIDATOR_MAX_REFORMULATIONS" =~ ^[0-9]+$ ]]; then
   echo "VALIDATOR_MAX_REFORMULATIONS doit etre un entier positif ou nul" >&2
+  exit 2
+fi
+if ! [[ "$GOD_MAX_CORRECTIONS" =~ ^[0-9]+$ ]]; then
+  echo "GOD_MAX_CORRECTIONS doit etre un entier positif ou nul" >&2
   exit 2
 fi
 
@@ -106,6 +111,39 @@ if [[ -n "$pending_id" ]]; then
   exit 0
 fi
 
+correction_id="$(python3 - "$DATA_DIR/evolution_runs" "$GOD_MAX_CORRECTIONS" "$DATA_DIR/evolution-session-started" <<'PY'
+import json
+import pathlib
+import sys
+
+runs_dir = pathlib.Path(sys.argv[1])
+maximum = int(sys.argv[2])
+session_path = pathlib.Path(sys.argv[3])
+session_started = session_path.stat().st_mtime if session_path.exists() else 0
+if not runs_dir.exists():
+    raise SystemExit(0)
+for run_dir in sorted(runs_dir.iterdir(), reverse=True):
+    verification_path = run_dir / "verification.json"
+    count_path = run_dir / "correction-count"
+    if not verification_path.exists() or not count_path.exists():
+        continue
+    try:
+        verification = json.loads(verification_path.read_text(encoding="utf-8"))
+        count = int(count_path.read_text(encoding="utf-8").strip())
+    except (ValueError, json.JSONDecodeError):
+        continue
+    correction_failed = run_dir / "god-correction-failed"
+    failed_this_session = correction_failed.exists() and correction_failed.stat().st_mtime >= session_started
+    if verification.get("status") == "rejected" and count < maximum and (run_dir / "worktree.path").exists() and not failed_this_session:
+        print(run_dir.name)
+        break
+PY
+)"
+if [[ -n "$correction_id" ]]; then
+  "$ROOT/scripts/god-correction-agent.sh" "$correction_id"
+  exit 0
+fi
+
 approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/evolution-session-started" <<'PY'
 import json
 import pathlib
@@ -152,4 +190,35 @@ PY
 )"
 if [[ -n "$verification_id" ]]; then
   "$ROOT/scripts/verify-evolution.sh" "$verification_id"
+  exit 0
+fi
+
+activation_id="$(python3 - "$DATA_DIR/evolution_runs" "$DATA_DIR/evolution-session-started" <<'PY'
+import json
+import pathlib
+import sys
+
+runs_dir = pathlib.Path(sys.argv[1])
+session_path = pathlib.Path(sys.argv[2])
+session_started = session_path.stat().st_mtime if session_path.exists() else 0
+if not runs_dir.exists():
+    raise SystemExit(0)
+for run_dir in sorted(runs_dir.iterdir(), reverse=True):
+    verification_path = run_dir / "verification.json"
+    activation_started = run_dir / "activation-started"
+    if not verification_path.exists() or (run_dir / "activation.json").exists() or not (run_dir / "activation-eligible").exists():
+        continue
+    if activation_started.exists() and activation_started.stat().st_mtime >= session_started:
+        continue
+    try:
+        verification = json.loads(verification_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        continue
+    if verification.get("status") == "verified" and (run_dir / "worktree.path").exists():
+        print(run_dir.name)
+        break
+PY
+)"
+if [[ -n "$activation_id" ]]; then
+  "$ROOT/scripts/activate-evolution.sh" "$activation_id"
 fi

@@ -76,6 +76,16 @@ int god_wait_timeout_seconds() {
   }
 }
 
+int god_max_corrections() {
+  const char* value = std::getenv("GOD_MAX_CORRECTIONS");
+  if (!value || !*value) return 2;
+  try {
+    return std::max(0, std::stoi(value));
+  } catch (...) {
+    return 2;
+  }
+}
+
 void append_jsonl(const path& file, const json& item) {
   std::ofstream output(file, std::ios::app);
   if (output) output << item.dump() << '\n';
@@ -113,6 +123,22 @@ std::vector<json> current_requests(const path& data_directory, int day, int simu
     output << duplicates << " doublon(s) de demande ignore(s) pour cette fenêtre.\n";
   return current;
 }
+
+std::vector<json> select_window_requests(const std::vector<json>& available,
+                                         std::set<std::string>& window_ids,
+                                         std::ostream& output) {
+  if (window_ids.empty() && !available.empty()) {
+    const std::size_t first = available.size() > 3 ? available.size() - 3 : 0;
+    for (std::size_t index = first; index < available.size(); ++index)
+      window_ids.insert(available[index].value("id", ""));
+    if (available.size() > 3)
+      output << available.size() - 3 << " ancienne(s) proposition(s) masquee(s) : seules les 3 plus recentes sont proposees.\n";
+  }
+  std::vector<json> selected;
+  for (const auto& request : available)
+    if (window_ids.contains(request.value("id", ""))) selected.push_back(request);
+  return selected;
+}
 }
 
 HumanValidation::HumanValidation(std::string data_directory, std::istream& input,
@@ -126,6 +152,7 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
   std::string phase;
   std::string last_log;
   std::string last_daemon_log;
+  std::string last_verification_status;
   bool reported_result = false;
 
   output_ << "\n=== SUIVI DE DIEU ===\n"
@@ -138,10 +165,19 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
     const bool god_started = std::filesystem::exists(run_directory / "god-started");
     const bool god_result_ready = std::filesystem::exists(run_directory / "god-result.txt");
     const bool god_failed = std::filesystem::exists(run_directory / "god-failed");
+    const bool correction_failed = std::filesystem::exists(run_directory / "god-correction-failed");
     const bool verification_started = std::filesystem::exists(run_directory / "verification-started");
     const bool verification_ready = std::filesystem::exists(run_directory / "verification.json");
-    const std::string next_phase = god_failed ? "echec" : verification_ready ? "verification" :
-                                   verification_started ? "verification" :
+    const bool activation_ready = std::filesystem::exists(run_directory / "activation.json");
+    std::string verification_status;
+    if (verification_ready) {
+      try { verification_status = json::parse(read_text(run_directory / "verification.json")).value("status", ""); }
+      catch (const json::parse_error&) { verification_status.clear(); }
+    }
+    const bool activation_failed = std::filesystem::exists(run_directory / "activation-failed");
+    const std::string next_phase = god_failed || correction_failed ? "echec" : activation_failed ? "activation-echec" : activation_ready ? "activation-terminee" :
+                                   verification_status == "verified" ? "activation" :
+                                   verification_ready ? "correction" : verification_started ? "verification" :
                                    god_result_ready ? "compte-rendu" :
                                    god_started ? "implementation" :
                                    prompt_ready ? "preparation" : "attente";
@@ -151,7 +187,11 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
       if (phase == "preparation") output_ << "[Dieu] Prompt prepare, lancement de l'instance architecte.\n";
       if (phase == "implementation") output_ << "[Dieu] Instance active : lecture, test rouge, implementation minimale.\n";
       if (phase == "compte-rendu") output_ << "[Dieu] Compte rendu recu, passage a la verification.\n";
-      if (phase == "verification") output_ << "[Verifier] Compilation, tests et Docker termines.\n";
+      if (phase == "verification") output_ << "[Verifier] Compilation, tests et Docker en cours.\n";
+      if (phase == "correction") output_ << "[Verifier] Echec detecte : Dieu va recevoir le diagnostic pour correction.\n";
+      if (phase == "activation") output_ << "[Activation] Verification reussie, commit, push et activation en cours.\n";
+      if (phase == "activation-terminee") output_ << "[Activation] Version activee et poussee sur main.\n";
+      if (phase == "activation-echec") output_ << "[Activation] Echec du commit ou du push ; la version reste inactive.\n";
       if (phase == "echec") output_ << "[Dieu] Le runner a echoue ; consultez les logs de cette execution.\n";
     }
 
@@ -177,17 +217,40 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
     if (verification_ready) {
       try {
         const auto verification = json::parse(read_text(run_directory / "verification.json"));
-        output_ << "[Verifier] statut=" << verification.value("status", "inconnu")
-                << " | cmake=" << verification.value("cmake", "inconnu")
-                << " | tests=" << verification.value("tests", "inconnu")
-                << " | docker=" << verification.value("docker", "inconnu") << '\n'
-                << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-        return verification.value("status", "") == "verified";
+        const auto status = verification.value("status", "inconnu");
+        if (status != last_verification_status) {
+          last_verification_status = status;
+          output_ << "[Verifier] statut=" << status
+                  << " | cmake=" << verification.value("cmake", "inconnu")
+                  << " | tests=" << verification.value("tests", "inconnu")
+                  << " | docker=" << verification.value("docker", "inconnu") << '\n' << std::flush;
+        }
+        if (verification.value("status", "") == "verified" && activation_ready) {
+          try {
+            const auto activation = json::parse(read_text(run_directory / "activation.json"));
+            output_ << "[Activation] statut=" << activation.value("status", "inconnu")
+                    << " | commit=" << activation.value("commit", "inconnu") << '\n'
+                    << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+            return activation.value("status", "") == "activated";
+          } catch (const json::parse_error&) {
+            output_ << "[Activation] activation.json est encore en cours d'ecriture.\n";
+          }
+        } else if (verification.value("status", "") == "rejected") {
+          const auto count_text = read_text(run_directory / "correction-count");
+          try {
+            if (std::stoi(count_text) >= god_max_corrections()) {
+              output_ << "[Dieu] Limite de corrections atteinte.\n"
+                      << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+              return false;
+            }
+          } catch (...) {
+          }
+        }
       } catch (const json::parse_error&) {
         output_ << "[Verifier] verification.json est encore en cours d'ecriture.\n";
       }
     }
-    if (god_failed) {
+    if (god_failed || correction_failed || activation_failed) {
       output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
       return false;
     }
@@ -202,10 +265,13 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
 
 bool HumanValidation::review_window(int day, int simulation_cycle) {
   const path data_directory(data_directory_);
+  window_request_ids_.clear();
   std::size_t selected_index=0;
   bool decision_made = false;
   while (true) {
-    auto requests = current_requests(data_directory, day, simulation_cycle, output_, notices_);
+    auto requests = select_window_requests(
+        current_requests(data_directory, day, simulation_cycle, output_, notices_),
+        window_request_ids_, output_);
     output_ << "\n=== VALIDATION HUMAINE ===\n"
             << "Jour " << day << " | Cycle elementaire " << simulation_cycle << "\n";
     if (requests.empty()) {

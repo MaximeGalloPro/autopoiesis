@@ -61,6 +61,7 @@ Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `240` par dé
 Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
 
 Après chaque fenêtre IA, le moteur s'arrête et attend une confirmation humaine. La validation traite au maximum une demande parmi celles de la fenêtre ; les autres restent `pending`. La reprise est explicite (`o`) ; l'arrêt est explicite (`q`). Cette garde est active par défaut via `WAIT_FOR_HUMAN_VALIDATION=1`.
+L'interface ne présente que les trois demandes les plus récentes de la fenêtre courante. Les autres propositions restent conservées dans les journaux et `pending`, mais ne sont pas proposées dans ce choix.
 
 ## Règles d'architecture
 
@@ -97,6 +98,8 @@ Une demande suit le flux `pending → approved → implementation → tests → 
 
 Une recommandation `reformulate` crée une nouvelle demande liée à la précédente. Le nombre maximal de reformulations est `VALIDATOR_MAX_REFORMULATIONS` et vaut `3` par défaut. Une demande qui dépasse cette limite devient `rejected` et ne peut pas être transmise à Dieu.
 
+Après une première implémentation, le vérificateur peut renvoyer un diagnostic à Dieu. Dieu dispose de `GOD_MAX_CORRECTIONS` corrections, `2` par défaut. Chaque correction reprend le même worktree, ajoute ou ajuste un test, puis repasse par la vérification. Après la limite, le résultat reste rejeté et attend une décision humaine.
+
 ### Changelog de Dieu
 
 Journal généré pour chaque exécution de Dieu. Il décrit la demande approuvée, le mécanisme visé, les fichiers modifiés et le résultat de la vérification. Il est conservé dans les artefacts d'exécution et ne constitue ni un commit ni une autorisation d'activation.
@@ -118,7 +121,7 @@ Le protocole d'une évolution est une expérience complète, et non l'ajout dire
 5. Le test doit d'abord échouer, puis l'implémentation minimale doit le rendre vert. Dieu ne profite pas de l'occasion pour ajouter des mécanismes voisins.
 6. Un vérificateur déterministe exécute la compilation, les tests ciblés et la suite complète. Il contrôle aussi que la demande initiale est réellement satisfaite et que les invariants du monde sont conservés.
 7. Un compte rendu critique décrit le résultat, les écarts, les effets secondaires et la plus petite amélioration éventuellement justifiée. Cette critique ne déclenche aucune nouvelle évolution automatiquement.
-8. La nouvelle capacité n'est considérée active qu'après cette vérification et la revue finale.
+8. Après une vérification réussie, l'orchestrateur committe le worktree, pousse `main` puis active la nouvelle version. Si la vérification échoue, la boucle de correction bornée est utilisée avant cette activation.
 
 L'instance architecte qui a conçu ce dispositif ne joue aucun de ces rôles opérationnels. Elle ne valide pas les demandes et ne lance pas Dieu après la mise en service.
 
