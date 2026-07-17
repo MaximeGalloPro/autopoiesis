@@ -16,25 +16,31 @@ L'IA propose. Le moteur décide de ce qui est possible. Dieu ne travaille que su
 
 ## Démarrage
 
-Sans API, pour un essai reproductible :
+Le lancement normal utilise `.env` et appelle l'API :
 
 ```bash
-./run.sh --no-api --cycles 3 --delay-ms 0
+./run.sh
 ```
 
-Avec l'API, renseigner `.env`, puis lancer :
+Les valeurs par défaut sont définies par `SIMULATION_CYCLES`, `SIMULATION_DELAY_MS` et `SIMULATION_RENDER_EVERY` dans `.env`. Une option donnée au lancement est prioritaire, par exemple :
 
 ```bash
 ./run.sh --cycles 3 --delay-ms 0 --render-every 0
+```
+
+Sans API, pour un essai reproductible :
+
+```bash
+USE_API=0 ./run.sh --cycles 3 --delay-ms 0 --render-every 0
 ```
 
 Avec `REPORT_EVERY_CYCLES=3`, les bilans IA sont produits tous les trois cycles. Avec `FEATURE_REQUESTS_REQUIRED=1`, chaque bilan doit contenir une demande d'évolution structurée. `SIMULATION_DELAY_MS=500` définit le délai par défaut entre deux cycles ; `0` lance la simulation à pleine vitesse.
 
 Les demandes apparaissent dans `data/feature_requests.jsonl`. Les bilans sont conservés dans `data/ai_reports.jsonl`.
 
-Depuis un terminal interactif, `run.sh` ouvre automatiquement l'interface de validation lorsqu'une demande attend une décision. En mode automatisé ou sans demande, il se termine sans attendre une saisie.
+Depuis un terminal interactif, `run.sh` ouvre automatiquement l'interface lorsqu'une demande attend une décision ou qu'une évolution approuvée attend Dieu. En mode automatisé ou sans demande, il se termine après avoir affiché l'état final.
 
-Une option donnée au lancement est prioritaire sur `.env`, par exemple `./run.sh --delay-ms 0` ne modifie pas la configuration persistante.
+`USE_API=0` désactive l'API pour un run local ; cette variable peut être définie dans `.env` ou préfixer la commande.
 
 ## Évolution contrôlée
 

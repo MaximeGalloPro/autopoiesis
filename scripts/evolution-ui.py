@@ -33,8 +33,25 @@ def load_state(root):
     return actionable
 
 
+def load_approved_evolutions(root):
+    """Return approved requests whose God/verification run is not complete."""
+    data = root / "data"
+    pending = []
+    for request in read_jsonl(data / "approved_feature_requests.jsonl"):
+        request_id = request.get("id")
+        if not request_id:
+            continue
+        run_dir = data / "evolution_runs" / request_id
+        if (run_dir / "verification.json").exists():
+            continue
+        record_path = run_dir / "validation-record.json"
+        record = json.loads(record_path.read_text(encoding="utf-8")) if record_path.exists() else None
+        pending.append((request, record))
+    return pending
+
+
 def has_work(root):
-    return bool(load_state(root))
+    return bool(load_state(root) or load_approved_evolutions(root))
 
 
 def recommendation(record):
@@ -186,6 +203,27 @@ def interactive(root):
     print("Autopoiesis · interface de validation")
     print("Les fichiers JSON restent la source officielle.")
     while True:
+        approved_items = load_approved_evolutions(root)
+        if approved_items:
+            request, record = approved_items[0]
+            print_request(request, record, 1, 1)
+            print("\nCette demande est déjà approuvée et attend l'exécution de Dieu.")
+            choice = input("[l] lancer Dieu  [d] détail  [q] quitter : ").strip().lower()
+            if choice == "l":
+                run_approved_evolution(root, request["id"])
+                again = input("\nRelancer une autre évolution ? [o/N] : ").strip().lower()
+                if again == "o":
+                    continue
+                return 0
+            if choice == "d":
+                show_detail(request)
+                input("Appuyez sur Entrée pour revenir à la demande.")
+                continue
+            if choice == "q":
+                return 0
+            print("Choix inconnu.")
+            continue
+
         items = load_state(root)
         if not items:
             print("\nAucune demande à valider.")
@@ -225,7 +263,7 @@ def interactive(root):
 
 def main():
     parser = argparse.ArgumentParser(description="Interface terminal des demandes d'évolution")
-    parser.add_argument("--has-work", action="store_true", help="retourne 0 si une demande attend une décision")
+    parser.add_argument("--has-work", action="store_true", help="retourne 0 si une demande ou une évolution attend une action")
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parents[1]
     if args.has_work:

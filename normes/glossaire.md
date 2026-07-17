@@ -91,7 +91,7 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 ### Interface de validation
 
-Vue terminal minimale lancée après une simulation interactive lorsqu'une demande attend une décision humaine. Elle affiche les données structurées et délègue toute transition aux scripts existants ; elle ne devient jamais une source d'état parallèle.
+Vue terminal minimale lancée après une simulation interactive lorsqu'une demande attend une décision humaine ou lorsqu'une évolution déjà approuvée attend Dieu. Elle affiche les données structurées et délègue toute transition aux scripts existants ; elle ne devient jamais une source d'état parallèle.
 
 Après approbation, elle orchestre l'observation d'une seule évolution : démarrage de Dieu, attente de son compte rendu, lancement de la vérification, affichage du bilan, puis choix de revenir aux demandes. Elle n'exécute aucune règle du moteur et ne fusionne aucun worktree.
 
