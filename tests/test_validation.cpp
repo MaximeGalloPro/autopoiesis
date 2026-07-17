@@ -1,5 +1,6 @@
 #include "autopoiesis/validation.hpp"
 #include <cassert>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -31,6 +32,7 @@ int main() {
   valid_requests << R"({"id":"request-3","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a2","agent_name":"Borin","title":"Leave me pending","need":"Rest","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["rest"],"actions":["sleep"],"preconditions":["tired"],"deterministic_effects":["rested"]},"acceptance_tests":["It works"]})" << '\n';
   valid_requests << R"({"id":"request-3","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a2","agent_name":"Borin","title":"Leave me pending","need":"Rest","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["rest"],"actions":["sleep"],"preconditions":["tired"],"deterministic_effects":["rested"]},"acceptance_tests":["It works"]})" << '\n';
   valid_requests.close();
+  setenv("GOD_WAIT_TIMEOUT_SECONDS", "1", 1);
   std::istringstream approval_input("1\na\no\n");
   std::ostringstream approval_output;
   HumanValidation approval(directory.string(), approval_input, approval_output);
@@ -43,5 +45,20 @@ int main() {
   std::ifstream remaining(directory / "feature_requests.jsonl");
   assert(std::string(std::istreambuf_iterator<char>(remaining), {}).find("request-3") != std::string::npos);
   assert(std::filesystem::exists(directory / "evolution_runs/request-2/validation-record.json"));
+
+  std::filesystem::create_directories(directory / "evolution_runs/request-2");
+  std::ofstream god_result(directory / "evolution_runs/request-2/god-result.txt");
+  god_result << "TDD termine: le test et l'implementation sont prets.\n";
+  god_result.close();
+  std::ofstream verification(directory / "evolution_runs/request-2/verification.json");
+  verification << R"({"status":"verified","cmake":"passed","tests":"passed","docker":"passed"})" << '\n';
+  verification.close();
+  std::istringstream progress_input("");
+  std::ostringstream progress_output;
+  HumanValidation progress(directory.string(), progress_input, progress_output);
+  assert(progress.wait_for_evolution("request-2"));
+  assert(progress_output.str().find("Dieu") != std::string::npos);
+  assert(progress_output.str().find("verified") != std::string::npos);
+  unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
   std::filesystem::remove_all(directory);
 }

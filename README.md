@@ -63,8 +63,10 @@ Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 2. Le moteur se met en pause et attend la confirmation humaine d'une seule validation à effectuer.
 3. Le Validator contrôle la demande sélectionnée en lecture seule et recommande `approve`, `reject` ou `reformulate`.
 4. L'approbation humaine explicite autorise Dieu à travailler sur cette seule demande.
-5. Dieu applique le TDD dans un worktree isolé : test rouge, changement minimal, test vert.
-6. Le vérificateur lance les tests, la compilation et le build Docker avant toute activation.
+5. Le même `./run.sh` démarre le daemon d'évolution en arrière-plan ; il lance Dieu automatiquement après l'approbation.
+6. L'interface reste en attente et affiche les étapes, les derniers logs, le compte rendu de Dieu et le résultat du vérificateur.
+7. Dieu applique le TDD dans un worktree isolé : test rouge, changement minimal, test vert.
+8. Le vérificateur lance les tests, la compilation et le build Docker avant toute activation.
 
 `VALIDATOR_MODE=human` attend la décision dans l'interface intégrée. `VALIDATOR_MODE=codex`
 lance Codex en lecture seule, mais la garde d'approbation humaine reste active.
@@ -82,6 +84,11 @@ et de Dieu, mais ne sont plus nécessaires pour valider une demande :
 
 Chaque évolution est journalisée dans `data/evolution_runs/<id>/` et
 `data/god-changelog.md`.
+
+`EVOLUTION_AUTOSTART=1` active ce lancement intégré (valeur par défaut).
+`GOD_WAIT_TIMEOUT_SECONDS=300` borne l'attente interactive ; en cas de dépassement,
+le daemon continue et l'exécution peut reprendre. Les logs détaillés restent dans
+`data/evolution_runs/<id>/` et le résumé du daemon dans `data/evolution-daemon.log`.
 
 ## Configuration des modèles
 

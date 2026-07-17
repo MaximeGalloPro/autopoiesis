@@ -44,8 +44,14 @@ request_id = sys.argv[2]
 run_dir = pathlib.Path(sys.argv[3])
 request = None
 for line in source.read_text(encoding="utf-8").splitlines():
-    if line.strip() and json.loads(line).get("id") == request_id:
-        request = json.loads(line)
+    if not line.strip():
+        continue
+    try:
+        candidate = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if isinstance(candidate, dict) and candidate.get("id") == request_id:
+        request = candidate
         break
 if request is None:
     raise SystemExit(f"Demande approuvee inconnue: {request_id}")
@@ -74,6 +80,8 @@ Demande approuvee :
 PY
 
 git -C "$ROOT" worktree add --detach "$WORKTREE" HEAD
+date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/god-started"
+set +e
 "$CODEX_BIN" --ask-for-approval never exec \
   --cd "$WORKTREE" \
   --model "$CODEX_MODEL" \
@@ -84,6 +92,13 @@ git -C "$ROOT" worktree add --detach "$WORKTREE" HEAD
   - < "$RUN_DIR/god-prompt.txt" \
   > "$RUN_DIR/god.stdout.log" \
   2> "$RUN_DIR/god.stderr.log"
+codex_status=$?
+set -e
+if [[ "$codex_status" -ne 0 ]]; then
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/god-failed"
+  exit "$codex_status"
+fi
+date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/god-finished"
 
 git -C "$WORKTREE" add -N -- .
 git -C "$WORKTREE" diff --binary > "$RUN_DIR/god.patch"

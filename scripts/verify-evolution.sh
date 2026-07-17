@@ -11,6 +11,8 @@ REQUEST_ID="$1"
 DATA_DIR="${DATA_DIR:-$ROOT/data}"
 RUN_DIR="$DATA_DIR/evolution_runs/$REQUEST_ID"
 WORKTREE_FILE="$RUN_DIR/worktree.path"
+mkdir -p "$RUN_DIR"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/verification-started"
 
 if [[ ! -s "$WORKTREE_FILE" ]]; then
   echo "Aucun worktree de Dieu pour $REQUEST_ID" >&2
@@ -57,5 +59,7 @@ print(json.dumps(result))
 PY
 "$ROOT/scripts/write-god-changelog.py" "$RUN_DIR" "$DATA_DIR/god-changelog.md"
 if [[ "$cmake_status" != "passed" || "$tests_status" != "passed" || "$docker_status" != "passed" ]]; then
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/verification-failed"
   exit 1
 fi
+date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/verification-finished"

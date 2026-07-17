@@ -39,18 +39,25 @@ approved_path = pathlib.Path(sys.argv[3])
 rejected_path = pathlib.Path(sys.argv[4])
 if not requests_path.exists():
     raise SystemExit(0)
-approved = set()
-rejected = set()
-if approved_path.exists():
-    approved = {json.loads(line)["id"] for line in approved_path.read_text(encoding="utf-8").splitlines() if line.strip()}
-if rejected_path.exists():
-    rejected = {json.loads(line)["id"] for line in rejected_path.read_text(encoding="utf-8").splitlines() if line.strip()}
-for line in requests_path.read_text(encoding="utf-8").splitlines():
-    if not line.strip():
-        continue
-    request = json.loads(line)
+def read_jsonl(path):
+    items = []
+    if not path.exists():
+        return items
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+            if isinstance(item, dict):
+                items.append(item)
+        except json.JSONDecodeError:
+            continue
+    return items
+approved = {item.get("id") for item in read_jsonl(approved_path)}
+rejected = {item.get("id") for item in read_jsonl(rejected_path)}
+for request in read_jsonl(requests_path):
     request_id = request.get("id")
-    if request.get("status") == "pending" and request_id not in approved and request_id not in rejected and not (runs_dir / request_id / "validation-record.json").exists():
+    if request.get("status") == "pending" and request_id and request_id not in approved and request_id not in rejected and not (runs_dir / request_id / "validation-record.json").exists():
         print(request_id)
         break
 PY
@@ -76,9 +83,12 @@ if not approved_path.exists():
 for line in approved_path.read_text(encoding="utf-8").splitlines():
     if not line.strip():
         continue
-    request_id = json.loads(line).get("id")
+    try:
+        request_id = json.loads(line).get("id")
+    except json.JSONDecodeError:
+        continue
     run_dir = runs_dir / request_id
-    if request_id and not (run_dir / "worktree.path").exists():
+    if request_id and not (run_dir / "worktree.path").exists() and not (run_dir / "god-failed").exists():
         print(request_id)
         break
 PY

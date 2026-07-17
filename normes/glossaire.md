@@ -105,7 +105,7 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 Vue terminal minimale intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. Elle lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, demande d'abord de sélectionner une proposition ou `aucune`, permet ensuite de traiter au plus une demande et écrit directement les transitions humaines `approved` ou `rejected`. Elle ne devient jamais une source d'état parallèle et ne nécessite pas de script lancé dans un autre terminal.
 
-Après approbation, elle persiste la transition et rend la main à la simulation. L'orchestration de Dieu et la vérification restent des étapes séparées du workflow d'évolution ; l'interface intégrée n'exécute aucune règle du moteur et ne fusionne aucun worktree.
+Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. Le délai maximal d'attente est `GOD_WAIT_TIMEOUT_SECONDS` (300 secondes par défaut) ; un dépassement laisse le daemon continuer en arrière-plan.
 
 ### Protocole d'intervention
 

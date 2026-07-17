@@ -8,7 +8,8 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [ ] Vérifier la persistance du budget d’appels API et le comportement de la limite configurée.
 - [ ] Améliorer le regroupement des événements pertinents transmis à l’IA pour chaque personnage.
 - [ ] Finaliser le format des demandes d’évolution adressées à Dieu avec critères d’acceptation testables.
-- [ ] Relier le hook de validation à une prise en charge Codex contrôlée en mode TDD.
+- [x] Relier l'approbation humaine au daemon de Dieu et afficher son suivi dans le même terminal.
+- [ ] Effectuer un run de bout en bout avec une demande approuvée et vérifier les logs de Dieu.
 - [ ] Concevoir le registre des actions, ressources, outils et capacités ajoutables au moteur.
 - [ ] Implémenter l’application isolée d’une évolution validée, avec test échouant avant activation.
 - [ ] Clarifier ou implémenter par TDD le palier de chasse du lapin si la capacité attendue n’est pas encore active dans le moteur.

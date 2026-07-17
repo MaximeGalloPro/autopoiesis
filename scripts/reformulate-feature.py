@@ -38,6 +38,18 @@ def write_record(path, record):
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def read_jsonl(path):
+    items = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return items
+
+
 def main():
     if len(sys.argv) != 3:
         print("Usage: reformulate-feature.py <data-directory> <max-reformulations>", file=sys.stderr)
@@ -49,7 +61,7 @@ def main():
     if not requests_path.exists():
         return 0
 
-    requests = [json.loads(line) for line in requests_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    requests = read_jsonl(requests_path)
     known_ids = {item.get("id") for item in requests}
     for request in requests:
         request_id = request.get("id")
@@ -58,7 +70,10 @@ def main():
         reformulation_record_path = run_dir / "reformulation-record.json"
         if not request_id or not record_path.exists() or reformulation_record_path.exists():
             continue
-        record = json.loads(record_path.read_text(encoding="utf-8"))
+        try:
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
         recommendation = record.get("recommendation", {})
         if recommendation.get("decision") != "reformulate":
             continue

@@ -1,10 +1,13 @@
 #include "autopoiesis/validation.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 namespace apo {
@@ -45,6 +48,32 @@ std::string timestamp() {
   const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch()).count();
   return std::to_string(now);
+}
+
+std::string read_text(const path& file) {
+  std::ifstream input(file);
+  if (!input) return {};
+  return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+std::string last_non_empty_line(const path& file) {
+  std::istringstream input(read_text(file));
+  std::string line;
+  std::string last;
+  while (std::getline(input, line)) {
+    if (!line.empty()) last = line;
+  }
+  return last;
+}
+
+int god_wait_timeout_seconds() {
+  const char* value = std::getenv("GOD_WAIT_TIMEOUT_SECONDS");
+  if (!value || !*value) return 300;
+  try {
+    return std::max(1, std::stoi(value));
+  } catch (...) {
+    return 300;
+  }
 }
 
 void append_jsonl(const path& file, const json& item) {
@@ -89,6 +118,87 @@ std::vector<json> current_requests(const path& data_directory, int day, int simu
 HumanValidation::HumanValidation(std::string data_directory, std::istream& input,
                                  std::ostream& output)
     : data_directory_(std::move(data_directory)), input_(input), output_(output) {}
+
+bool HumanValidation::wait_for_evolution(const std::string& request_id) {
+  const path run_directory = path(data_directory_) / "evolution_runs" / request_id;
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(god_wait_timeout_seconds());
+  std::string phase;
+  std::string last_log;
+  std::string last_daemon_log;
+  bool reported_result = false;
+
+  output_ << "\n=== SUIVI DE DIEU ===\n"
+          << "Demande " << request_id << " approuvee."
+          << " Le daemon lance Dieu automatiquement.\n"
+          << "En attente des artefacts d'execution...\n" << std::flush;
+
+  while (std::chrono::steady_clock::now() < deadline) {
+    const bool prompt_ready = std::filesystem::exists(run_directory / "god-prompt.txt");
+    const bool god_started = std::filesystem::exists(run_directory / "god-started");
+    const bool god_result_ready = std::filesystem::exists(run_directory / "god-result.txt");
+    const bool god_failed = std::filesystem::exists(run_directory / "god-failed");
+    const bool verification_started = std::filesystem::exists(run_directory / "verification-started");
+    const bool verification_ready = std::filesystem::exists(run_directory / "verification.json");
+    const std::string next_phase = god_failed ? "echec" : verification_ready ? "verification" :
+                                   verification_started ? "verification" :
+                                   god_result_ready ? "compte-rendu" :
+                                   god_started ? "implementation" :
+                                   prompt_ready ? "preparation" : "attente";
+    if (next_phase != phase) {
+      phase = next_phase;
+      if (phase == "attente") output_ << "[Dieu] En attente du runner d'evolution.\n";
+      if (phase == "preparation") output_ << "[Dieu] Prompt prepare, lancement de l'instance architecte.\n";
+      if (phase == "implementation") output_ << "[Dieu] Instance active : lecture, test rouge, implementation minimale.\n";
+      if (phase == "compte-rendu") output_ << "[Dieu] Compte rendu recu, passage a la verification.\n";
+      if (phase == "verification") output_ << "[Verifier] Compilation, tests et Docker termines.\n";
+      if (phase == "echec") output_ << "[Dieu] Le runner a echoue ; consultez les logs de cette execution.\n";
+    }
+
+    const auto stdout_line = last_non_empty_line(run_directory / "god.stdout.log");
+    const auto stderr_line = last_non_empty_line(run_directory / "god.stderr.log");
+    const auto current_log = stderr_line.empty() ? stdout_line : stderr_line;
+    if (!current_log.empty() && current_log != last_log) {
+      last_log = current_log;
+      output_ << "[Dieu] " << current_log << '\n';
+    }
+    const auto daemon_log = last_non_empty_line(path(data_directory_) / "evolution-daemon.log");
+    if (!daemon_log.empty() && daemon_log != last_daemon_log) {
+      last_daemon_log = daemon_log;
+      output_ << "[Orchestrateur] " << daemon_log << '\n';
+    }
+
+    if (god_result_ready && !reported_result) {
+      const auto result = read_text(run_directory / "god-result.txt");
+      if (!result.empty()) output_ << "[Dieu] Detail du compte rendu :\n" << result;
+      reported_result = true;
+    }
+
+    if (verification_ready) {
+      try {
+        const auto verification = json::parse(read_text(run_directory / "verification.json"));
+        output_ << "[Verifier] statut=" << verification.value("status", "inconnu")
+                << " | cmake=" << verification.value("cmake", "inconnu")
+                << " | tests=" << verification.value("tests", "inconnu")
+                << " | docker=" << verification.value("docker", "inconnu") << '\n'
+                << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+        return verification.value("status", "") == "verified";
+      } catch (const json::parse_error&) {
+        output_ << "[Verifier] verification.json est encore en cours d'ecriture.\n";
+      }
+    }
+    if (god_failed) {
+      output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+      return false;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+
+  output_ << "[Dieu] Delai d'attente depasse (GOD_WAIT_TIMEOUT_SECONDS). "
+          << "Le traitement peut continuer dans le daemon.\n"
+          << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+  return true;
+}
 
 bool HumanValidation::review_window(int day, int simulation_cycle) {
   const path data_directory(data_directory_);
@@ -183,7 +293,8 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
                               approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
       output_ << (approve ? "Demande approuvée : " : "Demande refusée : ") << request_id << '\n'
               << "Statut enregistré : " << (approve ? "approved" : "rejected")
-              << ". Le workflow de Dieu pourra maintenant traiter cette demande.\n";
+              << ".\n";
+      if (approve && !wait_for_evolution(request_id)) return false;
       selected_index=0;
       decision_made=true;
       continue;

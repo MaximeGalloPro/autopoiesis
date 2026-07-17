@@ -10,6 +10,7 @@ class HumanValidation {
  public:
   HumanValidation(std::string data_directory, std::istream& input, std::ostream& output);
   bool review_window(int day, int simulation_cycle);
+  bool wait_for_evolution(const std::string& request_id);
 
  private:
   std::string data_directory_;
