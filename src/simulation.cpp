@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <limits>
 #include <thread>
 
 namespace apo {
@@ -20,11 +21,33 @@ static int report_interval_from_env() {
 Decision LocalDecider::decide(const Perception& p) {
   const auto& me=p.value["self"];
   auto acts=p.value["available_actions"].get<std::vector<std::string>>();
-  if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food"};
-  if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"eat_berries")!=acts.end()) return {DecisionType::Action,"eat_berries",json::object(),"I need food"};
-  if(me["fatigue"]>=75) return {DecisionType::Action,"sleep",json::object(),"I need rest"};
+  if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food","food","","be fed"};
+  if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"eat_berries")!=acts.end()) return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
+  if(me["fatigue"]>=75) return {DecisionType::Action,"sleep",json::object(),"I need rest","rest","","be rested"};
+  if(me["hunger"]>=60){
+    const auto& cells=p.value["cells"];
+    Position self{me.value("x",0),me.value("y",0)};
+    int best_distance=std::numeric_limits<int>::max();
+    std::string best_direction;
+    for(const auto& cell:cells){
+      if(!cell.value("rabbit",false)&&cell.value("terrain",-1)!=static_cast<int>(Terrain::Bush)) continue;
+      Position target{cell.value("x",self.x),cell.value("y",self.y)};
+      int dx=target.x-self.x,dy=target.y-self.y;
+      int distance=std::abs(dx)+std::abs(dy);
+      if(distance==0||distance>=best_distance) continue;
+      std::vector<std::pair<std::string,Position>> candidates;
+      if(dx>0)candidates.push_back({"east",{self.x+1,self.y}});else if(dx<0)candidates.push_back({"west",{self.x-1,self.y}});
+      if(dy>0)candidates.push_back({"south",{self.x,self.y+1}});else if(dy<0)candidates.push_back({"north",{self.x,self.y-1}});
+      for(const auto&[direction,step]:candidates){
+        bool known_passable=false;
+        for(const auto& neighbor:cells) if(neighbor.value("x",-1)==step.x&&neighbor.value("y",-1)==step.y){int terrain=neighbor.value("terrain",-1);known_passable=terrain==static_cast<int>(Terrain::Ground)||terrain==static_cast<int>(Terrain::Bush);break;}
+        if(known_passable){best_distance=distance;best_direction=direction;break;}
+      }
+    }
+    if(!best_direction.empty()) return {DecisionType::Action,"move",{{"direction",best_direction}},"I seek food","food","","be fed"};
+  }
   static const std::vector<std::string> dirs{"north","south","east","west"};
-  return {DecisionType::Action,"move",{{"direction",dirs[std::uniform_int_distribution<size_t>(0,3)(rng_)]}},"I explore"};
+  return {DecisionType::Action,"move",{{"direction",dirs[std::uniform_int_distribution<size_t>(0,3)(rng_)]}},me["hunger"]>=60?"I explore to find food":"I explore","exploration","","discover the world"};
 }
 
 static bool action_succeeded(const Decision& decision, const std::string& result) {
