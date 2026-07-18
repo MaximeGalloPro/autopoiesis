@@ -15,13 +15,16 @@ namespace {
 using path = std::filesystem::path;
 
 std::vector<json> read_jsonl(const path& file, std::ostream& output,
-                             std::set<std::string>& notices) {
+                             std::set<std::string>& notices,
+                             std::size_t first_line = 0) {
   std::vector<json> items;
   std::ifstream input(file);
   if (!input) return items;
   std::string line;
   std::size_t invalid_lines = 0;
+  std::size_t line_number = 0;
   while (std::getline(input, line)) {
+    if (line_number++ < first_line) continue;
     if (line.empty()) continue;
     try {
       items.push_back(json::parse(line));
@@ -34,6 +37,13 @@ std::vector<json> read_jsonl(const path& file, std::ostream& output,
     output << invalid_lines << " ligne(s) JSON invalide(s) ignoree(s) dans "
            << file.filename().string() << ".\n";
   return items;
+}
+
+std::size_t request_offset(const path& data_directory) {
+  std::ifstream input(data_directory / "evolution-session-request-offset");
+  std::size_t offset = 0;
+  if (input) input >> offset;
+  return offset;
 }
 
 std::set<std::string> ids_from(const std::vector<json>& items) {
@@ -137,7 +147,8 @@ void write_validation_record(const path& data_directory, const json& request,
 
 std::vector<json> current_requests(const path& data_directory, int day, int simulation_cycle,
                                     std::ostream& output, std::set<std::string>& notices) {
-  const auto requests = read_jsonl(data_directory / "feature_requests.jsonl", output, notices);
+  const auto requests = read_jsonl(data_directory / "feature_requests.jsonl", output, notices,
+                                   request_offset(data_directory));
   const auto approved = ids_from(read_jsonl(data_directory / "approved_feature_requests.jsonl", output, notices));
   const auto rejected = ids_from(read_jsonl(data_directory / "rejected_feature_requests.jsonl", output, notices));
   std::vector<json> current;

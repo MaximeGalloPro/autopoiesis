@@ -26,7 +26,10 @@ void Logger::ai_report(int simulation_cycle,int day,const Agent& agent,const jso
 void Logger::ai_feature_request(int simulation_cycle,int day,const Agent& agent,const json& report,const json& request) {
   std::string error;
   if(!validate_feature_request(request,error)) { message("Demande IA rejetee : "+error); return; }
-  json pending={{"id",request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-"+agent.id+"-ai-"+std::to_string(++request_counter_)},{"status","pending"},{"source","ai_period_report"},{"day",day},{"simulation_cycle",simulation_cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"report",report},{"title",request.value("title","")},{"need",request.value("need","")},{"obstacle",request.value("obstacle","")},{"proposed_change",request.value("proposed_change","")},{"mechanism",request.value("mechanism",json::object())},{"acceptance_tests",request.value("acceptance_tests",json::array())}};
+  if(evolution_window_cycle_!=simulation_cycle){evolution_window_cycle_=simulation_cycle;evolution_keys_.clear();}
+  const auto evolution_key=request.value("evolution_key","");
+  if(!evolution_keys_.insert(evolution_key).second){message("Demande IA ignoree : mecanisme deja propose dans cette fenetre ("+evolution_key+").");return;}
+  json pending={{"id",request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-"+agent.id+"-ai-"+std::to_string(++request_counter_)},{"status","pending"},{"source","ai_period_report"},{"day",day},{"simulation_cycle",simulation_cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"report",report},{"evolution_key",evolution_key},{"domain",request.value("domain","")},{"title",request.value("title","")},{"need",request.value("need","")},{"obstacle",request.value("obstacle","")},{"proposed_change",request.value("proposed_change","")},{"mechanism",request.value("mechanism",json::object())},{"acceptance_tests",request.value("acceptance_tests",json::array())}};
   std::ofstream requests(directory_+"/feature_requests.jsonl",std::ios::app); if(requests) requests<<pending.dump()<<'\n';
   message("Demande à Dieu à valider "+pending["id"].get<std::string>()+" : "+pending["title"].get<std::string>());
 }

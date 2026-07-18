@@ -51,12 +51,12 @@ static json french_string_array(){
 
 static json feature_request_schema(){
   return {{"type","object"},{"additionalProperties",false},{"properties",{
-    {"requested",{{"type","boolean"}}},{"title",french_string()},{"need",french_string()},{"obstacle",french_string()},{"proposed_change",french_string()},
+    {"requested",{{"type","boolean"}}},{"evolution_key",{{"type","string"},{"description","Cle technique stable en snake_case pour dedupliquer le mecanisme."}}},{"domain",{{"type","string"},{"enum",{"survie","construction","production","exploration","social","connaissance"}}}},{"title",french_string()},{"need",french_string()},{"obstacle",french_string()},{"proposed_change",french_string()},
     {"mechanism",{{"type","object"},{"additionalProperties",false},{"properties",{
       {"name",french_string()},{"summary",french_string()},{"resources",french_string_array()},{"actions",french_string_array()},{"preconditions",french_string_array()},{"deterministic_effects",french_string_array()}
     }},{"required",{"name","summary","resources","actions","preconditions","deterministic_effects"}}}},
     {"acceptance_tests",french_string_array()}
-  }},{"required",{"requested","title","need","obstacle","proposed_change","mechanism","acceptance_tests"}}};
+  }},{"required",{"requested","evolution_key","domain","title","need","obstacle","proposed_change","mechanism","acceptance_tests"}}};
 }
 
 std::string period_report_instructions(){
@@ -64,6 +64,8 @@ std::string period_report_instructions(){
          "Reponds exclusivement en francais dans tous les champs textuels, sans titre ni expression en anglais. "
          "Explique la periode depuis son point de vue et evalue son etat. Inclus uniquement la voix du personnage, "
          "le resume de la periode, l'evaluation de son etat et l'indication qu'une demande d'evolution doit suivre ou non. "
+         "Relie explicitement ses actions a son aspiration et a son projet durable. Mentionne les progres, la monotonie, "
+         "les relations et surtout toute capacite manquante qui bloque ce projet. "
          "Ne propose et ne pretend aucun changement de code ou du monde dans cet appel.";
 }
 
@@ -71,9 +73,23 @@ std::string evolution_request_instructions(){
   return "A partir du bilan termine et de l'historique d'actions verifie, formule exactement une demande d'evolution "
          "soumise a validation humaine. Redige exclusivement en francais tous les champs textuels, y compris title, "
          "need, obstacle, proposed_change, les champs de mechanism et chaque element de acceptance_tests. "
+         "Priorise la capacite manquante qui bloque le projet durable ou l'aspiration du personnage. Utilise evolution_key "
+         "comme cle technique stable et choisis un domain. La proposition doit etre distincte des cles deja proposees "
+         "dans cette fenetre. Ne propose pas une simple optimisation de navigation, anti-boucle, repos ou seuil numerique, "
+         "sauf si le contexte prouve qu'elle bloque directement la survie ou le projet. "
          "Decris un seul mecanisme deterministe incremental avec ses ressources, actions, preconditions, effets "
          "deterministes et tests d'acceptation executables. N'implemente et n'active rien : cette sortie est seulement "
          "une proposition pending destinee au Validator et a Dieu.";
+}
+
+static json character_context(const Agent& agent,const std::vector<std::string>& history){
+  return {{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},
+          {"health",agent.health},{"hunger",agent.hunger},{"thirst",agent.thirst},{"fatigue",agent.fatigue},
+          {"boredom",agent.boredom},{"alive",agent.alive},{"personality",personality_json(agent.personality)},
+          {"attributes",attributes_json(agent.attributes)},{"behavior",behavior_json(agent.behavior)},
+          {"project",project_json(agent.project)},{"relationships",relationships_json(agent.relationships)},
+          {"observed_animals",agent.observed_animals},{"memories",agent.memories},
+          {"known_map_cells",agent.map_memory.size()},{"recent_actions",history}};
 }
 
 Decision OpenAIClient::decide(const Perception& p){
@@ -84,12 +100,16 @@ Decision OpenAIClient::decide(const Perception& p){
 }
 
 json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history){
-  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"thirst",agent.thirst},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"attributes",attributes_json(agent.attributes)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",character_context(agent,history)}};
   return post_response(budget_,key_,model_,base_url_,period_report_instructions(),context,report_schema());
 }
 
 json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report){
-  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"thirst",agent.thirst},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"attributes",attributes_json(agent.attributes)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
-  return post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
+  if(proposal_window_cycle_!=simulation_cycle){proposal_window_cycle_=simulation_cycle;proposals_in_window_.clear();}
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",character_context(agent,history)},{"report",report},{"proposals_already_made",proposals_in_window_}};
+  auto request=post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
+  if(request.is_object()&&request.value("requested",false))
+    proposals_in_window_.push_back({{"evolution_key",request.value("evolution_key","")},{"title",request.value("title","")}});
+  return request;
 }
 }

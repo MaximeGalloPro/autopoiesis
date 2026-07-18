@@ -55,6 +55,9 @@ add_test(NAME character_attributes COMMAND autopoiesis_attribute_tests)
 add_executable(autopoiesis_survival_ai_tests tests/test_survival_ai.cpp)
 target_link_libraries(autopoiesis_survival_ai_tests PRIVATE autopoiesis_core)
 add_test(NAME effective_local_survival_ai COMMAND autopoiesis_survival_ai_tests)
+add_executable(autopoiesis_behavior_tests tests/test_behavior.cpp)
+target_link_libraries(autopoiesis_behavior_tests PRIVATE autopoiesis_core)
+add_test(NAME character_behavior_model COMMAND autopoiesis_behavior_tests)
 add_executable(autopoiesis_prompt_tests tests/test_prompts.cpp)
 target_link_libraries(autopoiesis_prompt_tests PRIVATE autopoiesis_core)
 add_test(NAME french_ai_prompts COMMAND autopoiesis_prompt_tests)
@@ -73,6 +76,7 @@ foreach(test_target
     autopoiesis_world_complexity_tests
     autopoiesis_attribute_tests
     autopoiesis_survival_ai_tests
+    autopoiesis_behavior_tests
     autopoiesis_prompt_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

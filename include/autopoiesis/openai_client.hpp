@@ -15,6 +15,10 @@ class OpenAIClient final : public IDecider, public ICycleReporter {
   json request_evolution(int simulation_cycle, int day, const Agent& agent,
                          const std::vector<std::string>& history,
                          const json& report) override;
- private: std::string key_, model_, base_url_; ApiCallBudget budget_;
+ private:
+  std::string key_, model_, base_url_;
+  ApiCallBudget budget_;
+  int proposal_window_cycle_{-1};
+  std::vector<json> proposals_in_window_;
 };
 }

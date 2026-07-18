@@ -2,6 +2,7 @@
 #include "types.hpp"
 #include "decision.hpp"
 #include <fstream>
+#include <set>
 
 namespace apo {
 class Logger {
@@ -17,5 +18,7 @@ class Logger {
   const std::vector<std::string>& recent() const { return recent_; }
  private:
   std::ofstream readable_, structured_; std::vector<std::string> recent_; std::string directory_, request_prefix_; unsigned long request_counter_{0};
+  std::set<std::string> evolution_keys_;
+  int evolution_window_cycle_{-1};
 };
 }

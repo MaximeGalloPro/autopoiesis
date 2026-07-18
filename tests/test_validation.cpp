@@ -94,7 +94,11 @@ int main() {
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory);
   std::ofstream recent_requests(directory / "feature_requests.jsonl");
-  for (int index = 1; index <= 4; ++index) {
+  recent_requests << R"({"id":"historical","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a1","agent_name":"Ada","title":"Old","need":"Food","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["food"],"actions":["eat"],"preconditions":["hungry"],"deterministic_effects":["fed"]},"acceptance_tests":["It works"]})" << '\n';
+  recent_requests.close();
+  std::ofstream(directory / "evolution-session-request-offset") << "1\n";
+  recent_requests.open(directory / "feature_requests.jsonl", std::ios::app);
+  for (int index = 2; index <= 4; ++index) {
     recent_requests << R"({"id":"recent-)" << index
                     << R"(","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a1","agent_name":"Ada","title":"Recent )"
                     << index << R"(","need":"Food","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["food"],"actions":["eat"],"preconditions":["hungry"],"deterministic_effects":["fed"]},"acceptance_tests":["It works"]})"
@@ -105,9 +109,10 @@ int main() {
   std::ostringstream recent_output;
   HumanValidation recent(directory.string(), recent_input, recent_output);
   assert(!recent.review_window(3, 720));
-  assert(recent_output.str().find("recent-1") == std::string::npos);
+  assert(recent_output.str().find("historical") == std::string::npos);
   assert(recent_output.str().find("recent-2") != std::string::npos);
   assert(recent_output.str().find("recent-3") != std::string::npos);
   assert(recent_output.str().find("recent-4") != std::string::npos);
+  assert(recent_output.str().find("ancienne(s)") == std::string::npos);
   std::filesystem::remove_all(directory);
 }

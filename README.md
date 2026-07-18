@@ -36,6 +36,14 @@ action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 - Chaque personnage possède force, agilité, endurance, robustesse, récupération, résistance aux maladies, concentration, volonté, mémoire et sens spatial.
 - L'IA locale sélectionne un objectif par utilité, le conserve brièvement pour éviter les oscillations et utilise un BFS déterministe sur les seules cases connues.
 
+## Personnages et projets
+
+- Ada est bâtisseuse et prépare un abri, Borin est pourvoyeur et cherche à constituer des réserves, Cyra est exploratrice et veut produire une cartographie partageable.
+- Chaque personnage possède une aspiration, des préférences, un projet durable avec progression et blocage, un niveau de monotonie et des relations évolutives.
+- Les urgences vitales restent prioritaires. Hors urgence, l'IA locale arbitre entre projet, exploration et coopération sans appel API.
+- Un projet bloqué enregistre une capacité manquante dans l'historique ; il ne crée jamais directement une demande à Dieu.
+- Lors de la fenêtre IA, le bilan relie les actions au projet. La demande privilégie ce blocage concret et évite les simples réglages de navigation ou de seuils.
+
 ## Démarrage
 
 Le lancement normal lit `.env` et utilise l'API :

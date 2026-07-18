@@ -92,6 +92,8 @@ int main() {
 
   json request = {
       {"requested", true},
+      {"evolution_key", "chasse_du_lapin"},
+      {"domain", "survie"},
       {"title", "Chasser le lapin"},
       {"need", "Manger"},
       {"obstacle", "Les baies ne suffisent pas"},

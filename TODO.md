@@ -6,8 +6,8 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 
 - [ ] Effectuer un run de vérification sur 3 jours et confirmer les 6 appels API au cycle élémentaire 720, sans appel avant ce point, puis vérifier la pause humaine.
 - [ ] Vérifier la persistance du budget d’appels API et le comportement de la limite configurée.
-- [ ] Améliorer le regroupement des événements pertinents transmis à l’IA pour chaque personnage.
-- [ ] Finaliser le format des demandes d’évolution adressées à Dieu avec critères d’acceptation testables.
+- [x] Relier les événements transmis à l’IA aux aspirations, projets, blocages, relations et à la monotonie de chaque personnage.
+- [x] Finaliser le format des demandes d’évolution avec clé sémantique, domaine et critères d’acceptation testables.
 - [x] Relier l'approbation humaine au daemon de Dieu et afficher son suivi dans le même terminal.
 - [x] Limiter l'interface aux trois propositions les plus récentes et ajouter la correction TDD bornée de Dieu.
 - [x] Activer automatiquement une évolution vérifiée par commit et push.
@@ -16,12 +16,13 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [ ] Implémenter l’application isolée d’une évolution validée, avec test échouant avant activation.
 - [ ] Clarifier ou implémenter par TDD le palier de chasse du lapin si la capacité attendue n’est pas encore active dans le moteur.
 - [ ] Préparer les mécanismes suivants : bois, arbres abattables, haches, fer, fabrication et préconditions associées.
-- [ ] Ajouter des tests de rejeu pour garantir le déterminisme du moteur local.
+- [x] Ajouter des tests de rejeu pour garantir le déterminisme du moteur local et des projets.
 - [x] Agrandir la carte à `40 × 24` et appliquer une topologie torique à tous les déplacements.
 - [x] Ajouter eau, soif, cinq aliments, cinq espèces animales et dix attributs actifs.
 - [x] Remplacer la décision locale purement réactive par utilité, persistance d'objectif et BFS sur mémoire limitée.
 - [ ] Ajouter reproduction et renouvellement déterministe des populations et ressources.
 - [ ] Ajouter inventaires, conservation des aliments et partage entre personnages.
+- [ ] Ajouter des actions sociales spécialisées : partager une connaissance, demander de l'aide, avertir et accompagner.
 
 ## Garde-fous
 

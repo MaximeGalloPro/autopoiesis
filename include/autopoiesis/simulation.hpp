@@ -35,5 +35,7 @@ class Simulation {
   std::map<std::string,std::vector<std::string>> action_history_;
   std::map<std::string,json> planning_history_;
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
+  void update_behavior_after_action(Agent&, const Agent& before, const Decision&,
+                                    const std::string& result, bool succeeded);
 };
 }

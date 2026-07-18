@@ -43,7 +43,7 @@ bool validate_feature_request(const json& request, std::string& error) {
     error = "la demande doit etre explicitement demandee";
     return false;
   }
-  for (const char* field : {"title", "need", "obstacle", "proposed_change"}) {
+  for (const char* field : {"evolution_key", "domain", "title", "need", "obstacle", "proposed_change"}) {
     if (!require_string(request, field, error)) return false;
   }
   if (!request.contains("mechanism") || !request["mechanism"].is_object()) {

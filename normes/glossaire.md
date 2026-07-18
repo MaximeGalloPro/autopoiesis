@@ -68,6 +68,14 @@ Un personnage suit sa santé, sa faim, sa soif et sa fatigue. L'eau et les alime
 
 Les dix attributs de base sont la force, l'agilité, l'endurance, la robustesse, la récupération, la résistance aux maladies, la concentration, la volonté, la mémoire et le sens spatial. Un attribut ne doit pas être ajouté comme simple donnée décorative : son effet moteur ou décisionnel doit être explicite et testé.
 
+### Aspiration et projet durable
+
+L'aspiration donne une direction stable au personnage. Le projet durable est sa traduction déterministe avec une clé, un objectif mesurable, une progression et un statut parmi `candidate`, `active`, `blocked`, `completed` et `abandoned`. Un projet `blocked` nomme une capacité manquante concrète ; ce fait nourrit le bilan de fin de période sans créer lui-même une demande d'évolution.
+
+### Monotonie et relation
+
+La monotonie augmente lors des échecs, attentes et passages répétés, puis diminue avec une découverte, une réussite de projet ou une interaction. Une relation conserve confiance, affinité et nombre d'interactions entre deux personnages. Ces états appartiennent au moteur local, sont déterministes et peuvent influencer l'arbitrage sans appel API.
+
 ### Fenêtre IA
 
 Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
@@ -90,6 +98,8 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 11. Toute évolution du moteur suit le TDD : test échouant d'abord, implémentation minimale, tests verts, puis revue.
 12. Toute session de modification terminée doit se conclure par la compilation, les tests, un commit Git et un push vers le dépôt distant. Une modification non poussée n'est pas considérée comme livrée, car elle ne peut pas être récupérée pour lancer le jeu.
 13. La topologie torique est un invariant transversal : aucune perception, distance ou navigation ne peut réintroduire implicitement un bord infranchissable.
+14. Une aspiration ou un projet n'est pas décoratif : sa progression, son blocage et ses effets décisionnels doivent être observables et testés.
+15. Un blocage local enrichit l'historique du personnage mais ne produit jamais directement une demande à Dieu ; seules les deux étapes IA de fin de fenêtre peuvent créer cette demande.
 
 ## Patterns
 
@@ -107,7 +117,7 @@ La mémoire narrative et la mémoire spatiale sont stockées séparément. La pr
 
 ### Décision locale par utilité
 
-Le décideur local compare les urgences de faim, soif, fatigue et exploration, maintient brièvement l'objectif retenu grâce à une hystérésis, puis cherche une route déterministe sur la carte connue. Il ne consulte jamais la carte complète. À état, mémoire et graine identiques, le choix reste identique.
+Le décideur local compare les urgences de faim, soif et fatigue avec le projet, l'exploration et la coopération, maintient brièvement l'objectif retenu grâce à une hystérésis, puis cherche une route déterministe sur la carte connue. Il ne consulte jamais la carte complète. À état, mémoire et graine identiques, le choix reste identique.
 
 ### Évolution contrôlée
 
@@ -151,6 +161,8 @@ Le projet conserve actuellement une validation humaine explicite comme garde d'a
 À chaque fin de fenêtre IA, l'observateur IA reçoit l'historique pertinent d'un personnage. Il peut transformer un besoin récurrent ou un obstacle en proposition concrète d'évolution du monde, des capacités ou des algorithmes. La proposition n'est jamais exécutée dans la simulation en cours : elle attend le contrôle de l'instance validatrice, l'autorisation donnée à Dieu et une intégration vérifiée dans une version ultérieure du moteur.
 
 Une demande `pending` doit identifier un titre, le besoin, l'obstacle, le changement proposé et un mécanisme unique. Ce mécanisme décrit ses ressources, actions, préconditions, effets déterministes et tests d'acceptation non vides. Une demande IA qui ne respecte pas ce contrat est journalisée comme rejetée et ne devient pas `pending`.
+
+Chaque demande IA possède aussi une `evolution_key` stable et un domaine. Les clés déjà proposées pendant la même fenêtre sont transmises aux appels suivants puis filtrées localement en cas de doublon. Cette déduplication ne déclenche aucun retry et ne modifie donc jamais la règle des deux appels par personnage.
 
 Les bilans et demandes produits à la fin d'une fenêtre IA sont rédigés entièrement en français. Cette règle couvre tous les champs textuels structurés, notamment le titre, le mécanisme et les tests d'acceptation, sans ajouter d'appel de traduction.
 
