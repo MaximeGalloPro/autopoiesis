@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <queue>
 #include <thread>
 
 namespace apo {
@@ -25,6 +26,66 @@ Decision LocalDecider::decide(const Perception& p) {
   if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food","food","","be fed"};
   if(me["hunger"]>=40&&std::find(acts.begin(),acts.end(),"eat_berries")!=acts.end()) return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
   if(me["hunger"]>=40&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food","food","","be fed"};
+  const auto history=p.value.value("action_history",json::array());
+  std::set<std::pair<int,int>> repeated_positions;
+  bool repetition=history.is_array()&&history.size()>=20;
+  if(repetition){
+    for(auto it=history.end()-20;it!=history.end();++it){
+      if(it->value("action","")!="move"||it->value("outcome","")!="success") { repetition=false; break; }
+      repeated_positions.insert({it->value("x",0),it->value("y",0)});
+    }
+    repetition=repetition&&repeated_positions.size()<=4;
+  }
+  if(repetition&&me["hunger"]>=70){
+    const auto& known=p.value["known_map"];
+    Position self{me.value("x",0),me.value("y",0)};
+    std::map<std::pair<int,int>,const json*> traversable;
+    for(const auto& cell:known) if(cell.value("status","")=="traversable")
+      traversable[{cell.value("x",0),cell.value("y",0)}]=&cell;
+    std::queue<Position> pending;
+    std::map<std::pair<int,int>,std::pair<int,std::string>> reached;
+    pending.push(self); reached[{self.x,self.y}]={0,""};
+    static const std::vector<std::pair<std::string,Position>> loop_dirs{
+      {"north",{0,-1}},{"east",{1,0}},{"south",{0,1}},{"west",{-1,0}}};
+    while(!pending.empty()){
+      Position current=pending.front(); pending.pop();
+      const auto current_info=reached.at({current.x,current.y});
+      for(const auto&[direction,offset]:loop_dirs){
+        Position next{current.x+offset.x,current.y+offset.y};
+        if(reached.contains({next.x,next.y})||!traversable.contains({next.x,next.y})) continue;
+        reached[{next.x,next.y}]={current_info.first+1,current_info.first==0?direction:current_info.second};
+        pending.push(next);
+      }
+    }
+    int best_distance=std::numeric_limits<int>::max();
+    std::pair<int,int> best_coordinates{std::numeric_limits<int>::max(),std::numeric_limits<int>::max()};
+    std::string food_direction;
+    for(const auto&[coordinates,cell]:traversable){
+      if((*cell).value("food",0)<=0||!reached.contains(coordinates)) continue;
+      const auto& route=reached.at(coordinates);
+      if(route.first>0&&(route.first<best_distance||(route.first==best_distance&&coordinates<best_coordinates))){
+        best_distance=route.first; best_coordinates=coordinates; food_direction=route.second;
+      }
+    }
+    if(!food_direction.empty()) return {DecisionType::Action,"move",{{"direction",food_direction}},"Repetition detected: seek known food","food","","be fed"};
+
+    std::vector<std::pair<std::string,Position>> unknown;
+    for(const auto&[direction,offset]:loop_dirs){
+      Position next{self.x+offset.x,self.y+offset.y};
+      bool known_cell=false;
+      for(const auto& cell:known) if(cell.value("x",-1)==next.x&&cell.value("y",-1)==next.y){known_cell=true;break;}
+      bool accessible=false;
+      for(const auto& cell:p.value["cells"]) if(cell.value("x",-1)==next.x&&cell.value("y",-1)==next.y){
+        const int terrain=cell.value("terrain",-1);
+        accessible=terrain==static_cast<int>(Terrain::Ground)||terrain==static_cast<int>(Terrain::Bush);
+        break;
+      }
+      if(!known_cell&&accessible) unknown.push_back({direction,next});
+    }
+    const bool has_fresh=std::any_of(unknown.begin(),unknown.end(),[&](const auto& candidate){return !repeated_positions.contains({candidate.second.x,candidate.second.y});});
+    for(const auto&[direction,target]:unknown) if(!has_fresh||!repeated_positions.contains({target.x,target.y}))
+      return {DecisionType::Action,"move",{{"direction",direction}},"Repetition detected: explore deterministic exit","exploration","","leave movement loop"};
+  }
   if(me["fatigue"]>=75) return {DecisionType::Action,"sleep",json::object(),"I need rest","rest","","be rested"};
   if(me["fatigue"]>=45&&std::find(acts.begin(),acts.end(),"rest")!=acts.end()) return {DecisionType::Action,"rest",json::object(),"I need rest","rest","","be rested"};
   if(me["hunger"]>=60){
@@ -85,12 +146,12 @@ Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* repor
 }
 
 Perception Simulation::perceive(Agent& a) {
+  json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=terrain==Terrain::Ground||terrain==Terrain::Bush;known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",!world_.in_bounds(p)?"out_of_bounds":traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.berries(p)}});}
   json cells=json::array();
   for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx){Position p{a.position.x+dx,a.position.y+dy};if(std::abs(dx)+std::abs(dy)<=3&&world_.in_bounds(p)){auto terrain=world_.terrain(p);a.remember_map(p,terrain);cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()}});}}
-  json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=terrain==Terrain::Ground||terrain==Terrain::Bush;known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",!world_.in_bounds(p)?"out_of_bounds":traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]}});}
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&std::abs(o.position.x-a.position.x)+std::abs(o.position.y-a.position.y)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
-  return Perception{json{{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"fatigue",a.fatigue},{"personality",personality_json(a.personality)}}},{"cells",cells},{"known_map",known},{"visible_agents",visible},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
+  return Perception{json{{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"fatigue",a.fatigue},{"personality",personality_json(a.personality)}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);if(action_index%12==0)a.fatigue=clamp_stat(a.fatigue+1);}
@@ -116,7 +177,7 @@ void Simulation::run_day(){
     for(auto& agent:agents_) if(agent.alive&&agent.sleeping_days==0){
     advance_action_needs(agent,action_index); Agent before=agent; Decision d=decider_.decide(perceive(agent)); std::string e;
     if(!validate_decision(d,agent,world_,agents_,e)){d={DecisionType::Action,"wait",json::object(),"invalid decision"};logger_.message("Jour "+std::to_string(day_)+" / cycle elementaire "+std::to_string(simulation_cycle_)+" — "+agent.name+" decision invalide : "+e);}
-    if(d.type==DecisionType::Blocked) logger_.feature_request(simulation_cycle_,day_,agent,d); auto result=execute(agent,d); auto& history=action_history_[agent.id]; std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+" action="+(d.type==DecisionType::Blocked?"blocked":d.action)+" outcome="+(action_succeeded(d,result)?"success":"failure")+" result="+result; if(!d.reason.empty()) entry+=" reason="+d.reason; if(!d.need.empty()) entry+=" need="+d.need; if(!d.obstacle.empty()) entry+=" obstacle="+d.obstacle; if(!d.desired_result.empty()) entry+=" desired_result="+d.desired_result; history.push_back(entry); if(history.size()>1200)history.erase(history.begin()); logger_.event(simulation_cycle_,day_,before,d,result,agent);
+    if(d.type==DecisionType::Blocked) logger_.feature_request(simulation_cycle_,day_,agent,d); auto result=execute(agent,d); const bool succeeded=action_succeeded(d,result); auto& planning=planning_history_[agent.id]; planning.push_back({{"action",d.type==DecisionType::Blocked?"blocked":d.action},{"outcome",succeeded?"success":"failure"},{"x",agent.position.x},{"y",agent.position.y}}); while(planning.size()>20)planning.erase(planning.begin()); auto& history=action_history_[agent.id]; std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+" action="+(d.type==DecisionType::Blocked?"blocked":d.action)+" outcome="+(succeeded?"success":"failure")+" result="+result; if(!d.reason.empty()) entry+=" reason="+d.reason; if(!d.need.empty()) entry+=" need="+d.need; if(!d.obstacle.empty()) entry+=" obstacle="+d.obstacle; if(!d.desired_result.empty()) entry+=" desired_result="+d.desired_result; history.push_back(entry); if(history.size()>1200)history.erase(history.begin()); logger_.event(simulation_cycle_,day_,before,d,result,agent);
     }
   }
   for(auto& agent:agents_) if(agent.alive) update_needs(agent);

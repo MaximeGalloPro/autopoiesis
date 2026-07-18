@@ -30,6 +30,7 @@ class Simulation {
   World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_;
   int cycles_per_day_{240}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
   std::map<std::string,std::vector<std::string>> action_history_;
+  std::map<std::string,json> planning_history_;
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
 };
 }

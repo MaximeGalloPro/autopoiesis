@@ -13,6 +13,30 @@ static Perception exploration_perception(const json& known_map) {
       {"available_actions", json::array({"move", "wait"})}}};
 }
 
+static json repeated_moves() {
+  json history = json::array();
+  for (int index = 0; index < 20; ++index) {
+    const Position position = std::vector<Position>{{5, 5}, {5, 4}, {6, 4}, {6, 5}}[index % 4];
+    history.push_back({{"action", "move"}, {"outcome", "success"},
+                       {"x", position.x}, {"y", position.y}});
+  }
+  return history;
+}
+
+static Perception loop_perception(int hunger, const json& known_map,
+                                  const json& history = repeated_moves()) {
+  json cells = json::array();
+  for (const Position position : std::vector<Position>{{5, 4}, {6, 5}, {5, 6}, {4, 5}})
+    cells.push_back({{"x", position.x}, {"y", position.y},
+                     {"terrain", static_cast<int>(Terrain::Ground)}});
+  return Perception{json{
+      {"self", {{"x", 5}, {"y", 5}, {"hunger", hunger}, {"fatigue", 20}}},
+      {"cells", cells},
+      {"known_map", known_map},
+      {"action_history", history},
+      {"available_actions", json::array({"move", "wait"})}}};
+}
+
 struct FixedMove final : IDecider {
   std::string direction;
   explicit FixedMove(std::string value) : direction(std::move(value)) {}
@@ -49,6 +73,39 @@ int main() {
     assert(repeated.action == first.action);
     assert(repeated.parameters == first.parameters);
   }
+
+
+  json food_map = json::array({
+      {{"x", 5}, {"y", 5}, {"status", "traversable"}, {"food", 0}},
+      {{"x", 5}, {"y", 4}, {"status", "traversable"}, {"food", 0}},
+      {{"x", 5}, {"y", 3}, {"status", "traversable"}, {"food", 2}},
+      {{"x", 6}, {"y", 5}, {"status", "traversable"}, {"food", 0}},
+      {{"x", 7}, {"y", 5}, {"status", "traversable"}, {"food", 2}}});
+  const Decision food_exit = decider.decide(loop_perception(70, food_map));
+  assert(food_exit.action == "move");
+  assert(food_exit.parameters["direction"] == "north");
+  assert(food_exit.reason == "Repetition detected: seek known food");
+
+  json unknown_exit_map = json::array({
+      {{"x", 4}, {"y", 5}, {"status", "blocked"}}});
+  const Decision unknown_exit = decider.decide(loop_perception(70, unknown_exit_map));
+  assert(unknown_exit.action == "move");
+  assert(unknown_exit.parameters["direction"] == "south");
+  assert(unknown_exit.reason == "Repetition detected: explore deterministic exit");
+
+  const Perception below_threshold = loop_perception(69, food_map);
+  Perception without_history = below_threshold;
+  without_history.value.erase("action_history");
+  const Decision normal_with_loop = decider.decide(below_threshold);
+  const Decision normal_without_loop = decider.decide(without_history);
+  assert(normal_with_loop.action == normal_without_loop.action);
+  assert(normal_with_loop.parameters == normal_without_loop.parameters);
+  assert(normal_with_loop.reason == normal_without_loop.reason);
+
+  const Decision deterministic_first = decider.decide(loop_perception(70, food_map));
+  const Decision deterministic_second = decider.decide(loop_perception(70, food_map));
+  assert(deterministic_first.parameters == deterministic_second.parameters);
+  assert(deterministic_first.reason == deterministic_second.reason);
 
   setenv("CYCLES_PER_DAY", "1", 1);
   Logger logger("/tmp/autopoiesis-exploration-tests");
