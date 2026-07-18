@@ -43,3 +43,16 @@ add_test(NAME obstacle_aware_exploration COMMAND autopoiesis_exploration_tests)
 add_executable(autopoiesis_rest_tests tests/test_rest.cpp)
 target_link_libraries(autopoiesis_rest_tests PRIVATE autopoiesis_core)
 add_test(NAME stationary_rest COMMAND autopoiesis_rest_tests)
+add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
+
+foreach(test_target
+    autopoiesis_tests
+    autopoiesis_budget_tests
+    autopoiesis_goal_tests
+    autopoiesis_reporting_tests
+    autopoiesis_timing_tests
+    autopoiesis_validation_tests
+    autopoiesis_exploration_tests
+    autopoiesis_rest_tests)
+  target_compile_options(${test_target} PRIVATE -UNDEBUG)
+endforeach()

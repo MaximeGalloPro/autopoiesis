@@ -9,9 +9,27 @@ if [[ -f "$ROOT/.env" ]]; then
 fi
 DATA_DIR="${DATA_DIR:-$ROOT/data}"
 LOCK_DIR="$DATA_DIR/evolution-daemon.lock"
+SESSION_OFFSET_FILE="$DATA_DIR/evolution-session-request-offset"
 VALIDATOR_MODE="${VALIDATOR_MODE:-human}"
 VALIDATOR_MAX_REFORMULATIONS="${VALIDATOR_MAX_REFORMULATIONS:-3}"
 GOD_MAX_CORRECTIONS="${GOD_MAX_CORRECTIONS:-2}"
+log() {
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+run_stage() {
+  local label="$1"
+  local request_id="$2"
+  shift 2
+  log "$label demarre | demande=$request_id"
+  if "$@"; then
+    log "$label termine | demande=$request_id"
+    return 0
+  else
+    local status=$?
+    log "$label en echec | demande=$request_id | code=$status"
+    return "$status"
+  fi
+}
 if [[ "$VALIDATOR_MODE" != "human" && "$VALIDATOR_MODE" != "codex" ]]; then
   echo "VALIDATOR_MODE doit valoir human ou codex" >&2
   exit 2
@@ -31,7 +49,16 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK_DIR"' EXIT
 
-python3 "$ROOT/scripts/reformulate-feature.py" "$DATA_DIR" "$VALIDATOR_MAX_REFORMULATIONS"
+if [[ ! -f "$SESSION_OFFSET_FILE" && -f "$DATA_DIR/evolution-session-started" ]]; then
+  request_offset=0
+  if [[ -f "$DATA_DIR/feature_requests.jsonl" ]]; then
+    request_offset="$(wc -l < "$DATA_DIR/feature_requests.jsonl")"
+  fi
+  printf '%s\n' "$request_offset" > "$SESSION_OFFSET_FILE"
+  log "File historique ignoree | lignes=$request_offset"
+fi
+
+python3 "$ROOT/scripts/reformulate-feature.py" "$DATA_DIR" "$VALIDATOR_MAX_REFORMULATIONS" "$SESSION_OFFSET_FILE"
 
 # Une approbation humaine est prioritaire sur les demandes encore pending.
 priority_approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/evolution-session-started" <<'PY'
@@ -64,11 +91,11 @@ for line in reversed(approved_path.read_text(encoding="utf-8").splitlines()):
 PY
 )"
 if [[ -n "$priority_approved_id" ]]; then
-  "$ROOT/scripts/codex-feature-hook.sh" "$priority_approved_id"
+  run_stage "Dieu" "$priority_approved_id" "$ROOT/scripts/codex-feature-hook.sh" "$priority_approved_id"
   exit 0
 fi
 
-pending_id="$(python3 - "$DATA_DIR/feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/rejected_feature_requests.jsonl" <<'PY'
+pending_id="$(python3 - "$DATA_DIR/feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/rejected_feature_requests.jsonl" "$SESSION_OFFSET_FILE" <<'PY'
 import json
 import pathlib
 import sys
@@ -77,6 +104,7 @@ requests_path = pathlib.Path(sys.argv[1])
 runs_dir = pathlib.Path(sys.argv[2])
 approved_path = pathlib.Path(sys.argv[3])
 rejected_path = pathlib.Path(sys.argv[4])
+offset_path = pathlib.Path(sys.argv[5])
 if not requests_path.exists():
     raise SystemExit(0)
 def read_jsonl(path):
@@ -95,7 +123,18 @@ def read_jsonl(path):
     return items
 approved = {item.get("id") for item in read_jsonl(approved_path)}
 rejected = {item.get("id") for item in read_jsonl(rejected_path)}
-for request in read_jsonl(requests_path):
+try:
+    offset = max(0, int(offset_path.read_text(encoding="utf-8").strip()))
+except (FileNotFoundError, ValueError):
+    offset = 0
+current_lines = requests_path.read_text(encoding="utf-8").splitlines()[offset:]
+for line in current_lines:
+    try:
+        request = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if not isinstance(request, dict):
+        continue
     request_id = request.get("id")
     if request.get("status") == "pending" and request_id and request_id not in approved and request_id not in rejected and not (runs_dir / request_id / "validation-record.json").exists():
         print(request_id)
@@ -104,9 +143,9 @@ PY
 )"
 if [[ -n "$pending_id" ]]; then
   if [[ "$VALIDATOR_MODE" == "codex" ]]; then
-    "$ROOT/scripts/validator-feature-hook.sh" "$pending_id"
+    run_stage "Validator" "$pending_id" "$ROOT/scripts/validator-feature-hook.sh" "$pending_id"
   else
-    echo "Demande $pending_id en attente de validation humaine" >&2
+    log "Validation humaine attendue | demande=$pending_id"
   fi
   exit 0
 fi
@@ -140,7 +179,7 @@ for run_dir in sorted(runs_dir.iterdir(), reverse=True):
 PY
 )"
 if [[ -n "$correction_id" ]]; then
-  "$ROOT/scripts/god-correction-agent.sh" "$correction_id"
+  run_stage "Correction de Dieu" "$correction_id" "$ROOT/scripts/god-correction-agent.sh" "$correction_id"
   exit 0
 fi
 
@@ -171,7 +210,7 @@ for line in approved_path.read_text(encoding="utf-8").splitlines():
 PY
 )"
 if [[ -n "$approved_id" ]]; then
-  "$ROOT/scripts/codex-feature-hook.sh" "$approved_id"
+  run_stage "Dieu" "$approved_id" "$ROOT/scripts/codex-feature-hook.sh" "$approved_id"
   exit 0
 fi
 
@@ -189,7 +228,7 @@ for run_dir in sorted(runs_dir.iterdir()):
 PY
 )"
 if [[ -n "$verification_id" ]]; then
-  "$ROOT/scripts/verify-evolution.sh" "$verification_id"
+  run_stage "Verification" "$verification_id" "$ROOT/scripts/verify-evolution.sh" "$verification_id"
   exit 0
 fi
 
@@ -220,5 +259,5 @@ for run_dir in sorted(runs_dir.iterdir(), reverse=True):
 PY
 )"
 if [[ -n "$activation_id" ]]; then
-  "$ROOT/scripts/activate-evolution.sh" "$activation_id"
+  run_stage "Activation" "$activation_id" "$ROOT/scripts/activate-evolution.sh" "$activation_id"
 fi

@@ -32,6 +32,7 @@ int main() {
   valid_requests << R"({"id":"request-3","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a2","agent_name":"Borin","title":"Leave me pending","need":"Rest","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["rest"],"actions":["sleep"],"preconditions":["tired"],"deterministic_effects":["rested"]},"acceptance_tests":["It works"]})" << '\n';
   valid_requests << R"({"id":"request-3","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a2","agent_name":"Borin","title":"Leave me pending","need":"Rest","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["rest"],"actions":["sleep"],"preconditions":["tired"],"deterministic_effects":["rested"]},"acceptance_tests":["It works"]})" << '\n';
   valid_requests.close();
+  setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
   setenv("GOD_WAIT_TIMEOUT_SECONDS", "1", 1);
   std::istringstream approval_input("1\na\no\n");
   std::ostringstream approval_output;
@@ -47,6 +48,9 @@ int main() {
   assert(std::filesystem::exists(directory / "evolution_runs/request-2/validation-record.json"));
 
   std::filesystem::create_directories(directory / "evolution_runs/request-2");
+  std::ofstream god_started(directory / "evolution_runs/request-2/god-started");
+  god_started << "started\n";
+  god_started.close();
   std::ofstream god_result(directory / "evolution_runs/request-2/god-result.txt");
   god_result << "TDD termine: le test et l'implementation sont prets.\n";
   god_result.close();
@@ -59,7 +63,33 @@ int main() {
   assert(progress.wait_for_evolution("request-2"));
   assert(progress_output.str().find("Dieu") != std::string::npos);
   assert(progress_output.str().find("verified") != std::string::npos);
+  unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
   unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory / "evolution_runs/queued-request");
+  setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
+  std::istringstream queue_input("");
+  std::ostringstream queue_output;
+  HumanValidation queued(directory.string(), queue_input, queue_output);
+  assert(queued.wait_for_evolution("queued-request"));
+  assert(queue_output.str().find("file d'attente") != std::string::npos);
+  assert(queue_output.str().find("GOD_QUEUE_TIMEOUT_SECONDS") != std::string::npos);
+  unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
+
+  std::filesystem::remove_all(directory);
+  const auto failed_run = directory / "evolution_runs/failed-request";
+  std::filesystem::create_directories(failed_run);
+  std::ofstream(failed_run / "god-started") << "started\n";
+  std::ofstream(failed_run / "god-failed") << "exit=1\n";
+  std::ofstream(failed_run / "god.stderr.log")
+      << "detail ancien\nraison precise de l'echec\n";
+  std::istringstream failed_input("");
+  std::ostringstream failed_output;
+  HumanValidation failed(directory.string(), failed_input, failed_output);
+  assert(!failed.wait_for_evolution("failed-request"));
+  assert(failed_output.str().find("raison precise de l'echec") != std::string::npos);
+  assert(failed_output.str().find("evolution_runs/failed-request") != std::string::npos);
 
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory);
@@ -76,7 +106,7 @@ int main() {
   HumanValidation recent(directory.string(), recent_input, recent_output);
   assert(!recent.review_window(3, 720));
   assert(recent_output.str().find("recent-1") == std::string::npos);
-  assert(recent_output.str().find("recent-2") == std::string::npos);
+  assert(recent_output.str().find("recent-2") != std::string::npos);
   assert(recent_output.str().find("recent-3") != std::string::npos);
   assert(recent_output.str().find("recent-4") != std::string::npos);
   std::filesystem::remove_all(directory);

@@ -38,9 +38,9 @@ def write_record(path, record):
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def read_jsonl(path):
+def read_jsonl(path, start_line=0):
     items = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines()[start_line:]:
         if not line.strip():
             continue
         try:
@@ -51,8 +51,8 @@ def read_jsonl(path):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: reformulate-feature.py <data-directory> <max-reformulations>", file=sys.stderr)
+    if len(sys.argv) not in {3, 4}:
+        print("Usage: reformulate-feature.py <data-directory> <max-reformulations> [request-offset-file]", file=sys.stderr)
         return 2
     data_dir = pathlib.Path(sys.argv[1])
     maximum = int(sys.argv[2])
@@ -61,18 +61,28 @@ def main():
     if not requests_path.exists():
         return 0
 
-    requests = read_jsonl(requests_path)
-    known_ids = {item.get("id") for item in requests}
+    offset = 0
+    if len(sys.argv) == 4:
+        try:
+            offset = max(0, int(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8").strip()))
+        except (FileNotFoundError, ValueError):
+            pass
+    requests = read_jsonl(requests_path, offset)
+    known_ids = {item.get("id") for item in read_jsonl(requests_path)}
     for request in requests:
         request_id = request.get("id")
+        if not request_id:
+            continue
         run_dir = runs_dir / request_id
         record_path = run_dir / "validation-record.json"
         reformulation_record_path = run_dir / "reformulation-record.json"
-        if not request_id or not record_path.exists() or reformulation_record_path.exists():
+        if not record_path.exists() or reformulation_record_path.exists():
             continue
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
+            continue
+        if record.get("terminal") or record.get("status") in {"rejected", "reformulated"}:
             continue
         recommendation = record.get("recommendation", {})
         if recommendation.get("decision") != "reformulate":

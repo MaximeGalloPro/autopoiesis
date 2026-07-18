@@ -72,6 +72,9 @@ Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `VALIDATOR_MODE=human` attend la décision dans l'interface intégrée. `VALIDATOR_MODE=codex`
 lance Codex en lecture seule, mais la garde d'approbation humaine reste active.
 `VALIDATOR_MAX_REFORMULATIONS=3` limite les reformulations successives.
+Au démarrage, le daemon mémorise la fin du journal des demandes et ne traite que
+les propositions créées pendant le run courant. L'historique reste conservé sans
+encombrer la file du Validator.
 
 L'interface terminal est affichée directement par le binaire après chaque
 fenêtre IA. Les hooks restent disponibles pour l'automatisation du Validator
@@ -87,9 +90,11 @@ Chaque évolution est journalisée dans `data/evolution_runs/<id>/` et
 `data/god-changelog.md`.
 
 `EVOLUTION_AUTOSTART=1` active ce lancement intégré (valeur par défaut).
-`GOD_WAIT_TIMEOUT_SECONDS=300` borne l'attente interactive ; en cas de dépassement,
-le daemon continue et l'exécution peut reprendre. Les logs détaillés restent dans
-`data/evolution_runs/<id>/` et le résumé du daemon dans `data/evolution-daemon.log`.
+`GOD_QUEUE_TIMEOUT_SECONDS=900` borne l'attente avant le démarrage de Dieu.
+Une fois Dieu lancé, `GOD_WAIT_TIMEOUT_SECONDS=900` borne son workflow complet.
+L'interface affiche un suivi toutes les 15 secondes et, en cas de dépassement ou
+d'erreur, les dernières lignes utiles ainsi que le chemin de tous les artefacts.
+Le daemon peut continuer en arrière-plan après un timeout.
 Le runner cherche automatiquement Codex dans le `PATH` puis dans l'installation
 VS Code ; `CODEX_BIN` permet de fournir un chemin absolu si nécessaire.
 `GOD_MAX_CORRECTIONS=2` borne les retours de correction de Dieu après un échec de vérification.

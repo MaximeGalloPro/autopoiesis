@@ -66,13 +66,45 @@ std::string last_non_empty_line(const path& file) {
   return last;
 }
 
-int god_wait_timeout_seconds() {
-  const char* value = std::getenv("GOD_WAIT_TIMEOUT_SECONDS");
-  if (!value || !*value) return 300;
+int timeout_seconds(const char* name, int fallback) {
+  const char* value = std::getenv(name);
+  if (!value || !*value) return fallback;
   try {
     return std::max(1, std::stoi(value));
   } catch (...) {
-    return 300;
+    return fallback;
+  }
+}
+
+std::vector<std::string> tail_non_empty_lines(const path& file, std::size_t maximum) {
+  std::istringstream input(read_text(file));
+  std::vector<std::string> lines;
+  std::string line;
+  while (std::getline(input, line)) {
+    if (line.empty()) continue;
+    if (line.size() > 600) line = line.substr(0, 600) + "...";
+    lines.push_back(line);
+    if (lines.size() > maximum) lines.erase(lines.begin());
+  }
+  return lines;
+}
+
+void print_evolution_diagnostics(std::ostream& output, const path& data_directory,
+                                 const path& run_directory) {
+  output << "[Diagnostic] Artefacts complets : " << run_directory.string() << '\n';
+  const std::vector<std::pair<std::string, path>> logs = {
+      {"Dieu stderr", run_directory / "god.stderr.log"},
+      {"Dieu stdout", run_directory / "god.stdout.log"},
+      {"Tests", run_directory / "verify-tests.log"},
+      {"Build", run_directory / "verify-build.log"},
+      {"Docker", run_directory / "verify-docker.log"},
+      {"Orchestrateur", data_directory / "evolution-daemon.log"},
+  };
+  for (const auto& [label, file] : logs) {
+    const auto lines = tail_non_empty_lines(file, 10);
+    if (lines.empty()) continue;
+    output << "[Diagnostic] " << label << " (dernieres lignes) :\n";
+    for (const auto& line : lines) output << "  " << line << '\n';
   }
 }
 
@@ -146,9 +178,15 @@ HumanValidation::HumanValidation(std::string data_directory, std::istream& input
     : data_directory_(std::move(data_directory)), input_(input), output_(output) {}
 
 bool HumanValidation::wait_for_evolution(const std::string& request_id) {
-  const path run_directory = path(data_directory_) / "evolution_runs" / request_id;
-  const auto deadline = std::chrono::steady_clock::now() +
-                        std::chrono::seconds(god_wait_timeout_seconds());
+  const path data_directory(data_directory_);
+  const path run_directory = data_directory / "evolution_runs" / request_id;
+  const auto queue_started_at = std::chrono::steady_clock::now();
+  const auto queue_deadline = queue_started_at + std::chrono::seconds(
+      timeout_seconds("GOD_QUEUE_TIMEOUT_SECONDS", 900));
+  auto work_started_at = queue_started_at;
+  auto work_deadline = queue_started_at;
+  auto last_heartbeat = queue_started_at;
+  bool work_started = false;
   std::string phase;
   std::string last_log;
   std::string last_daemon_log;
@@ -160,7 +198,8 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
           << " Le daemon lance Dieu automatiquement.\n"
           << "En attente des artefacts d'execution...\n" << std::flush;
 
-  while (std::chrono::steady_clock::now() < deadline) {
+  while (true) {
+    const auto now = std::chrono::steady_clock::now();
     const bool prompt_ready = std::filesystem::exists(run_directory / "god-prompt.txt");
     const bool god_started = std::filesystem::exists(run_directory / "god-started");
     const bool god_result_ready = std::filesystem::exists(run_directory / "god-result.txt");
@@ -175,6 +214,16 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
       catch (const json::parse_error&) { verification_status.clear(); }
     }
     const bool activation_failed = std::filesystem::exists(run_directory / "activation-failed");
+    if (god_started && !work_started) {
+      work_started = true;
+      work_started_at = now;
+      work_deadline = now + std::chrono::seconds(
+          timeout_seconds("GOD_WAIT_TIMEOUT_SECONDS", 900));
+      const auto queued_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+          now - queue_started_at).count();
+      output_ << "[Orchestrateur] Dieu a demarre apres " << queued_seconds
+              << " seconde(s) en file d'attente.\n";
+    }
     const std::string next_phase = god_failed || correction_failed ? "echec" : activation_failed ? "activation-echec" : activation_ready ? "activation-terminee" :
                                    verification_status == "verified" ? "activation" :
                                    verification_ready ? "correction" : verification_started ? "verification" :
@@ -202,7 +251,7 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
       last_log = current_log;
       output_ << "[Dieu] " << current_log << '\n';
     }
-    const auto daemon_log = last_non_empty_line(path(data_directory_) / "evolution-daemon.log");
+    const auto daemon_log = last_non_empty_line(data_directory / "evolution-daemon.log");
     if (!daemon_log.empty() && daemon_log != last_daemon_log) {
       last_daemon_log = daemon_log;
       output_ << "[Orchestrateur] " << daemon_log << '\n';
@@ -251,16 +300,35 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
       }
     }
     if (god_failed || correction_failed || activation_failed) {
+      print_evolution_diagnostics(output_, data_directory, run_directory);
       output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
       return false;
     }
+
+    if (!work_started && now >= queue_deadline) {
+      output_ << "[Orchestrateur] Delai de file d'attente depasse "
+              << "(GOD_QUEUE_TIMEOUT_SECONDS). Dieu n'a pas encore demarre ; "
+              << "le daemon peut poursuivre en arriere-plan.\n";
+      print_evolution_diagnostics(output_, data_directory, run_directory);
+      output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+      return true;
+    }
+    if (work_started && now >= work_deadline) {
+      output_ << "[Dieu] Delai de travail depasse (GOD_WAIT_TIMEOUT_SECONDS). "
+              << "L'instance a bien demarre et peut poursuivre dans le daemon.\n";
+      print_evolution_diagnostics(output_, data_directory, run_directory);
+      output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
+      return true;
+    }
+    if (now - last_heartbeat >= std::chrono::seconds(15)) {
+      const auto reference = work_started ? work_started_at : queue_started_at;
+      const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - reference).count();
+      output_ << "[Suivi] " << (work_started ? "Dieu travaille" : "attente du daemon")
+              << " depuis " << elapsed << " seconde(s).\n" << std::flush;
+      last_heartbeat = now;
+    }
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-
-  output_ << "[Dieu] Delai d'attente depasse (GOD_WAIT_TIMEOUT_SECONDS). "
-          << "Le traitement peut continuer dans le daemon.\n"
-          << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-  return true;
 }
 
 bool HumanValidation::review_window(int day, int simulation_cycle) {

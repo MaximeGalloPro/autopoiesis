@@ -57,7 +57,7 @@ result = {
 (run_dir / "verification.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(result))
 PY
-"$ROOT/scripts/write-god-changelog.py" "$RUN_DIR" "$DATA_DIR/god-changelog.md"
+python3 "$ROOT/scripts/write-god-changelog.py" "$RUN_DIR" "$DATA_DIR/god-changelog.md"
 if [[ "$cmake_status" != "passed" || "$tests_status" != "passed" || "$docker_status" != "passed" ]]; then
   date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/verification-failed"
   exit 1

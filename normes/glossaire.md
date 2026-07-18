@@ -98,6 +98,8 @@ Une demande suit le flux `pending → approved → implementation → tests → 
 
 Une recommandation `reformulate` crée une nouvelle demande liée à la précédente. Le nombre maximal de reformulations est `VALIDATOR_MAX_REFORMULATIONS` et vaut `3` par défaut. Une demande qui dépasse cette limite devient `rejected` et ne peut pas être transmise à Dieu.
 
+Le daemon d'évolution traite uniquement les demandes ajoutées depuis le démarrage du `./run.sh` courant. Les demandes historiques restent journalisées avec leur statut, mais elles ne sont ni revalidées ni reformulées automatiquement lors d'une nouvelle session.
+
 Après une première implémentation, le vérificateur peut renvoyer un diagnostic à Dieu. Dieu dispose de `GOD_MAX_CORRECTIONS` corrections, `2` par défaut. Chaque correction reprend le même worktree, ajoute ou ajuste un test, puis repasse par la vérification. Après la limite, le résultat reste rejeté et attend une décision humaine.
 
 ### Changelog de Dieu
@@ -108,7 +110,7 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 Vue terminal minimale intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. Elle lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, demande d'abord de sélectionner une proposition ou `aucune`, permet ensuite de traiter au plus une demande et écrit directement les transitions humaines `approved` ou `rejected`. Elle ne devient jamais une source d'état parallèle et ne nécessite pas de script lancé dans un autre terminal.
 
-Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. Le délai maximal d'attente est `GOD_WAIT_TIMEOUT_SECONDS` (300 secondes par défaut) ; un dépassement laisse le daemon continuer en arrière-plan.
+Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. L'attente est divisée en deux délais indépendants : `GOD_QUEUE_TIMEOUT_SECONDS` (900 secondes par défaut) avant le démarrage effectif, puis `GOD_WAIT_TIMEOUT_SECONDS` (900 secondes par défaut) pour le workflow de Dieu. L'interface affiche régulièrement la phase et la durée écoulée. En cas de dépassement ou d'erreur, elle montre les dernières lignes des journaux utiles et indique le dossier d'artefacts complet ; un timeout laisse le daemon continuer en arrière-plan.
 
 ### Protocole d'intervention
 
