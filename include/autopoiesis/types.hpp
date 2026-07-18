@@ -17,6 +17,7 @@ struct Agent {
   Personality personality; std::deque<std::string> memories; bool alive{true}; int sleeping_days{0}; int critical_hunger_days{0};
   void remember(const std::string& s) { memories.push_back(s); while (memories.size() > 10) memories.pop_front(); }
   std::map<std::pair<int,int>, Terrain> map_memory;
+  std::map<std::pair<int,int>, int> map_visit_counts;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
 struct Decision {

@@ -47,8 +47,27 @@ Decision LocalDecider::decide(const Perception& p) {
     }
     if(!best_direction.empty()) return {DecisionType::Action,"move",{{"direction",best_direction}},"I seek food","food","","be fed"};
   }
-  static const std::vector<std::string> dirs{"north","south","east","west"};
-  return {DecisionType::Action,"move",{{"direction",dirs[std::uniform_int_distribution<size_t>(0,3)(rng_)]}},me["hunger"]>=60?"I explore to find food":"I explore","exploration","","discover the world"};
+  static const std::vector<std::pair<std::string,Position>> dirs{
+      {"north",{0,-1}},{"east",{1,0}},{"south",{0,1}},{"west",{-1,0}}};
+  const auto& known=p.value["known_map"];
+  int lowest_visits=std::numeric_limits<int>::max();
+  std::string selected;
+  Position self{me.value("x",0),me.value("y",0)};
+  for(const auto&[direction,offset]:dirs){
+    Position adjacent{self.x+offset.x,self.y+offset.y};
+    int visits=0;
+    bool excluded=false;
+    for(const auto& cell:known){
+      if(cell.value("x",-1)!=adjacent.x||cell.value("y",-1)!=adjacent.y) continue;
+      const std::string status=cell.value("status","unknown");
+      excluded=status=="blocked"||status=="out_of_bounds";
+      visits=cell.value("visit_count",0);
+      break;
+    }
+    if(!excluded&&visits<lowest_visits){lowest_visits=visits;selected=direction;}
+  }
+  if(selected.empty()) return {DecisionType::Action,"wait",json::object(),"No eligible exploration direction","exploration","","discover the world"};
+  return {DecisionType::Action,"move",{{"direction",selected}},me["hunger"]>=60?"I explore to find food":"I explore","exploration","","discover the world"};
 }
 
 static bool action_succeeded(const Decision& decision, const std::string& result) {
@@ -66,7 +85,7 @@ Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* repor
 Perception Simulation::perceive(Agent& a) {
   json cells=json::array();
   for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx){Position p{a.position.x+dx,a.position.y+dy};if(std::abs(dx)+std::abs(dy)<=3&&world_.in_bounds(p)){auto terrain=world_.terrain(p);a.remember_map(p,terrain);cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()}});}}
-  json known=json::array();for(const auto&[position,terrain]:a.map_memory)known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)}});
+  json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=terrain==Terrain::Ground||terrain==Terrain::Bush;known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",!world_.in_bounds(p)?"out_of_bounds":traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]}});}
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&std::abs(o.position.x-a.position.x)+std::abs(o.position.y-a.position.y)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
   return Perception{json{{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"fatigue",a.fatigue},{"personality",personality_json(a.personality)}}},{"cells",cells},{"known_map",known},{"visible_agents",visible},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
@@ -81,7 +100,7 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="sleep"){a.sleeping_days=2;a.fatigue=clamp_stat(a.fatigue-20);a.remember("Je commence a dormir.");return "commence a dormir";}
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
   if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
-  if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=a.position;if(dir=="north")--p.y;if(dir=="south")++p.y;if(dir=="east")++p.x;if(dir=="west")--p.x;if(world_.passable(p)){a.position=p;a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
+  if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=a.position;if(dir=="north")--p.y;if(dir=="south")++p.y;if(dir=="east")++p.x;if(dir=="west")--p.x;if(world_.passable(p)){a.position=p;a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
   if(d.action=="talk"){auto id=d.parameters["target_agent_id"].get<std::string>();for(auto&o:agents_)if(o.id==id){std::string msg=d.parameters.value("message","Bonjour.");a.remember("J'ai parle a "+o.name+" : "+msg);o.remember(a.name+" m'a parle : "+msg);return "parle a "+o.name;}}
   return "attend";
 }
