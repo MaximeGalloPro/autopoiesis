@@ -61,6 +61,9 @@ add_test(NAME character_behavior_model COMMAND autopoiesis_behavior_tests)
 add_executable(autopoiesis_prompt_tests tests/test_prompts.cpp)
 target_link_libraries(autopoiesis_prompt_tests PRIVATE autopoiesis_core)
 add_test(NAME french_ai_prompts COMMAND autopoiesis_prompt_tests)
+add_executable(autopoiesis_api_diagnostic_tests tests/test_api_diagnostics.cpp)
+target_link_libraries(autopoiesis_api_diagnostic_tests PRIVATE autopoiesis_core)
+add_test(NAME api_failure_diagnostics COMMAND autopoiesis_api_diagnostic_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 
 foreach(test_target
@@ -77,6 +80,7 @@ foreach(test_target
     autopoiesis_attribute_tests
     autopoiesis_survival_ai_tests
     autopoiesis_behavior_tests
-    autopoiesis_prompt_tests)
+    autopoiesis_prompt_tests
+    autopoiesis_api_diagnostic_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

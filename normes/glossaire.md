@@ -109,7 +109,7 @@ Les décideurs retournent un objet JSON strict. Le moteur effectue toujours une 
 
 ### Fallback sûr
 
-En cas de réponse invalide, d'erreur réseau ou de budget API épuisé : journaliser l'incident, exécuter `wait`, poursuivre la simulation.
+En cas de réponse invalide, d'erreur réseau ou de budget API épuisé : journaliser l'étape, la durée, le code cURL ou HTTP et les champs d'erreur utiles sans payload ni secret, exécuter le fallback prévu et poursuivre la simulation. Un diagnostic ne déclenche jamais de retry implicite.
 
 ### Mémoire séparée
 

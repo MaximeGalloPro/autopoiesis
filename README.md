@@ -69,6 +69,9 @@ USE_API=0 ./run.sh --days 3 --delay-ms 0 --render-every-days 1
 Le délai est appliqué entre deux journées. `SIMULATION_DELAY_MS=0` lance le
 moteur à pleine vitesse. Le budget API est indépendant de l'horloge ; avec
 `LIMIT_LLM_API_CALLS=100`, il s'arrête lorsque cette limite est atteinte.
+`LLM_API_TIMEOUT_SECONDS=120` borne chaque appel sans ajouter de retry. En cas
+d'échec, le terminal et `data/simulation.log` indiquent la durée, l'erreur cURL
+ou le statut HTTP et les champs d'erreur API utiles, avec masquage des secrets.
 `WAIT_FOR_HUMAN_VALIDATION=1` active la pause et l'interface de validation
 intégrée à chaque fin de fenêtre ; `0` est réservé aux runs automatisés.
 

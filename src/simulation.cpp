@@ -388,14 +388,18 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
                     << " — bilan de " << agent.name << " (en cours...)\n" << std::flush;
           auto report=reporter_->report_period(simulation_cycle_,day_,agent,history);
           std::cout << "Appel " << call_number << "/" << total_calls << " — bilan de "
-                    << agent.name << (report.is_null()?" indisponible":" terminé") << "\n" << std::flush;
+                    << agent.name << (report.is_null()?" indisponible":" terminé");
+          if(report.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
+          std::cout << "\n" << std::flush;
           if(!report.is_null()) logger_.ai_report(simulation_cycle_,day_,agent,report);
 
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;
           auto request=reporter_->request_evolution(simulation_cycle_,day_,agent,history,report);
           std::cout << "Appel " << call_number << "/" << total_calls << " — demande d'évolution pour "
-                    << agent.name << (request.is_null()?" indisponible":" terminée") << "\n" << std::flush;
+                    << agent.name << (request.is_null()?" indisponible":" terminée");
+          if(request.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
+          std::cout << "\n" << std::flush;
           if(!request.is_null()) logger_.ai_feature_request(simulation_cycle_,day_,agent,report,request);
           history.clear();
         }

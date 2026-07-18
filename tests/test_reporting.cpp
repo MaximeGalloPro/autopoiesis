@@ -1,6 +1,8 @@
 #include "autopoiesis/simulation.hpp"
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -35,6 +37,19 @@ struct SplitReporter final : ICycleReporter {
   }
 };
 
+struct FailingReporter final : ICycleReporter {
+  json report_period(int, int, const Agent&, const std::vector<std::string>&) override {
+    return nullptr;
+  }
+  json request_evolution(int, int, const Agent&, const std::vector<std::string>&,
+                         const json&) override {
+    return nullptr;
+  }
+  std::string last_error() const override {
+    return "HTTP 429 en 0.42 s | type=rate_limit_error";
+  }
+};
+
 int main() {
   setenv("CYCLES_PER_DAY", "240", 1);
   setenv("REPORT_EVERY_DAYS", "3", 1);
@@ -54,6 +69,16 @@ int main() {
   assert(reporter.events[3] == "request:a2:3:720");
   assert(reporter.events[4] == "report:a3:3:720");
   assert(reporter.events[5] == "request:a3:3:720");
+
+  setenv("CYCLES_PER_DAY", "1", 1);
+  setenv("REPORT_EVERY_DAYS", "1", 1);
+  FailingReporter failing;
+  Simulation failed(42, decider, logger, &failing);
+  std::ostringstream terminal;
+  auto* previous_buffer = std::cout.rdbuf(terminal.rdbuf());
+  failed.run(1, 0, 0);
+  std::cout.rdbuf(previous_buffer);
+  assert(terminal.str().find("Diagnostic API : HTTP 429") != std::string::npos);
 
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");

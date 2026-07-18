@@ -1,18 +1,62 @@
 #include "autopoiesis/openai_client.hpp"
 #include <curl/curl.h>
+#include <chrono>
 #include <cstdlib>
+#include <iomanip>
+#include <regex>
+#include <sstream>
 
 namespace apo {
-OpenAIClient::OpenAIClient(std::string key,std::string model,std::string base,ApiCallBudget budget)
-  : key_(std::move(key)),model_(std::move(model)),base_url_(std::move(base)),budget_(std::move(budget)) { while(!base_url_.empty()&&base_url_.back()=='/') base_url_.pop_back(); }
+OpenAIClient::OpenAIClient(std::string key,std::string model,std::string base,ApiCallBudget budget,DiagnosticSink diagnostic_sink)
+  : key_(std::move(key)),model_(std::move(model)),base_url_(std::move(base)),budget_(std::move(budget)),diagnostic_sink_(std::move(diagnostic_sink)) { while(!base_url_.empty()&&base_url_.back()=='/') base_url_.pop_back(); }
 
 static size_t write_body(char* p,size_t s,size_t n,void* u){static_cast<std::string*>(u)->append(p,s*n);return s*n;}
 
-static json post_response(ApiCallBudget& budget,const std::string& key,const std::string& model,const std::string& url,const std::string& instructions,const json& input,const json& schema){
-  if(!budget.try_acquire()) return nullptr;
+static long positive_timeout_from_env(){
+  const char* value=std::getenv("LLM_API_TIMEOUT_SECONDS");
+  if(!value||!*value)return 120L;
+  try{return std::max(1L,std::stol(value));}catch(...){return 120L;}
+}
+
+static std::string elapsed_text(long duration_ms){
+  std::ostringstream output;output<<std::fixed<<std::setprecision(2)<<duration_ms/1000.0<<" s";return output.str();
+}
+
+static std::string redact_secrets(std::string value){
+  value=std::regex_replace(value,std::regex(R"(sk-[A-Za-z0-9_-]{8,})"),"[SECRET MASQUE]");
+  value=std::regex_replace(value,std::regex(R"(Bearer[[:space:]]+[^[:space:]]+)"),"Bearer [SECRET MASQUE]");
+  if(value.size()>400)value=value.substr(0,400)+"...";
+  return value;
+}
+
+std::string api_http_diagnostic(long status,const std::string& response_body,long duration_ms){
+  std::ostringstream output;output<<"HTTP "<<status<<" en "<<elapsed_text(duration_ms);
+  try{
+    const auto response=json::parse(response_body);
+    const auto error=response.value("error",json::object());
+    const auto type=error.value("type","");
+    const auto code=error.value("code","");
+    const auto message=redact_secrets(error.value("message",""));
+    if(!type.empty())output<<" | type="<<type;
+    if(!code.empty())output<<" | code="<<code;
+    if(!message.empty())output<<" | message="<<message;
+  }catch(const json::exception&){
+    output<<" | corps d'erreur illisible";
+  }
+  return output.str();
+}
+
+namespace {
+struct PostResult { json value{nullptr}; std::string error; };
+
+PostResult post_response(ApiCallBudget& budget,const std::string& key,const std::string& model,const std::string& url,const std::string& instructions,const json& input,const json& schema){
+  if(!budget.try_acquire()) return {nullptr,"budget d'appels épuisé ou verrou de budget indisponible"};
+  const auto started=std::chrono::steady_clock::now();
+  const auto duration_ms=[&](){return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count();};
   json body={{"model",model},{"instructions",instructions},{"input",input.dump()},{"text",{{"format",{{"type","json_schema"},{"name","autopoiesis_output"},{"strict",true},{"schema",schema}}}}}};
-  CURL* curl=curl_easy_init(); if(!curl) return nullptr;
+  CURL* curl=curl_easy_init(); if(!curl) return {nullptr,"initialisation cURL impossible"};
   std::string response; auto payload=body.dump();
+  char curl_error[CURL_ERROR_SIZE]{};
   struct curl_slist* headers=nullptr;
   headers=curl_slist_append(headers,"Content-Type: application/json");
   headers=curl_slist_append(headers,("Authorization: Bearer "+key).c_str());
@@ -21,15 +65,30 @@ static json post_response(ApiCallBudget& budget,const std::string& key,const std
   curl_easy_setopt(curl,CURLOPT_POSTFIELDS,payload.c_str());
   curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,write_body);
   curl_easy_setopt(curl,CURLOPT_WRITEDATA,&response);
-  curl_easy_setopt(curl,CURLOPT_TIMEOUT,20L);
+  curl_easy_setopt(curl,CURLOPT_ERRORBUFFER,curl_error);
+  curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,10L);
+  curl_easy_setopt(curl,CURLOPT_TIMEOUT,positive_timeout_from_env());
+  curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);
   auto rc=curl_easy_perform(curl); long status=0; curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
   curl_slist_free_all(headers); curl_easy_cleanup(curl);
-  if(rc!=CURLE_OK||status<200||status>=300) return nullptr;
+  const auto elapsed=duration_ms();
+  if(rc!=CURLE_OK){
+    const std::string detail=*curl_error?curl_error:curl_easy_strerror(rc);
+    return {nullptr,"cURL "+std::to_string(static_cast<int>(rc))+" en "+elapsed_text(elapsed)+" | "+redact_secrets(detail)};
+  }
+  if(status<200||status>=300) return {nullptr,api_http_diagnostic(status,response,elapsed)};
   try{
     auto result=json::parse(response); std::string text=result.value("output_text","");
     if(text.empty()&&result.contains("output")) for(auto&item:result["output"]) for(auto&content:item.value("content",json::array())) if(content.value("type","")=="output_text") text=content.value("text","");
-    return json::parse(text);
-  }catch(...){return nullptr;}
+    if(text.empty())return {nullptr,"HTTP "+std::to_string(status)+" en "+elapsed_text(elapsed)+" | réponse sans output_text | status="+result.value("status","inconnu")};
+    try{return {json::parse(text),{}};}catch(const json::exception& error){return {nullptr,"HTTP "+std::to_string(status)+" en "+elapsed_text(elapsed)+" | sortie structurée invalide | "+redact_secrets(error.what())};}
+  }catch(const json::exception& error){return {nullptr,"HTTP "+std::to_string(status)+" en "+elapsed_text(elapsed)+" | réponse Responses invalide | "+redact_secrets(error.what())};}
+}
+}
+
+void OpenAIClient::record_result(const std::string& operation,const std::string& agent_name,const std::string& error){
+  last_error_=error;
+  if(!error.empty()&&diagnostic_sink_)diagnostic_sink_("API "+operation+" de "+agent_name+" indisponible : "+error);
 }
 
 static json report_schema(){
@@ -95,21 +154,25 @@ static json character_context(const Agent& agent,const std::vector<std::string>&
 Decision OpenAIClient::decide(const Perception& p){
   const auto schema=json::parse(R"({"type":"object","additionalProperties":false,"properties":{"type":{"type":"string","enum":["action","blocked"]},"action":{"type":["string","null"]},"parameters":{"type":["object","null"]},"reason":{"type":["string","null"]},"need":{"type":["string","null"]},"obstacle":{"type":["string","null"]},"desired_result":{"type":["string","null"]}},"required":["type","action","parameters","reason","need","obstacle","desired_result"]})");
   auto result=post_response(budget_,key_,model_,base_url_,"Choose one currently available action or report blocked. Personality influences risk, exploration, cooperation, and persistence. Never invent actions; reason is only for logs.",p.value,schema);
-  Decision d; std::string error; if(!result.is_null()&&parse_decision(result,d,error)) return d;
+  record_result("décision",p.value.value("self",json::object()).value("name","inconnu"),result.error);
+  Decision d; std::string error; if(!result.value.is_null()&&parse_decision(result.value,d,error)) return d;
   Decision fallback; fallback.reason="API unavailable or call limit reached"; return fallback;
 }
 
 json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history){
   json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",character_context(agent,history)}};
-  return post_response(budget_,key_,model_,base_url_,period_report_instructions(),context,report_schema());
+  auto result=post_response(budget_,key_,model_,base_url_,period_report_instructions(),context,report_schema());
+  record_result("bilan",agent.name,result.error);
+  return result.value;
 }
 
 json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report){
   if(proposal_window_cycle_!=simulation_cycle){proposal_window_cycle_=simulation_cycle;proposals_in_window_.clear();}
   json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",character_context(agent,history)},{"report",report},{"proposals_already_made",proposals_in_window_}};
-  auto request=post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
-  if(request.is_object()&&request.value("requested",false))
-    proposals_in_window_.push_back({{"evolution_key",request.value("evolution_key","")},{"title",request.value("title","")}});
-  return request;
+  auto result=post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
+  record_result("demande d'évolution",agent.name,result.error);
+  if(result.value.is_object()&&result.value.value("requested",false))
+    proposals_in_window_.push_back({{"evolution_key",result.value.value("evolution_key","")},{"title",result.value.value("title","")}});
+  return result.value;
 }
 }

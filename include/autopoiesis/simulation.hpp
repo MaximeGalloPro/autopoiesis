@@ -12,6 +12,7 @@ class ICycleReporter {
                              const std::vector<std::string>& history) = 0;
   virtual json request_evolution(int, int, const Agent&, const std::vector<std::string>&,
                                  const json&) { return nullptr; }
+  virtual std::string last_error() const { return {}; }
 };
 class LocalDecider final : public IDecider {
  public: explicit LocalDecider(std::mt19937& rng) : rng_(rng) {} Decision decide(const Perception&) override;
