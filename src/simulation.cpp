@@ -97,6 +97,7 @@ void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_day
 std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.type==DecisionType::Blocked){a.remember("I reported a blockage: "+d.obstacle);return "signale un blocage : "+d.obstacle;}
   if(d.action=="wait"||d.action=="observe"){a.remember(d.action=="wait"?"J'ai attendu.":"J'ai observe mon environnement.");return "attend";}
+  if(d.action=="rest"){if(!a.alive||a.fatigue<=0||!world_.passable(a.position))return "attend";a.fatigue=clamp_stat(a.fatigue-20);return "rested";}
   if(d.action=="sleep"){a.sleeping_days=2;a.fatigue=clamp_stat(a.fatigue-20);a.remember("Je commence a dormir.");return "commence a dormir";}
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
   if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}

@@ -25,6 +25,7 @@ class Simulation {
            const ValidationGate& validation_gate = {});
   void run_day();
   const World& world() const { return world_; } const std::vector<Agent>& agents() const { return agents_; }
+  friend struct SimulationTestAccess;
  private:
   World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_;
   int cycles_per_day_{240}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
