@@ -16,6 +16,7 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Une **journée** contient `CYCLES_PER_DAY=240` cycles élémentaires.
 - La fenêtre IA par défaut est `REPORT_EVERY_DAYS=3`, donc `720` cycles élémentaires.
 - À la fin de cette fenêtre, chaque personnage déclenche exactement deux appels, dans cet ordre : bilan, puis demande d'évolution.
+- Les bilans et tous les champs des demandes d'évolution sont produits en français dans ces mêmes appels.
 - Avec trois personnages, cela représente six appels API au cycle élémentaire `720`.
 - Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.

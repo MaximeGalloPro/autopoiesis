@@ -34,18 +34,46 @@ static json post_response(ApiCallBudget& budget,const std::string& key,const std
 
 static json report_schema(){
   return {{"type","object"},{"additionalProperties",false},{"properties",{
-    {"character_voice",{{"type","string"}}},{"day_summary",{{"type","string"}}},{"state_assessment",{{"type","string"}}},{"ask_god",{{"type","boolean"}}}
+    {"character_voice",{{"type","string"},{"description","Texte uniquement en francais."}}},
+    {"day_summary",{{"type","string"},{"description","Resume uniquement en francais."}}},
+    {"state_assessment",{{"type","string"},{"description","Evaluation uniquement en francais."}}},
+    {"ask_god",{{"type","boolean"}}}
   }},{"required",{"character_voice","day_summary","state_assessment","ask_god"}}};
+}
+
+static json french_string(){
+  return {{"type","string"},{"description","Texte uniquement en francais."}};
+}
+
+static json french_string_array(){
+  return {{"type","array"},{"items",french_string()}};
 }
 
 static json feature_request_schema(){
   return {{"type","object"},{"additionalProperties",false},{"properties",{
-    {"requested",{{"type","boolean"}}},{"title",{{"type","string"}}},{"need",{{"type","string"}}},{"obstacle",{{"type","string"}}},{"proposed_change",{{"type","string"}}},
+    {"requested",{{"type","boolean"}}},{"title",french_string()},{"need",french_string()},{"obstacle",french_string()},{"proposed_change",french_string()},
     {"mechanism",{{"type","object"},{"additionalProperties",false},{"properties",{
-      {"name",{{"type","string"}}},{"summary",{{"type","string"}}},{"resources",{{"type","array"},{"items",{{"type","string"}}}}},{"actions",{{"type","array"},{"items",{{"type","string"}}}}},{"preconditions",{{"type","array"},{"items",{{"type","string"}}}}},{"deterministic_effects",{{"type","array"},{"items",{{"type","string"}}}}}
+      {"name",french_string()},{"summary",french_string()},{"resources",french_string_array()},{"actions",french_string_array()},{"preconditions",french_string_array()},{"deterministic_effects",french_string_array()}
     }},{"required",{"name","summary","resources","actions","preconditions","deterministic_effects"}}}},
-    {"acceptance_tests",{{"type","array"},{"items",{{"type","string"}}}}}
+    {"acceptance_tests",french_string_array()}
   }},{"required",{"requested","title","need","obstacle","proposed_change","mechanism","acceptance_tests"}}};
+}
+
+std::string period_report_instructions(){
+  return "Personnifie ce personnage et redige le bilan de la periode terminee. "
+         "Reponds exclusivement en francais dans tous les champs textuels, sans titre ni expression en anglais. "
+         "Explique la periode depuis son point de vue et evalue son etat. Inclus uniquement la voix du personnage, "
+         "le resume de la periode, l'evaluation de son etat et l'indication qu'une demande d'evolution doit suivre ou non. "
+         "Ne propose et ne pretend aucun changement de code ou du monde dans cet appel.";
+}
+
+std::string evolution_request_instructions(){
+  return "A partir du bilan termine et de l'historique d'actions verifie, formule exactement une demande d'evolution "
+         "soumise a validation humaine. Redige exclusivement en francais tous les champs textuels, y compris title, "
+         "need, obstacle, proposed_change, les champs de mechanism et chaque element de acceptance_tests. "
+         "Decris un seul mecanisme deterministe incremental avec ses ressources, actions, preconditions, effets "
+         "deterministes et tests d'acceptation executables. N'implemente et n'active rien : cette sortie est seulement "
+         "une proposition pending destinee au Validator et a Dieu.";
 }
 
 Decision OpenAIClient::decide(const Perception& p){
@@ -56,14 +84,12 @@ Decision OpenAIClient::decide(const Perception& p){
 }
 
 json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history){
-  json context={{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
-  std::string instructions="Personify this character and write a report for the completed simulation period. Explain the period from its perspective and assess its state. Include only the character voice, day summary, state assessment, and whether an evolution request should follow. Do not propose or claim any code or world change in this call.";
-  return post_response(budget_,key_,model_,base_url_,instructions,context,report_schema());
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
+  return post_response(budget_,key_,model_,base_url_,period_report_instructions(),context,report_schema());
 }
 
 json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report){
-  json context={{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
-  std::string instructions="Using the completed character report and its verified action history, formulate exactly one human-reviewed evolution request. Describe one incremental deterministic mechanism with resources, actions, preconditions, deterministic effects, and executable acceptance tests. Never implement or activate anything; this output is only a pending proposal for the Validator and God.";
-  return post_response(budget_,key_,model_,base_url_,instructions,context,feature_request_schema());
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
+  return post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
 }
 }

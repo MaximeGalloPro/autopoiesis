@@ -135,6 +135,8 @@ Le projet conserve actuellement une validation humaine explicite comme garde d'a
 
 Une demande `pending` doit identifier un titre, le besoin, l'obstacle, le changement proposé et un mécanisme unique. Ce mécanisme décrit ses ressources, actions, préconditions, effets déterministes et tests d'acceptation non vides. Une demande IA qui ne respecte pas ce contrat est journalisée comme rejetée et ne devient pas `pending`.
 
+Les bilans et demandes produits à la fin d'une fenêtre IA sont rédigés entièrement en français. Cette règle couvre tous les champs textuels structurés, notamment le titre, le mécanisme et les tests d'acceptation, sans ajouter d'appel de traduction.
+
 ### Croissance par mécanismes
 
 La simulation se complexifie par petites extensions testées. Un personnage peut d'abord manger des baies ou chasser, puis demander de nouveaux moyens : couper des arbres, fabriquer une hache, ramasser du fer, fondre du métal, construire un abri, etc. Chaque étape doit introduire les ressources, capacités, préconditions et effets strictement nécessaires, sans court-circuiter le moteur déterministe.

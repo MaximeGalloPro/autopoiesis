@@ -3,6 +3,9 @@
 #include "api_budget.hpp"
 
 namespace apo {
+std::string period_report_instructions();
+std::string evolution_request_instructions();
+
 class OpenAIClient final : public IDecider, public ICycleReporter {
  public:
   OpenAIClient(std::string key, std::string model, std::string base_url, ApiCallBudget budget);
