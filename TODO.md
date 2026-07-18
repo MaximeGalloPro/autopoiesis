@@ -17,6 +17,11 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [ ] Clarifier ou implémenter par TDD le palier de chasse du lapin si la capacité attendue n’est pas encore active dans le moteur.
 - [ ] Préparer les mécanismes suivants : bois, arbres abattables, haches, fer, fabrication et préconditions associées.
 - [ ] Ajouter des tests de rejeu pour garantir le déterminisme du moteur local.
+- [x] Agrandir la carte à `40 × 24` et appliquer une topologie torique à tous les déplacements.
+- [x] Ajouter eau, soif, cinq aliments, cinq espèces animales et dix attributs actifs.
+- [x] Remplacer la décision locale purement réactive par utilité, persistance d'objectif et BFS sur mémoire limitée.
+- [ ] Ajouter reproduction et renouvellement déterministe des populations et ressources.
+- [ ] Ajouter inventaires, conservation des aliments et partage entre personnages.
 
 ## Garde-fous
 

@@ -27,6 +27,15 @@ Les décisions quotidiennes utilisent actuellement le décideur local. Une répo
 IA ne modifie jamais directement le monde ni le code ; le moteur valide toute
 action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 
+## Monde et survie
+
+- La carte mesure `40 × 24`, soit quatre fois la surface initiale, et forme un tore : franchir un bord ramène au bord opposé.
+- La survie suit santé, faim, soif et fatigue. L'eau est recherchée puis consommée avec l'action locale `drink`.
+- Les aliments sont les baies, racines, champignons, poissons et venaison.
+- La faune comprend lapins, cerfs, sangliers, loups et poissons, avec danger, nutrition et habitat distincts.
+- Chaque personnage possède force, agilité, endurance, robustesse, récupération, résistance aux maladies, concentration, volonté, mémoire et sens spatial.
+- L'IA locale sélectionne un objectif par utilité, le conserve brièvement pour éviter les oscillations et utilise un BFS déterministe sur les seules cases connues.
+
 ## Démarrage
 
 Le lancement normal lit `.env` et utilise l'API :
@@ -121,6 +130,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 docker compose build
 ```
+
+La suite inclut un scénario local de six journées vérifiant que les trois
+personnages explorent, boivent, mangent, récupèrent et restent sous les seuils
+critiques sans aucun appel API.
 
 Une modification n'est livrée qu'après ces vérifications, un commit Git et un
 push vers le dépôt distant. Cette étape est obligatoire pour que le jeu soit

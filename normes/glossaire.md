@@ -56,6 +56,18 @@ Un cycle élémentaire est un créneau pendant lequel chaque personnage vivant e
 
 Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `240` par défaut. Le paramètre `SIMULATION_DAYS` indique le nombre de journées exécutées par le programme.
 
+### Monde torique
+
+La carte canonique mesure `40 × 24`. Elle ne possède pas de bord bloquant : tout déplacement dépassant une coordonnée est normalisé vers le côté opposé. Les distances, perceptions, voisinages et chemins utilisent tous cette même topologie.
+
+### Besoins vitaux
+
+Un personnage suit sa santé, sa faim, sa soif et sa fatigue. L'eau et les aliments sont des ressources déterministes du monde ; une action locale validée reste nécessaire pour les consommer.
+
+### Attributs
+
+Les dix attributs de base sont la force, l'agilité, l'endurance, la robustesse, la récupération, la résistance aux maladies, la concentration, la volonté, la mémoire et le sens spatial. Un attribut ne doit pas être ajouté comme simple donnée décorative : son effet moteur ou décisionnel doit être explicite et testé.
+
 ### Fenêtre IA
 
 Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
@@ -77,6 +89,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 10. Les secrets restent dans l'environnement et ne sont jamais committés.
 11. Toute évolution du moteur suit le TDD : test échouant d'abord, implémentation minimale, tests verts, puis revue.
 12. Toute session de modification terminée doit se conclure par la compilation, les tests, un commit Git et un push vers le dépôt distant. Une modification non poussée n'est pas considérée comme livrée, car elle ne peut pas être récupérée pour lancer le jeu.
+13. La topologie torique est un invariant transversal : aucune perception, distance ou navigation ne peut réintroduire implicitement un bord infranchissable.
 
 ## Patterns
 
@@ -91,6 +104,10 @@ En cas de réponse invalide, d'erreur réseau ou de budget API épuisé : journa
 ### Mémoire séparée
 
 La mémoire narrative et la mémoire spatiale sont stockées séparément. La première est courte et FIFO ; la seconde conserve les cases explorées par personnage.
+
+### Décision locale par utilité
+
+Le décideur local compare les urgences de faim, soif, fatigue et exploration, maintient brièvement l'objectif retenu grâce à une hystérésis, puis cherche une route déterministe sur la carte connue. Il ne consulte jamais la carte complète. À état, mémoire et graine identiques, le choix reste identique.
 
 ### Évolution contrôlée
 

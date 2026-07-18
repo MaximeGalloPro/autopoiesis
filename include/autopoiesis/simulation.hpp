@@ -15,7 +15,10 @@ class ICycleReporter {
 };
 class LocalDecider final : public IDecider {
  public: explicit LocalDecider(std::mt19937& rng) : rng_(rng) {} Decision decide(const Perception&) override;
- private: std::mt19937& rng_;
+ private:
+  struct GoalState { std::string name; int remaining{}; };
+  std::mt19937& rng_;
+  std::map<std::string,GoalState> goals_;
 };
 class Simulation {
  public:

@@ -84,12 +84,12 @@ Decision OpenAIClient::decide(const Perception& p){
 }
 
 json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history){
-  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"thirst",agent.thirst},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"attributes",attributes_json(agent.attributes)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}}};
   return post_response(budget_,key_,model_,base_url_,period_report_instructions(),context,report_schema());
 }
 
 json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report){
-  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",{{"id",agent.id},{"name",agent.name},{"position",{{"x",agent.position.x},{"y",agent.position.y}}},{"health",agent.health},{"hunger",agent.hunger},{"thirst",agent.thirst},{"fatigue",agent.fatigue},{"alive",agent.alive},{"personality",personality_json(agent.personality)},{"attributes",attributes_json(agent.attributes)},{"memories",agent.memories},{"known_map_cells",agent.map_memory.size()},{"recent_actions",history}}},{"report",report}};
   return post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
 }
 }

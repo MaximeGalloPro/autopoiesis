@@ -34,7 +34,8 @@ struct CountingReporter final : ICycleReporter {
 int main() {
   World world;
   assert(!world.in_bounds({0, -1}));
-  assert(!world.passable({0, 0}));
+  assert(world.passable({0, 0}));
+  assert(world.passable({-1, 0}) == world.passable({World::width - 1, 0}));
   assert(!world.passable({5, 2}));
   assert(world.passable({14, 2}));
 

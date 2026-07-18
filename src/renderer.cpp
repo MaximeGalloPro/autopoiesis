@@ -8,7 +8,7 @@ void render(int day, int simulation_cycle, const World& world,
             << world.ascii(agents) << '\n';
   for (const auto& agent : agents) {
     std::cout << agent.name << "  santé " << agent.health << " | faim "
-              << agent.hunger << " | fatigue " << agent.fatigue
+              << agent.hunger << " | soif " << agent.thirst << " | fatigue " << agent.fatigue
               << (agent.alive ? "" : " | mort") << '\n';
   }
   std::cout << "\nDerniers événements :\n";
