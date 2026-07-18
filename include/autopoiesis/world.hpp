@@ -27,12 +27,19 @@ class World {
   bool hunt_rabbit(Position hunter);
   int berries(Position p) const;
   bool eat_berries(Position p);
+  int wood(Position p) const;
+  int fibers(Position p) const;
+  int shelter_level(Position p) const;
+  void add_materials(Position p, int wood, int fibers);
+  bool build_shelter(Position p);
   void advance_nature(std::mt19937& rng);
   std::string ascii(const std::vector<Agent>& agents) const;
  private:
   std::vector<Terrain> cells_; Position rabbit_; bool rabbit_alive_{true};
   std::vector<FoodResource> food_resources_;
   std::vector<Animal> animals_;
+  struct ConstructionCell { int wood{}; int fibers{}; int shelter_level{}; };
+  std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
   int index(Position p) const { const auto canonical=wrap(p); return canonical.y * width + canonical.x; }
 };
 }

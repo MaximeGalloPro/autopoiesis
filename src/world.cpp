@@ -30,6 +30,11 @@ int World::food(Position p) const { p=wrap(p);int total=0;for(const auto& resour
 int World::berries(Position p) const { p=wrap(p);for(const auto& resource:food_resources_)if(resource.type==FoodType::Berries&&resource.position==p)return resource.amount;return 0; }
 bool World::consume_food(Position p,FoodType* eaten,int* nutrition) { p=wrap(p);for(auto& resource:food_resources_)if(resource.position==p&&resource.amount>0&&terrain(p)!=Terrain::Water){--resource.amount;if(eaten)*eaten=resource.type;if(nutrition)*nutrition=resource.nutrition;return true;}return false; }
 bool World::eat_berries(Position p) { p=wrap(p);for(auto& resource:food_resources_)if(resource.type==FoodType::Berries&&resource.position==p&&resource.amount>0){--resource.amount;return true;}return false; }
+int World::wood(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.wood; }
+int World::fibers(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.fibers; }
+int World::shelter_level(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.shelter_level; }
+void World::add_materials(Position p,int wood_amount,int fiber_amount) { p=wrap(p);auto& cell=construction_cells_[{p.x,p.y}];cell.wood+=std::max(0,wood_amount);cell.fibers+=std::max(0,fiber_amount); }
+bool World::build_shelter(Position p) { p=wrap(p);if(!passable(p))return false;auto& cell=construction_cells_[{p.x,p.y}];if(cell.wood<3||cell.fibers<2)return false;cell.wood-=3;cell.fibers-=2;++cell.shelter_level;return true; }
 const Animal* World::animal(const std::string& id) const { for(const auto& candidate:animals_)if(candidate.id==id)return &candidate;return nullptr; }
 bool World::hunt_animal(Position hunter,const std::string& animal_id,Animal* hunted) { for(auto& candidate:animals_)if(candidate.id==animal_id&&candidate.alive&&adjacent(hunter,candidate.position)){candidate.alive=false;if(hunted)*hunted=candidate;if(candidate.type==AnimalType::Rabbit)rabbit_alive_=false;return true;}return false; }
 bool World::hunt_rabbit(Position hunter) {

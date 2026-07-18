@@ -9,6 +9,7 @@ std::vector<std::string> available_actions(const Agent& a, const World& w, const
   if (w.drinkable(a.position)) r.push_back("drink");
   const bool occupies_current_cell=std::any_of(agents.begin(),agents.end(),[&](const Agent& occupant){return occupant.id==a.id&&occupant.position==a.position;});
   if(a.alive&&a.fatigue>0&&w.passable(a.position)&&occupies_current_cell) r.push_back("rest");
+  if(a.alive&&w.passable(a.position)&&occupies_current_cell&&w.wood(a.position)>=3&&w.fibers(a.position)>=2) r.push_back("build_shelter");
   if (w.rabbit_alive() && w.adjacent(a.position,w.rabbit())) r.push_back("hunt_rabbit");
   if(std::any_of(w.animals().begin(),w.animals().end(),[&](const Animal& animal){return animal.alive&&w.adjacent(a.position,animal.position);})) r.push_back("hunt_animal");
   for (const auto& other:agents)
@@ -17,7 +18,7 @@ std::vector<std::string> available_actions(const Agent& a, const World& w, const
 }
 bool validate_decision(const Decision& d,const Agent& a,const World& w,const std::vector<Agent>& agents,std::string& e) {
   if (d.type==DecisionType::Blocked) return (!d.need.empty() && !d.obstacle.empty() && !d.desired_result.empty()) || (e="blocked fields missing",false);
-  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit"}; if (!names.contains(d.action)) {e="unknown action";return false;}
+  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter"}; if (!names.contains(d.action)) {e="unknown action";return false;}
   auto avail=available_actions(a,w,agents); if (std::find(avail.begin(),avail.end(),d.action)==avail.end()) {e="action unavailable";return false;}
   if (d.action=="move") { if (!d.parameters.is_object() || !d.parameters.contains("direction") || !d.parameters["direction"].is_string()) {e="direction required";return false;} auto dir=d.parameters["direction"].get<std::string>(); if (!std::set<std::string>{"north","south","east","west"}.contains(dir)){e="invalid direction";return false;} }
   if (d.action=="hunt_animal") { if(!d.parameters.is_object()||!d.parameters.contains("animal_id")||!d.parameters["animal_id"].is_string()){e="animal_id required";return false;}const auto* target=w.animal(d.parameters["animal_id"].get<std::string>());if(!target||!target->alive||!w.adjacent(a.position,target->position)){e="hunt target not adjacent";return false;} }

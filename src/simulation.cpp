@@ -229,6 +229,7 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "eat_berries") return result == "mange des baies";
   if (decision.action == "hunt_animal") return result.starts_with("chasse ");
   if (decision.action == "hunt_rabbit") return result == "chasse le lapin";
+  if (decision.action == "build_shelter") return result == "construit un abri" || result == "ameliore un abri";
   return true;
 }
 
@@ -279,6 +280,7 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
   if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
   if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
+  if(d.action=="build_shelter"){const bool existing=world_.shelter_level(a.position)>0;if(!a.alive||!world_.build_shelter(a.position))return "materiaux insuffisants pour construire";a.remember(existing?"J'ai ameliore l'abri.":"J'ai construit un abri.");return existing?"ameliore un abri":"construit un abri";}
   if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=world_.step(a.position,dir);if(world_.passable(p)){a.position=p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
   if(d.action=="talk"){auto id=d.parameters["target_agent_id"].get<std::string>();for(auto&o:agents_)if(o.id==id){std::string msg=d.parameters.value("message","Bonjour.");a.remember("J'ai parle a "+o.name+" : "+msg);o.remember(a.name+" m'a parle : "+msg);auto& outgoing=a.relationships[o.id];++outgoing.interactions;outgoing.trust=clamp_stat(outgoing.trust+1+std::max(0,a.personality.empathy-50)/25);outgoing.affinity=clamp_stat(outgoing.affinity+1);auto& incoming=o.relationships[a.id];++incoming.interactions;incoming.trust=clamp_stat(incoming.trust+1+std::max(0,o.personality.empathy-50)/25);incoming.affinity=clamp_stat(incoming.affinity+1);return "parle a "+o.name;}}
   return "attend";
@@ -295,6 +297,14 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
   }else if(decision.action=="talk"||decision.action=="hunt_animal"||decision.action=="hunt_rabbit")boredom_delta=-12;
   else if(decision.action=="eat_food"||decision.action=="eat_berries"||decision.action=="drink")boredom_delta=-5;
   agent.boredom=clamp_stat(agent.boredom+boredom_delta);
+
+  if(succeeded&&decision.action=="build_shelter"&&agent.project.status==ProjectStatus::Blocked&&agent.project.missing_capability=="build_shelter"){
+    agent.project.status=ProjectStatus::Active;
+    agent.project.blocked_reason.clear();
+    agent.project.missing_capability.clear();
+    agent.remember("La construction de l'abri permet a mon projet de reprendre.");
+    return;
+  }
 
   if(agent.project.status!=ProjectStatus::Active)return;
   const int previous_progress=agent.project.progress;
