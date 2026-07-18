@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <set>
 
 namespace apo {
 Logger::Logger(const std::string& directory) : directory_(directory) {
@@ -32,6 +33,31 @@ void Logger::ai_feature_request(int simulation_cycle,int day,const Agent& agent,
   json pending={{"id",request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-"+agent.id+"-ai-"+std::to_string(++request_counter_)},{"status","pending"},{"source","ai_period_report"},{"day",day},{"simulation_cycle",simulation_cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"report",report},{"evolution_key",evolution_key},{"domain",request.value("domain","")},{"title",request.value("title","")},{"need",request.value("need","")},{"obstacle",request.value("obstacle","")},{"proposed_change",request.value("proposed_change","")},{"mechanism",request.value("mechanism",json::object())},{"acceptance_tests",request.value("acceptance_tests",json::array())}};
   std::ofstream requests(directory_+"/feature_requests.jsonl",std::ios::app); if(requests) requests<<pending.dump()<<'\n';
   message("Demande à Dieu à valider "+pending["id"].get<std::string>()+" : "+pending["title"].get<std::string>());
+}
+std::set<std::string> Logger::known_evolution_keys() const {
+  std::set<std::string> keys;
+  std::ifstream input(directory_+"/feature_requests.jsonl");
+  std::string line;
+  while(std::getline(input,line)){
+    try{const auto request=json::parse(line);const auto key=request.value("evolution_key","");if(!key.empty())keys.insert(key);}catch(const json::exception&){}
+  }
+  return keys;
+}
+std::string Logger::devil_constraint(int simulation_cycle,int day,const json& request) {
+  std::string error;
+  if(!validate_feature_request(request,error)){message("Contrainte du Diable rejetee : "+error);return {};}
+  const auto evolution_key=request.value("evolution_key","");
+  if(known_evolution_keys().contains(evolution_key)){message("Contrainte du Diable deja connue : "+evolution_key);return {};}
+  const auto id=request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-devil-"+std::to_string(++request_counter_);
+  json pending=request;
+  pending["id"]=id;pending["status"]="pending";pending["source"]="devil";
+  pending["day"]=day;pending["simulation_cycle"]=simulation_cycle;
+  pending["agent_id"]="devil";pending["agent_name"]="Le Diable";
+  std::ofstream output(directory_+"/feature_requests.jsonl",std::ios::app);
+  if(!output)return {};
+  output<<pending.dump()<<'\n';
+  message("Le Diable propose "+id+" : "+pending.value("title","contrainte sans titre"));
+  return id;
 }
 void Logger::event(int simulation_cycle,int day,const Agent& before,const Decision& d,const std::string& result,const Agent& after) { json j={{"day",day},{"simulation_cycle",simulation_cycle},{"type","agent_action"},{"agent_id",before.id},{"state_before",{{"health",before.health},{"hunger",before.hunger},{"thirst",before.thirst},{"fatigue",before.fatigue},{"x",before.position.x},{"y",before.position.y}}},{"decision",decision_json(d)},{"result",result},{"state_after",{{"health",after.health},{"hunger",after.hunger},{"thirst",after.thirst},{"fatigue",after.fatigue},{"x",after.position.x},{"y",after.position.y},{"alive",after.alive}}}}; if(structured_) structured_<<j.dump()<<'\n'; std::string detail=d.reason; if(d.type==DecisionType::Blocked) detail=d.need+" : "+d.obstacle; message("Jour "+std::to_string(day)+" / cycle elementaire "+std::to_string(simulation_cycle)+" — "+before.name+" "+result+(detail.empty()?"":" ["+detail+"]")); }
 }

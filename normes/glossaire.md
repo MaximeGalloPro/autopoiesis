@@ -36,6 +36,12 @@ Barrière locale qui vérifie le nom de l'action, ses paramètres, ses précondi
 
 Architecte du monde, des capacités et des règles de simulation. Dieu transforme une demande approuvée en modification technique incrémentale. Il ne s'auto-autorise jamais : l'autorisation d'implémenter doit précéder toute modification, puis l'implémentation reste soumise aux tests et à la vérification.
 
+### Diable
+
+Générateur local de contraintes rationnelles du monde réel. À chaque fenêtre IA de référence de trois journées, il effectue un tirage reproductible avec une probabilité de `1 / DEVIL_CHANCE_ONE_IN`, soit une chance sur dix par défaut. Il ne réalise aucun appel API et ne modifie jamais directement le monde : son résultat est une demande d'évolution structurée, distincte de celles des personnages.
+
+Une contrainte du Diable doit être compatible avec les capacités déjà actives, conserver au moins une mitigation immédiate, imposer une difficulté observable et ouvrir une pression cohérente vers une capacité future. Elle reste `pending` jusqu'à validation séparée. `DEVIL_AUTO_APPROVE=1` est une politique d'autorisation préalable explicite ; elle permet uniquement la transition vers `approved` et ne contourne ni Dieu, ni le TDD, ni la vérification, ni l'activation contrôlée.
+
 ### Mécanisme
 
 Ensemble cohérent de règles déterministes ajoutées au moteur : nouvelle ressource, nouvel objet, nouvelle action, nouveau besoin, transformation du monde ou interaction entre personnages. Un mécanisme doit être livré avec ses tests avant d'être considéré actif.
@@ -80,6 +86,8 @@ La monotonie augmente lors des échecs, attentes et passages répétés, puis di
 
 Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
 
+Après ces six appels, le Diable effectue son tirage local. Ce tirage et la création éventuelle de sa contrainte n'ajoutent aucun appel API. La validation du Diable est une étape séparée et ne consomme pas le choix unique parmi les trois propositions des personnages.
+
 Après chaque fenêtre IA, le moteur s'arrête et attend une confirmation humaine. La validation traite au maximum une demande parmi celles de la fenêtre ; les autres restent `pending`. La reprise est explicite (`o`) ; l'arrêt est explicite (`q`). Cette garde est active par défaut via `WAIT_FOR_HUMAN_VALIDATION=1`.
 L'interface ne présente que les trois demandes les plus récentes de la fenêtre courante. Les autres propositions restent conservées dans les journaux et `pending`, mais ne sont pas proposées dans ce choix.
 
@@ -100,6 +108,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 13. La topologie torique est un invariant transversal : aucune perception, distance ou navigation ne peut réintroduire implicitement un bord infranchissable.
 14. Une aspiration ou un projet n'est pas décoratif : sa progression, son blocage et ses effets décisionnels doivent être observables et testés.
 15. Un blocage local enrichit l'historique du personnage mais ne produit jamais directement une demande à Dieu ; seules les deux étapes IA de fin de fenêtre peuvent créer cette demande.
+16. Le Diable ne crée que des demandes structurées issues d'un catalogue local testé ; il n'applique jamais lui-même une contrainte au monde.
 
 ## Patterns
 
@@ -128,6 +137,10 @@ Une recommandation `reformulate` crée une nouvelle demande liée à la précéd
 Le daemon d'évolution traite uniquement les demandes ajoutées depuis le démarrage du `./run.sh` courant. Les demandes historiques restent journalisées avec leur statut, mais elles ne sont ni revalidées ni reformulées automatiquement lors d'une nouvelle session.
 
 Après une première implémentation, le vérificateur peut renvoyer un diagnostic à Dieu. Dieu dispose de `GOD_MAX_CORRECTIONS` corrections, `2` par défaut. Chaque correction reprend le même worktree, ajoute ou ajuste un test, puis repasse par la vérification. Après la limite, le résultat reste rejeté et attend une décision humaine.
+
+### Responsabilité Docker
+
+La socket Docker de macOS se trouve hors du worktree et reste volontairement inaccessible à l'instance Dieu sandboxée. Dieu exécute la compilation et les tests locaux, puis indique que Docker est délégué. Le vérificateur externe `scripts/verify-evolution.sh` possède seul la responsabilité du build Docker obligatoire. Aucun commit, push ou activation ne peut avoir lieu si cette vérification échoue.
 
 ### Changelog de Dieu
 
@@ -176,7 +189,7 @@ Tout hasard du moteur local passe par une graine configurable. Les réponses IA 
 
 ### Livraison obligatoire
 
-Après chaque run de modifications : vérifier le diff et l'absence de secrets, compiler, exécuter les tests, construire Docker, committer les changements avec un message explicite, puis pousser la branche courante vers le dépôt distant. Si le commit ou le push échoue, le travail reste ouvert et l'échec doit être signalé ; il ne faut pas déclarer la modification terminée.
+Après chaque run de modifications : vérifier le diff et l'absence de secrets, compiler, exécuter les tests, construire Docker, committer les changements avec un message explicite, puis pousser la branche courante vers le dépôt distant. Dans un run automatisé de Dieu, la construction Docker est exclusivement exécutée par le vérificateur externe après les tests de Dieu. Si le commit ou le push échoue, le travail reste ouvert et l'échec doit être signalé ; il ne faut pas déclarer la modification terminée.
 
 ## Ajouts futurs
 

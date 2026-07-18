@@ -13,7 +13,7 @@ Avant toute modification, lire [`normes/glossaire.md`](normes/glossaire.md). Ce 
 - Respecter l'horloge et sa garde : un cycle élémentaire est une action locale, une journée vaut 240 cycles élémentaires et la fenêtre IA de référence vaut 3 journées, soit 720 cycles ; seuls le bilan puis la demande d'évolution sont appelés à ce moment, puis le moteur attend une confirmation humaine avant de reprendre.
 - La validation humaine doit rester intégrée au processus interactif ; ne pas demander à l'utilisateur de lancer un second script ou terminal pour débloquer la simulation. Une fenêtre ne traite qu'une seule demande ; les autres restent `pending`.
 - Ajouter ou mettre à jour les tests lorsqu'une règle du moteur change.
-- Vérifier la compilation Docker et les tests avant de considérer une modification terminée.
+- Vérifier la compilation Docker et les tests avant de considérer une modification terminée. Dans le workflow de Dieu, l'instance sandboxée exécute les tests locaux mais ne tente jamais d'accéder à la socket Docker ; `scripts/verify-evolution.sh` possède seul cette responsabilité et doit réussir le build Docker avant tout commit ou activation.
 - Après chaque run de modifications, committer puis pousser la branche courante ; une modification non poussée n'est pas livrée et ne permet pas de lancer le jeu depuis un autre environnement.
 
 Les normes peuvent être enrichies dans `normes/`, mais une nouvelle règle doit rester compatible avec ces invariants.

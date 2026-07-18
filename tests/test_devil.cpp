@@ -1,0 +1,86 @@
+#include "autopoiesis/devil.hpp"
+#include "autopoiesis/feature_request.hpp"
+#include "autopoiesis/logger.hpp"
+#include "autopoiesis/simulation.hpp"
+
+#include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <set>
+
+using namespace apo;
+
+struct WaitDecider final : IDecider {
+  Decision decide(const Perception&) override { return {}; }
+};
+
+int main() {
+  World world(42);
+  std::vector<Agent> agents{{"a1", "Ada", {3, 2}},
+                            {"a2", "Borin", {10, 5}},
+                            {"a3", "Cyra", {16, 7}}};
+
+  Devil forced(42, 1);
+  std::set<std::string> known_keys;
+  for (int window = 1; window <= 4; ++window) {
+    const auto proposal = forced.draw(window * 3, window * 720, world, agents,
+                                      known_keys);
+    assert(proposal.has_value());
+    std::string error;
+    assert(validate_feature_request(*proposal, error));
+    assert((*proposal)["requested"] == true);
+    assert((*proposal)["real_world_basis"].is_string());
+    assert(!(*proposal)["current_mitigations"].empty());
+    assert((*proposal)["future_pressure"].is_string());
+    assert(known_keys.insert((*proposal)["evolution_key"].get<std::string>()).second);
+  }
+
+  Devil first(1234, 10);
+  Devil second(1234, 10);
+  int appearances = 0;
+  for (int window = 1; window <= 100; ++window) {
+    const auto left = first.draw(window * 3, window * 720, world, agents, {});
+    const auto right = second.draw(window * 3, window * 720, world, agents, {});
+    assert(left.has_value() == right.has_value());
+    if (left) {
+      ++appearances;
+      assert((*left)["evolution_key"] == (*right)["evolution_key"]);
+    }
+  }
+  assert(appearances >= 4 && appearances <= 20);
+
+  const std::filesystem::path directory = "/tmp/autopoiesis-devil-tests";
+  std::filesystem::remove_all(directory);
+  Logger logger(directory.string());
+  Devil writer(7, 1);
+  const auto proposal = writer.draw(3, 720, world, agents, {});
+  assert(proposal);
+  const auto id = logger.devil_constraint(720, 3, *proposal);
+  assert(!id.empty());
+  std::ifstream input(directory / "feature_requests.jsonl");
+  json stored;
+  input >> stored;
+  assert(stored["source"] == "devil");
+  assert(stored["status"] == "pending");
+  assert(stored["agent_name"] == "Le Diable");
+  assert(stored["id"] == id);
+
+  const std::filesystem::path simulation_directory = "/tmp/autopoiesis-devil-simulation-tests";
+  std::filesystem::remove_all(simulation_directory);
+  setenv("CYCLES_PER_DAY", "1", 1);
+  setenv("REPORT_EVERY_DAYS", "3", 1);
+  setenv("DEVIL_CHANCE_ONE_IN", "1", 1);
+  WaitDecider wait;
+  Logger simulation_logger(simulation_directory.string());
+  Simulation simulation(42, wait, simulation_logger);
+  simulation.run(3, 0, 0);
+  std::ifstream requests(simulation_directory / "feature_requests.jsonl");
+  json generated;
+  requests >> generated;
+  assert(generated["source"] == "devil");
+  assert(generated["day"] == 3);
+  assert(generated["simulation_cycle"] == 3);
+  unsetenv("CYCLES_PER_DAY");
+  unsetenv("REPORT_EVERY_DAYS");
+  unsetenv("DEVIL_CHANCE_ONE_IN");
+}

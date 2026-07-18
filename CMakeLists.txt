@@ -10,7 +10,8 @@ find_package(nlohmann_json REQUIRED)
 
 add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
-    src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp)
+    src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
+    src/devil.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
@@ -67,7 +68,11 @@ add_test(NAME french_ai_prompts COMMAND autopoiesis_prompt_tests)
 add_executable(autopoiesis_api_diagnostic_tests tests/test_api_diagnostics.cpp)
 target_link_libraries(autopoiesis_api_diagnostic_tests PRIVATE autopoiesis_core)
 add_test(NAME api_failure_diagnostics COMMAND autopoiesis_api_diagnostic_tests)
+add_executable(autopoiesis_devil_tests tests/test_devil.cpp)
+target_link_libraries(autopoiesis_devil_tests PRIVATE autopoiesis_core)
+add_test(NAME devil_constraints COMMAND autopoiesis_devil_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
+add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 
 foreach(test_target
     autopoiesis_tests
@@ -85,6 +90,7 @@ foreach(test_target
     autopoiesis_behavior_tests
     autopoiesis_shelter_tests
     autopoiesis_prompt_tests
-    autopoiesis_api_diagnostic_tests)
+    autopoiesis_api_diagnostic_tests
+    autopoiesis_devil_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

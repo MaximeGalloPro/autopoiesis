@@ -19,5 +19,6 @@ class HumanValidation {
   std::ostream& output_;
   std::set<std::string> notices_;
   std::set<std::string> window_request_ids_;
+  bool review_devil(int day, int simulation_cycle);
 };
 }

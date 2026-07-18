@@ -114,5 +114,36 @@ int main() {
   assert(recent_output.str().find("recent-3") != std::string::npos);
   assert(recent_output.str().find("recent-4") != std::string::npos);
   assert(recent_output.str().find("ancienne(s)") == std::string::npos);
+
+  const auto devil_request = R"({"id":"devil-1","status":"pending","source":"devil","day":3,"simulation_cycle":720,"agent_id":"devil","agent_name":"Le Diable","title":"Le froid nocturne","need":"Rendre les abris utiles","obstacle":"Aucune température","proposed_change":"Ajouter le froid","mechanism":{"name":"froid","summary":"Froid déterministe","resources":["température"],"actions":["calculer"],"preconditions":["nuit"],"deterministic_effects":["fatigue"]},"acceptance_tests":["La nuit fatigue"]})";
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory);
+  std::ofstream(directory / "feature_requests.jsonl") << devil_request << '\n';
+  std::istringstream devil_input("r\no\n");
+  std::ostringstream devil_output;
+  HumanValidation devil_validation(directory.string(), devil_input, devil_output);
+  assert(devil_validation.review_window(3, 720));
+  assert(devil_output.str().find("APPARITION DU DIABLE") != std::string::npos);
+  assert(devil_output.str().find("Le froid nocturne") != std::string::npos);
+  std::ifstream devil_rejected(directory / "rejected_feature_requests.jsonl");
+  const std::string devil_rejected_content(std::istreambuf_iterator<char>(devil_rejected), {});
+  assert(devil_rejected_content.find("devil-1") != std::string::npos);
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory);
+  std::ofstream(directory / "feature_requests.jsonl") << devil_request << '\n';
+  setenv("DEVIL_AUTO_APPROVE", "1", 1);
+  setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
+  std::istringstream automatic_input("o\n");
+  std::ostringstream automatic_output;
+  HumanValidation automatic(directory.string(), automatic_input, automatic_output);
+  assert(automatic.review_window(3, 720));
+  assert(automatic_output.str().find("Approbation automatique") != std::string::npos);
+  std::ifstream devil_approved(directory / "approved_feature_requests.jsonl");
+  const std::string devil_approved_content(std::istreambuf_iterator<char>(devil_approved), {});
+  assert(devil_approved_content.find("devil-1") != std::string::npos);
+  assert(devil_approved_content.find("devil_automatic") != std::string::npos);
+  unsetenv("DEVIL_AUTO_APPROVE");
+  unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
   std::filesystem::remove_all(directory);
 }

@@ -7,6 +7,7 @@ faire le bilan d'une période et proposer une évolution contrôlée.
 ```text
 actions locales → 3 journées → bilan IA → demande IA à Dieu
                                   (2 appels par personnage)
+              → tirage local du Diable (1 chance sur 10)
                                   → Validator → approbation → Dieu → tests
 ```
 
@@ -22,6 +23,23 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
 - Le terminal affiche l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
 - La validation est intégrée au même terminal et ne présente que les trois propositions les plus récentes de la fenêtre : choisir `1`, `2`, `3` ou `n` pour aucune, puis `a` approuve ou `r` refuse la proposition sélectionnée. `o` reprend et `q` ou `exit` arrête proprement. Les autres demandes restent `pending`.
+
+## Le Diable
+
+À chaque fenêtre de trois journées, un tirage local et reproductible donne au
+Diable une chance sur dix d'apparaître. Il choisit dans un catalogue de
+contraintes du monde réel compatibles avec les capacités présentes : froid,
+périssabilité, sécheresse, territorialité animale ou convalescence. Chaque
+contrainte conserve des moyens immédiats de mitigation tout en créant une
+pression susceptible de faire émerger une future demande.
+
+Le tirage et le catalogue ne déclenchent aucun appel API. Une contrainte du
+Diable est proposée dans une étape séparée et ne remplace aucune des trois
+demandes des personnages. Avec `DEVIL_AUTO_APPROVE=0`, elle attend `a` ou `r`
+dans le terminal. `DEVIL_AUTO_APPROVE=1` constitue une autorisation préalable :
+la contrainte passe automatiquement à `approved`, puis suit exactement le même
+workflow Dieu, TDD, vérification Docker, commit, push et activation. La
+probabilité se règle avec `DEVIL_CHANCE_ONE_IN=10`.
 
 Les décisions quotidiennes utilisent actuellement le décideur local. Une réponse
 IA ne modifie jamais directement le monde ni le code ; le moteur valide toute
@@ -89,6 +107,10 @@ Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 7. Dieu applique le TDD dans un worktree isolé : test rouge, changement minimal, test vert.
 8. En cas d'échec, Dieu reçoit le diagnostic et peut corriger jusqu'à `GOD_MAX_CORRECTIONS=2` fois.
 9. Le vérificateur lance les tests, la compilation et le build Docker ; après succès, l'orchestrateur committe, pousse et active la modification.
+
+Dieu ne tente pas d'accéder à la socket Docker du Mac depuis sa sandbox. Ce
+n'est ni une erreur ni une vérification manquante : le build Docker appartient
+exclusivement au vérificateur externe et reste obligatoire avant l'activation.
 
 `VALIDATOR_MODE=human` attend la décision dans l'interface intégrée. `VALIDATOR_MODE=codex`
 lance Codex en lecture seule, mais la garde d'approbation humaine reste active.

@@ -77,8 +77,9 @@ Regles imperatives :
 - conserve la separation entre decideur IA et moteur deterministe ;
 - ne lis ni ne modifies .env, secrets, scripts d'orchestration ou journaux de donnees ;
 - n'ajoute aucun mecanisme voisin, refactor ou amelioration opportuniste ;
+- ne lance pas Docker : la socket hote est volontairement hors de ta sandbox ; le verificateur externe executera obligatoirement le build Docker avant toute activation ;
 - ne committe pas manuellement : l'orchestrateur committera et activera uniquement apres verification ;
-- termine par un compte rendu concis des fichiers modifies et des tests executes.
+- termine par un compte rendu concis des fichiers modifies et des tests executes, en indiquant que Docker est delegue au verificateur externe.
 
 Demande approuvee :
 {json.dumps(request, ensure_ascii=False, indent=2)}

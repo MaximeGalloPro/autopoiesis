@@ -14,6 +14,8 @@ class Logger {
   void ai_report(int simulation_cycle, int day, const Agent& agent, const json& report);
   void ai_feature_request(int simulation_cycle, int day, const Agent& agent,
                           const json& report, const json& request);
+  std::string devil_constraint(int simulation_cycle, int day, const json& request);
+  std::set<std::string> known_evolution_keys() const;
   void message(const std::string& line);
   const std::vector<std::string>& recent() const { return recent_; }
  private:

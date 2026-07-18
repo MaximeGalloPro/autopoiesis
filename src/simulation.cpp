@@ -244,7 +244,7 @@ static Agent initial_agent(std::string id,std::string name,Position position,int
   return agent;
 }
 
-Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",240)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)){
+Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",240)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)){
   agents_={initial_agent("a1","Ada",{3,2},45,20,{90,20,30,30,40},{55,65,50,45,50,45,70,60,75,80},25,
                          {"builder","Créer un foyer sûr et organisé",95,45,55,70,{FoodType::Berries,FoodType::Mushrooms}},
                          {"build_shelter","Préparer un abri durable",ProjectStatus::Active,0,0,2,"","",1,0}),
@@ -414,6 +414,15 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
           history.clear();
         }
         std::cout << "Fenêtre IA terminée : " << total_calls << " appels tentés.\n" << std::flush;
+      }
+      const auto constraint=devil_.draw(day_,simulation_cycle_,world_,agents_,logger_.known_evolution_keys());
+      if(constraint){
+        const auto id=logger_.devil_constraint(simulation_cycle_,day_,*constraint);
+        if(!id.empty())std::cout << "\n=== APPARITION DU DIABLE ===\n"
+                                << "Une contrainte réelle est proposée : " << constraint->value("title","sans titre") << "\n"
+                                << "Elle attend la validation prévue par la configuration.\n" << std::flush;
+      }else{
+        std::cout << "Tirage du Diable : aucune apparition cette fenêtre.\n" << std::flush;
       }
     }
     if(all_dead) break;

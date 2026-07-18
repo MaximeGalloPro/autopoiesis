@@ -75,9 +75,10 @@ Regles :
 - ajoute ou ajuste d'abord un test qui reproduit l'echec ;
 - implemente la correction minimale ;
 - execute les tests pertinents puis la suite ;
+- ne lance pas Docker : la socket hote est volontairement hors de ta sandbox ; le verificateur externe executera obligatoirement le build Docker avant toute activation ;
 - ne modifie ni .env, ni les secrets, ni les scripts d'orchestration ;
 - ne committe pas manuellement : l'orchestrateur committra uniquement apres verification ;
-- termine par un compte rendu concis.
+- termine par un compte rendu concis, en indiquant que Docker est delegue au verificateur externe.
 
 Resultat du verificateur :
 {json.dumps(verification, ensure_ascii=False, indent=2)}

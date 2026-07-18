@@ -134,19 +134,21 @@ void append_jsonl(const path& file, const json& item) {
 }
 
 void write_validation_record(const path& data_directory, const json& request,
-                             const std::string& decision, const std::string& reason) {
+                             const std::string& decision, const std::string& reason,
+                             const std::string& reviewer = "human") {
   const auto request_id = request.value("id", "unknown");
   const auto run_directory = data_directory / "evolution_runs" / request_id;
   std::error_code error;
   std::filesystem::create_directories(run_directory, error);
   json record={{"request_id",request_id},{"status",decision=="approve"?"validated":"rejected"},
-               {"recommendation",{{"decision",decision},{"reviewer","human"},{"reason",reason}}}};
+               {"recommendation",{{"decision",decision},{"reviewer",reviewer},{"reason",reason}}}};
   std::ofstream output(run_directory / "validation-record.json");
   if (output) output << record.dump(2) << '\n';
 }
 
 std::vector<json> current_requests(const path& data_directory, int day, int simulation_cycle,
-                                    std::ostream& output, std::set<std::string>& notices) {
+                                    std::ostream& output, std::set<std::string>& notices,
+                                    bool devil_only = false) {
   const auto requests = read_jsonl(data_directory / "feature_requests.jsonl", output, notices,
                                    request_offset(data_directory));
   const auto approved = ids_from(read_jsonl(data_directory / "approved_feature_requests.jsonl", output, notices));
@@ -156,6 +158,7 @@ std::vector<json> current_requests(const path& data_directory, int day, int simu
   std::size_t duplicates=0;
   for (const auto& request : requests) {
     const auto id = request.value("id", "");
+    if ((request.value("source", "") == "devil") != devil_only) continue;
     if (id.empty() || request.value("status", "") != "pending" || approved.contains(id) || rejected.contains(id)) continue;
     if (request.value("day", -1) != day || request.value("simulation_cycle", -1) != simulation_cycle) continue;
     if (!seen_ids.insert(id).second) { ++duplicates; continue; }
@@ -342,8 +345,53 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
   }
 }
 
+bool HumanValidation::review_devil(int day,int simulation_cycle) {
+  const path data_directory(data_directory_);
+  auto constraints=current_requests(data_directory,day,simulation_cycle,output_,notices_,true);
+  if(constraints.empty())return true;
+  const auto request=constraints.back();
+  const auto request_id=request.value("id","unknown");
+  const bool automatic=[](){const char* value=std::getenv("DEVIL_AUTO_APPROVE");return value&&std::string(value)=="1";}();
+
+  output_ << "\n=== APPARITION DU DIABLE ===\n"
+          << request.value("title","Contrainte sans titre") << "\n"
+          << "Fondement réel : " << request.value("real_world_basis","non précisé") << "\n"
+          << "Pression future : " << request.value("future_pressure","non précisée") << "\n";
+
+  auto decide=[&](bool approve,const std::string& mode){
+    auto decided=request;
+    decided["status"]=approve?"approved":"rejected";
+    decided[approve?"approved_at":"rejected_at"]=timestamp();
+    decided[approve?"approval_mode":"rejection_mode"]=mode;
+    if(!approve)decided["rejection_reason"]="Contrainte refusée par la politique du Diable";
+    append_jsonl(data_directory/(approve?"approved_feature_requests.jsonl":"rejected_feature_requests.jsonl"),decided);
+    const auto reason=approve?(automatic?"Approbation automatique configurée du Diable":"Approbation humaine explicite de la contrainte"):
+                              "Refus humain explicite de la contrainte";
+    write_validation_record(data_directory,decided,approve?"approve":"reject",reason,mode);
+    output_ << (approve?"Contrainte approuvée : ":"Contrainte refusée : ") << request_id << "\n";
+    return !approve||wait_for_evolution(request_id);
+  };
+
+  if(automatic){
+    output_ << "Approbation automatique activée par DEVIL_AUTO_APPROVE=1.\n";
+    return decide(true,"devil_automatic");
+  }
+
+  while(true){
+    output_ << "[a] accepter  [r] refuser  [d] détail  [q/exit] arrêter.\n> " << std::flush;
+    std::string line;
+    if(!std::getline(input_,line))return false;
+    if(line=="a"||line=="A")return decide(true,"human");
+    if(line=="r"||line=="R")return decide(false,"human");
+    if(line=="d"||line=="D"){output_<<request.dump(2)<<'\n';continue;}
+    if(line=="q"||line=="Q"||line=="exit"||line=="quit")return false;
+    output_ << "Choisissez a, r ou d.\n";
+  }
+}
+
 bool HumanValidation::review_window(int day, int simulation_cycle) {
   const path data_directory(data_directory_);
+  if(!review_devil(day,simulation_cycle))return false;
   window_request_ids_.clear();
   std::size_t selected_index=0;
   bool decision_made = false;
