@@ -23,8 +23,10 @@ Decision LocalDecider::decide(const Perception& p) {
   const auto& me=p.value["self"];
   auto acts=p.value["available_actions"].get<std::vector<std::string>>();
   if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food","food","","be fed"};
-  if(me["hunger"]>=75&&std::find(acts.begin(),acts.end(),"eat_berries")!=acts.end()) return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
+  if(me["hunger"]>=40&&std::find(acts.begin(),acts.end(),"eat_berries")!=acts.end()) return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
+  if(me["hunger"]>=40&&std::find(acts.begin(),acts.end(),"hunt_rabbit")!=acts.end()) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food","food","","be fed"};
   if(me["fatigue"]>=75) return {DecisionType::Action,"sleep",json::object(),"I need rest","rest","","be rested"};
+  if(me["fatigue"]>=45&&std::find(acts.begin(),acts.end(),"rest")!=acts.end()) return {DecisionType::Action,"rest",json::object(),"I need rest","rest","","be rested"};
   if(me["hunger"]>=60){
     const auto& cells=p.value["cells"];
     Position self{me.value("x",0),me.value("y",0)};
