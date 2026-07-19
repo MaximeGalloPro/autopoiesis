@@ -561,8 +561,19 @@ Perception Simulation::perceive(Agent& a) {
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
+  const auto actions=available_actions(a,world_,agents_);
+  const bool shelter_action_available=std::any_of(actions.begin(),actions.end(),[](const std::string& action){
+    return action=="harvest_wood"||action=="assemble_shelter"||action=="build_shelter";
+  });
+  if(a.project.status==ProjectStatus::Blocked&&a.project.key=="build_shelter"&&
+     a.project.missing_capability=="build_shelter"&&shelter_action_available){
+    a.project.status=ProjectStatus::Active;
+    a.project.blocked_reason.clear();
+    a.project.missing_capability.clear();
+    a.remember("La capacite de construction de l'abri est disponible.");
+  }
   json construction=nullptr;if(a.shelter_construction)construction={{"x",a.shelter_construction->position.x},{"y",a.shelter_construction->position.y},{"progress",a.shelter_construction->progress}};
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -627,7 +638,7 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
     return;
   }
 
-  if(agent.project.status!=ProjectStatus::Active)return;
+  if(agent.project.status!=ProjectStatus::Active||!succeeded)return;
   const int previous_progress=agent.project.progress;
   if(agent.project.key=="build_shelter")
     agent.project.progress=static_cast<int>(std::count_if(agent.map_memory.begin(),agent.map_memory.end(),[](const auto& cell){return cell.second==Terrain::Tree;}));

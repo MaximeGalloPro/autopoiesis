@@ -23,6 +23,9 @@ struct SimulationTestAccess {
             result == "construit un abri");
     return result;
   }
+  static Perception perceive(Simulation& simulation, Agent& agent) {
+    return simulation.perceive(agent);
+  }
 };
 }
 
@@ -38,14 +41,37 @@ int main() {
                           "J'assemble mon abri."};
   std::string error;
 
-  // Un prélèvement transforme exactement un arbre vivant en une unité portée.
+  // Une action canonique localement réalisable suffit à reconnaître la
+  // capacité de construction déjà active dans le projet bloqué.
   ada.position = {6, 1};
+  ada.project.status = ProjectStatus::Blocked;
+  ada.project.blocked_reason = "La capacite de construire un abri manque.";
+  ada.project.missing_capability = "build_shelter";
+  const auto synchronized = SimulationTestAccess::perceive(simulation, ada);
+  const auto synchronized_actions =
+      synchronized.value["available_actions"].get<std::vector<std::string>>();
+  assert(std::find(synchronized_actions.begin(), synchronized_actions.end(),
+                   "harvest_wood") != synchronized_actions.end());
+  assert(ada.project.status == ProjectStatus::Active);
+  assert(ada.project.blocked_reason.empty());
+  assert(ada.project.missing_capability.empty());
+
+  // Un prélèvement transforme exactement un arbre vivant en une unité portée.
   assert(world.living_trees(ada.position) == 1);
   assert(validate_decision(harvest, ada, world, simulation.agents(), error));
   assert(SimulationTestAccess::execute(simulation, ada, harvest) ==
          "preleve du bois");
   assert(world.living_trees(ada.position) == 0);
   assert(ada.wood_inventory == 1);
+  ada.position = {7, 1};
+  const auto after_harvest = SimulationTestAccess::perceive(simulation, ada);
+  const auto actions_after_harvest =
+      after_harvest.value["available_actions"].get<std::vector<std::string>>();
+  assert(std::find(actions_after_harvest.begin(), actions_after_harvest.end(),
+                   "harvest_wood") == actions_after_harvest.end());
+  assert(std::find(actions_after_harvest.begin(), actions_after_harvest.end(),
+                   "assemble_shelter") != actions_after_harvest.end());
+  ada.position = {6, 1};
 
   // Sans arbre, tout l'état pertinent reste inchangé.
   const auto empty_cell = ada.position;
@@ -106,6 +132,7 @@ int main() {
   assert(ada.shelter_construction->progress == 1);
   const int wood_before_wrong_site = ada.wood_inventory;
   const int progress_before_wrong_site = ada.shelter_construction->progress;
+  const int project_progress_before_wrong_site = ada.project.progress;
   ada.position = {8, 1};
   assert(!validate_decision(assemble, ada, world, simulation.agents(), error));
   assert(SimulationTestAccess::execute(simulation, ada, assemble) ==
@@ -113,7 +140,7 @@ int main() {
   assert(ada.wood_inventory == wood_before_wrong_site);
   assert(ada.shelter_construction->progress == progress_before_wrong_site);
   assert(world.shelter_level(ada.position) == 0);
-  assert(ada.project.progress == completed_project_progress);
+  assert(ada.project.progress == project_progress_before_wrong_site);
 
   // Le mécanisme antérieur de construction avec matériaux au sol reste couvert.
   Logger legacy_logger("/tmp/autopoiesis-legacy-shelter-tests");
