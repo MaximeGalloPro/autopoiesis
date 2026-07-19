@@ -272,10 +272,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .recompile-progress.ready > svg { color: var(--green); }
 .recompile-progress.failed > svg { color: var(--red); }
 
-.modal-layer { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 30px; background: rgba(3, 8, 6, .78); backdrop-filter: blur(14px); }
+.guard-reminder { position: fixed; z-index: 80; right: 24px; bottom: 105px; display: flex; align-items: center; gap: 12px; width: min(620px, calc(100vw - 48px)); padding: 12px 14px; border: 1px solid rgba(216,175,97,.35); border-radius: 12px; background: rgba(12,21,17,.97); box-shadow: 0 18px 55px rgba(0,0,0,.5); backdrop-filter: blur(16px); }
+.guard-reminder.devil { border-color: rgba(210,94,61,.4); background: rgba(31,20,16,.97); }
+.guard-reminder-icon { display: grid; flex: 0 0 38px; place-items: center; height: 38px; border: 1px solid rgba(216,175,97,.3); border-radius: 50%; color: var(--accent); }
+.guard-reminder.devil .guard-reminder-icon { border-color: rgba(210,94,61,.35); color: #dc765c; }
+.guard-reminder-icon svg { width: 18px; }
+.guard-reminder-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.guard-reminder-copy > span { color: var(--accent); font-size: 8px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.guard-reminder-copy strong { overflow: hidden; font-family: Georgia, serif; font-size: 15px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.guard-reminder-copy small { color: var(--muted); font-size: 9px; }
+.guard-reminder-actions { display: flex; gap: 7px; }
+.guard-reminder-actions button, .guard-minimize { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 11px; border-radius: 7px; cursor: pointer; }
+.guard-reminder-actions button svg, .guard-minimize svg { width: 14px; }
+.guard-resume { border: 1px solid rgba(118,182,139,.5); background: #6fa181; color: #09110d; font-weight: 800; }
+.guard-open, .guard-minimize { border: 1px solid var(--line-strong); background: rgba(255,255,255,.04); color: #c4cbc7; }
+.guard-open:hover, .guard-minimize:hover { background: rgba(255,255,255,.08); }
+
+.guard-layer { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 30px; pointer-events: none; background: radial-gradient(circle at 50% 100%, rgba(3,8,6,.72), transparent 72%); }
+.guard-layer .validation-modal { pointer-events: auto; }
 .validation-modal { width: min(1080px, 100%); max-height: calc(100dvh - 60px); overflow-y: auto; padding: 28px; border: 1px solid rgba(216,175,97,.24); border-radius: 16px; background: linear-gradient(145deg, #14201b, #0b1310 75%); box-shadow: 0 30px 100px rgba(0,0,0,.7); }
 .validation-modal.devil { border-color: rgba(205,100,69,.35); background: radial-gradient(circle at 90% 0%, rgba(157,64,44,.15), transparent 38%), linear-gradient(145deg, #211813, #100e0c 75%); }
 .validation-heading { align-items: flex-start; gap: 15px; padding-bottom: 21px; border-bottom: 1px solid var(--line); }
+.validation-heading-copy { flex: 1; min-width: 0; }
+.guard-minimize { flex: 0 0 auto; }
 .validation-icon { display: grid; flex: 0 0 46px; place-items: center; height: 46px; border: 1px solid rgba(216,175,97,.32); border-radius: 50%; color: var(--accent); }
 .devil .validation-icon { border-color: rgba(210,94,61,.35); color: #dc765c; }
 .validation-heading h2 { margin: 5px 0 5px; font-family: Georgia, serif; font-size: clamp(24px, 3vw, 34px); font-weight: 500; }
@@ -367,6 +386,7 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .delay-control { grid-column: 1 / -1; border-top: 1px solid var(--line); padding: 10px 16px; }
   .population { display: none; }
   .progress-dock { bottom: 150px; }
+  .guard-reminder { bottom: 150px; }
 }
 
 @media (max-width: 620px) {
@@ -392,11 +412,18 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .delay-control { grid-template-columns: 125px 1fr; }
   .request-grid { grid-template-columns: 1fr; }
   .request-card { min-height: 230px; }
-  .modal-layer { padding: 12px; }
-  .validation-modal { max-height: calc(100dvh - 24px); padding: 17px; }
+  .guard-reminder { right: 12px; bottom: 155px; gap: 9px; width: calc(100vw - 24px); padding: 10px; }
+  .guard-reminder-icon { flex-basis: 34px; height: 34px; }
+  .guard-reminder-copy small { display: none; }
+  .guard-reminder-actions { gap: 5px; }
+  .guard-reminder-actions button { min-height: 34px; padding: 7px 9px; font-size: 9px; }
+  .guard-layer { place-items: end center; padding: 0; background: linear-gradient(to top, rgba(3,8,6,.78), transparent 82%); }
+  .guard-layer .validation-modal { width: 100%; max-height: 76dvh; padding: 17px 16px calc(17px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 18px 18px 0 0; }
   .validation-heading { gap: 10px; }
   .validation-icon { flex-basis: 37px; height: 37px; }
   .validation-icon svg { width: 19px; }
+  .guard-minimize { width: 36px; min-height: 36px; padding: 0; }
+  .guard-minimize span { display: none; }
   .confirmation-layout { grid-template-columns: 1fr; }
   .confirmation-card dl, .devil-context { grid-template-columns: 1fr; }
   .god-progress ol { grid-template-columns: repeat(4, 1fr); gap: 8px 0; }

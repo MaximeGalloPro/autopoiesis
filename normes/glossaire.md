@@ -288,6 +288,8 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 Dans l'interface web, React présente les trois demandes les plus récentes sous forme de cartes à jouer. Le premier clic sélectionne une carte ; un second écran demande explicitement d'approuver, refuser ou revenir. Le navigateur ne modifie aucun journal lui-même : il transmet une commande structurée à Elysia, puis au moteur C++, qui la revalide et la remet à `HumanValidation`. En mode `--terminal`, le protocole historique reste disponible.
 
+L'arrivée d'une garde ne masque jamais l'observatoire : elle apparaît d'abord sous forme de rappel compact et le panneau de décision reste réductible, notamment sur mobile. Réduire ou ignorer visuellement ce panneau ne vaut ni reprise ni décision ; le moteur reste en attente jusqu'à une commande humaine explicite. Une fenêtre sans proposition peut être reprise directement depuis le rappel compact.
+
 Après une approbation, l'interface web observe les mêmes artefacts que le suivi terminal et affiche les phases `file d'attente → préparation → TDD → compte rendu → vérification → activation`. Elle montre la durée et le dernier retour utile sans interpréter ni modifier le résultat. Une activation réussie se termine par une confirmation explicite avant la reprise de la simulation ; cette confirmation remplace l'ancien second écran générique « Reprendre ».
 
 Tout écran web de reprise expose le délai entre journées sous forme de slider borné de `0` à `10000 ms`. La valeur initiale vient de `SIMULATION_DELAY_MS`, puis le choix local s'applique aux journées suivantes du run sans modifier `.env`, le nombre de cycles ou le calendrier.

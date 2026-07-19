@@ -18,7 +18,12 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Inspector } from "./components/Inspector";
 import { ProgressDock } from "./components/ProgressDock";
-import { EvolutionCompletionOverlay, ValidationOverlay } from "./components/ValidationOverlay";
+import {
+  EvolutionCompletionOverlay,
+  EvolutionCompletionReminder,
+  ValidationOverlay,
+  ValidationReminder,
+} from "./components/ValidationOverlay";
 import type { EntitySelection } from "./components/WorldScene";
 import { useSimulation } from "./hooks/useSimulation";
 import { seasonLabels } from "./lib/format";
@@ -69,6 +74,7 @@ export default function App() {
   const [selected, setSelected] = useState<EntitySelection | null>(null);
   const [delayDraft, setDelayDraft] = useState(500);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [openGuardKey, setOpenGuardKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (snapshot) setDelayDraft(snapshot.delay_ms);
@@ -115,6 +121,12 @@ export default function App() {
 
   const campFood = useMemo(() => snapshot?.cells.reduce((total, cell) => total + cell.stored_food, 0) ?? 0, [snapshot]);
   const dayProgress = snapshot ? Math.max(0, Math.min(100, (snapshot.cycle_in_day / snapshot.cycles_per_day) * 100)) : 0;
+  const validationGuardKey = data.validation
+    ? `validation:${data.validation.kind}:${data.validation.simulation_cycle}`
+    : null;
+  const completionGuardKey = data.evolution_completion
+    ? `completion:${data.evolution_completion.request_id}:${data.evolution_completion.stage}`
+    : null;
 
   return (
     <div className={`app-shell ${snapshot?.phase === "night" ? "night" : "day"}`}>
@@ -169,6 +181,7 @@ export default function App() {
           <button
             className={snapshot?.paused ? "paused" : ""}
             disabled={controlDisabled}
+            aria-label={snapshot?.paused ? "Reprendre la simulation" : "Mettre la simulation en pause"}
             aria-pressed={snapshot?.paused ?? false}
             aria-keyshortcuts="Space"
             onClick={() => snapshot && dispatch({ type: "control.pause", paused: !snapshot.paused })}
@@ -207,10 +220,12 @@ export default function App() {
       </footer>
 
       <ProgressDock activity={data.activity} evolution={data.evolution} recompilation={data.recompilation} />
-      {data.validation && <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} />}
-      {data.evolution_completion && (
-        <EvolutionCompletionOverlay completion={data.evolution_completion} sendCommand={sendCommand} />
-      )}
+      {data.validation && validationGuardKey && (openGuardKey === validationGuardKey
+        ? <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
+        : <ValidationReminder prompt={data.validation} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(validationGuardKey)} />)}
+      {data.evolution_completion && completionGuardKey && (openGuardKey === completionGuardKey
+        ? <EvolutionCompletionOverlay completion={data.evolution_completion} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
+        : <EvolutionCompletionReminder completion={data.evolution_completion} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(completionGuardKey)} />)}
       {showShortcuts && <ShortcutHelp onClose={() => setShowShortcuts(false)} />}
       {commandError && <div className="toast error" role="alert"><TriangleAlert />{commandError}<button onClick={dismissCommandError} aria-label="Fermer">×</button></div>}
     </div>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ValidationOverlay } from "../src/components/ValidationOverlay";
+import { ValidationOverlay, ValidationReminder } from "../src/components/ValidationOverlay";
 import type { ValidationPrompt } from "../src/protocol";
 
 const request = {
@@ -26,10 +26,12 @@ describe("interface de validation", () => {
       requests: [request],
       allowed_commands: ["1", "n", "q"],
     };
-    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} />);
+    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} onMinimize={() => undefined} />);
     expect(html).toContain("Les autres resteront pending");
     expect(html).toContain("Aucune évolution");
     expect(html).toContain("Arrêter le run");
+    expect(html).toContain("Réduire la fenêtre de décision");
+    expect(html).not.toContain("aria-modal=\"true\"");
   });
 
   test("présente le fondement et la pression du Diable sans option aucune", () => {
@@ -43,9 +45,28 @@ describe("interface de validation", () => {
       real_world_basis: "Le froid réduit les rendements.",
       future_pressure: "Préparer une isolation testable.",
     };
-    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} />);
+    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} onMinimize={() => undefined} />);
     expect(html).toContain("Fondement réel");
     expect(html).toContain("Pression future");
     expect(html).not.toContain("Aucune évolution");
+  });
+
+  test("propose une reprise compacte sans masquer le monde", () => {
+    const prompt: ValidationPrompt = {
+      kind: "feature",
+      stage: "empty",
+      day: 3,
+      simulation_cycle: 7200,
+      requests: [],
+      allowed_commands: ["o", "q"],
+    };
+    const html = renderToStaticMarkup(
+      <ValidationReminder prompt={prompt} sendCommand={async () => true} onOpen={() => undefined} />,
+    );
+    expect(html).toContain("Simulation en attente");
+    expect(html).toContain("Le monde reste entièrement consultable");
+    expect(html).toContain("Reprendre");
+    expect(html).toContain("Détails");
+    expect(html).not.toContain("role=\"dialog\"");
   });
 });
