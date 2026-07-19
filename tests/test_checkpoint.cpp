@@ -46,6 +46,7 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].map_visit_counts==right[index].map_visit_counts);
     assert(left[index].known_campfires==right[index].known_campfires);
     assert(left[index].branch_inventory==right[index].branch_inventory);
+    assert(left[index].carried_food==right[index].carried_food);
     assert(project_json(left[index].project)==project_json(right[index].project));
     assert(relationships_json(left[index].relationships)==relationships_json(right[index].relationships));
   }

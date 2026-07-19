@@ -43,7 +43,11 @@ int World::branches(Position p) const { p=wrap(p);const auto found=construction_
 bool World::take_branch(Position p) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||found->second.loose_branches<=0)return false;--found->second.loose_branches;return true; }
 bool World::campfire(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found!=construction_cells_.end()&&found->second.campfire; }
 bool World::adjacent_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return true;return false; }
+std::optional<Position> World::nearby_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return neighbor;return std::nullopt; }
 bool World::place_campfire(Position p) { p=wrap(p);if(!passable(p)||campfire(p))return false;construction_cells_[{p.x,p.y}].campfire=true;return true; }
+int World::stored_food(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:static_cast<int>(found->second.food_stockpile.size()); }
+bool World::store_food(Position p,const FoodItem& food) { p=wrap(p);if(!campfire(p)||food.nutrition<=0)return false;construction_cells_[{p.x,p.y}].food_stockpile.push_back(food);return true; }
+bool World::take_stored_food(Position p,FoodItem* food) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire||found->second.food_stockpile.empty())return false;if(food)*food=found->second.food_stockpile.front();found->second.food_stockpile.erase(found->second.food_stockpile.begin());return true; }
 bool World::create_shelter(Position p) { p=wrap(p);if(!passable(p)||shelter_level(p)>0)return false;construction_cells_[{p.x,p.y}].shelter_level=1;return true; }
 void World::add_materials(Position p,int wood_amount,int fiber_amount) { p=wrap(p);auto& cell=construction_cells_[{p.x,p.y}];cell.wood+=std::max(0,wood_amount);cell.fibers+=std::max(0,fiber_amount); }
 bool World::build_shelter(Position p) { p=wrap(p);if(!passable(p))return false;auto& cell=construction_cells_[{p.x,p.y}];if(cell.wood<3||cell.fibers<2)return false;cell.wood-=3;cell.fibers-=2;++cell.shelter_level;return true; }
@@ -101,10 +105,13 @@ json World::checkpoint() const {
       {"x",animal.position.x},{"y",animal.position.y},{"alive",animal.alive},
       {"danger",animal.danger},{"nutrition",animal.nutrition}});
   json construction=json::array();
-  for(const auto&[position,cell]:construction_cells_)construction.push_back({
-      {"x",position.first},{"y",position.second},{"wood",cell.wood},
+  for(const auto&[position,cell]:construction_cells_){
+    json stored=json::array();for(const auto& food:cell.food_stockpile)stored.push_back({{"type",static_cast<int>(food.type)},{"nutrition",food.nutrition}});
+    construction.push_back({{"x",position.first},{"y",position.second},{"wood",cell.wood},
       {"fibers",cell.fibers},{"shelter_level",cell.shelter_level},
-      {"loose_branches",cell.loose_branches},{"campfire",cell.campfire}});
+      {"loose_branches",cell.loose_branches},{"campfire",cell.campfire},
+      {"stored_food",std::move(stored)}});
+  }
   return {{"width",width},{"height",height},{"cells",std::move(cells)},
           {"rabbit",{{"x",rabbit_.x},{"y",rabbit_.y},{"alive",rabbit_alive_}}},
           {"food_resources",std::move(foods)},{"animals",std::move(animals)},
@@ -135,10 +142,12 @@ void World::restore_checkpoint(const json& state) {
   bool has_branch_state=false;
   for(const auto& value:state.at("construction")){
     has_branch_state=has_branch_state||value.contains("loose_branches");
-    restored_construction[{value.at("x").get<int>(),value.at("y").get<int>()}]={
-        value.at("wood").get<int>(),value.at("fibers").get<int>(),
+    ConstructionCell cell{value.at("wood").get<int>(),value.at("fibers").get<int>(),
         value.at("shelter_level").get<int>(),value.value("loose_branches",0),
-        value.value("campfire",false)};
+        value.value("campfire",false),{}};
+    for(const auto& food:value.value("stored_food",json::array()))cell.food_stockpile.push_back({
+        static_cast<FoodType>(food.at("type").get<int>()),food.at("nutrition").get<int>()});
+    restored_construction[{value.at("x").get<int>(),value.at("y").get<int>()}]=std::move(cell);
   }
   const auto& rabbit=state.at("rabbit");
   cells_=std::move(restored_cells);

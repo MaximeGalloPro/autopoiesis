@@ -70,6 +70,10 @@ La phase diurne occupe les trois quarts d'une journée et la phase nocturne le q
 
 Les cases praticables voisines d'un arbre produisent progressivement des branches. Un personnage peut ramasser une branche locale ; trois branches permettent d'allumer un feu de camp persistant sur sa case. Un feu n'entre dans sa mémoire spatiale qu'après avoir été perçu. Pendant le dernier sixième de la phase diurne et durant la nuit, il rejoint par la carte connue une case adjacente à un feu mémorisé et s'y repose, sauf urgence vitale prioritaire.
 
+### Réserve commune
+
+Chaque feu possède une réserve alimentaire persistante. Un personnage ne transporte initialement qu'un aliment à la fois, avec son type et sa nutrition. `collect_food` retire atomiquement cet aliment du monde, `deposit_food` exige un feu adjacent connu et transfère l'objet vers sa réserve, puis `eat_camp_food` permet à n'importe quel personnage adjacent de le consommer. Aucun aliment ne peut être dupliqué ou devenir commun sans ces transitions validées.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -133,6 +137,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 22. Après l'activation d'une évolution, l'ancien binaire ne peut pas exécuter la journée suivante : il doit sauvegarder, recompiler, transférer l'exécution à la version activée, puis restaurer le checkpoint.
 23. Toute évolution qui modifie un état persistant doit conserver la lecture de la version précédente du checkpoint ou fournir une migration déterministe couverte par un test.
 24. Pause et vitesse graphique ne changent ni l'ordre ni le nombre des cycles élémentaires. L'accélération peut réduire les rendus intermédiaires, jamais les décisions ou validations du moteur.
+25. Une ressource transportée appartient à exactement un emplacement : monde, inventaire d'un personnage ou réserve. Chaque transfert est une action locale validée et persistante.
 
 ## Patterns
 

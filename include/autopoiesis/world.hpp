@@ -37,7 +37,11 @@ class World {
   bool take_branch(Position p);
   bool campfire(Position p) const;
   bool adjacent_campfire(Position p) const;
+  std::optional<Position> nearby_campfire(Position p) const;
   bool place_campfire(Position p);
+  int stored_food(Position campfire_position) const;
+  bool store_food(Position campfire_position, const FoodItem& food);
+  bool take_stored_food(Position campfire_position, FoodItem* food = nullptr);
   bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
@@ -56,6 +60,7 @@ class World {
     int shelter_level{};
     int loose_branches{};
     bool campfire{};
+    std::vector<FoodItem> food_stockpile;
   };
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
   void replenish_branches();

@@ -47,6 +47,10 @@ std::string action_label(const std::string& action) {
   if(action=="collect_branch")return "Ramasser une branche";
   if(action=="build_campfire")return "Allumer un feu";
   if(action=="rest_by_campfire")return "Rester près du feu";
+  if(action=="collect_food")return "Ramasser pour le camp";
+  if(action=="deposit_food")return "Déposer au camp";
+  if(action=="eat_carried_food")return "Manger la ration portée";
+  if(action=="eat_camp_food")return "Manger à la réserve";
   return action;
 }
 
@@ -356,6 +360,7 @@ struct RaylibInterface::Impl {
         const int center_x=x+static_cast<int>(cell_width/2),center_y=y+static_cast<int>(cell_height/2);
         DrawCircle(center_x,center_y,std::max(4.0F,cell_width*0.22F),{219,78,45,255});
         DrawCircle(center_x,center_y,std::max(2.0F,cell_width*0.10F),{249,197,66,255});
+        if(cell.stored_food>0)DrawText(TextFormat("%d",cell.stored_food),x+2,y+2,10,primary_text);
       }
       if(cell.shelter_level>0){
         DrawRectangle(x+3,y+3,std::max(4,static_cast<int>(cell_width)-6),
@@ -435,9 +440,11 @@ struct RaylibInterface::Impl {
                column_x,cursor+row*21,13,index%2==0?primary_text:secondary_text);
     }
     cursor+=112;
-    DrawText(TextFormat("Bois : %d   Branches : %d   Monotonie : %d",agent.wood_inventory,
-                        agent.branch_inventory,agent.boredom),
-             x+22,std::min(cursor,height-28),13,secondary_text);
+    const int inventory_y=std::min(cursor,height-48);
+    DrawText(TextFormat("Bois : %d   Branches : %d   Ration : %s",agent.wood_inventory,
+                        agent.branch_inventory,agent.carried_food?"oui":"non"),
+             x+22,inventory_y,13,secondary_text);
+    DrawText(TextFormat("Monotonie : %d",agent.boredom),x+22,inventory_y+20,13,secondary_text);
   }
 
   void draw() const {

@@ -2,9 +2,60 @@
 
 Ce fichier sert de point de reprise lors du changement d’ordinateur.
 
-## Prochaines étapes
+## Feuille de route gameplay
 
-- [ ] Effectuer un run de vérification sur 3 jours et confirmer les 6 appels API au cycle élémentaire 720, sans appel avant ce point, puis vérifier la pause humaine.
+Chaque ligne représente un mécanisme jouable à livrer en TDD. L'ordre est
+intentionnel : une phase doit produire une boucle observable avant d'ajouter la
+suivante.
+
+### Phase 1 - Faire société autour du camp
+
+- [x] **G01 - Boucle de survie collective** : relier collecte, transport, dépôt, consommation et pénurie dans un même scénario automatisé. Premier flux livré : une nourriture portée vers la réserve du feu puis consommable par un autre personnage.
+- [ ] **G02 - Foyer collectif** : identifier un camp partagé avec feu, emplacements de repos et activités communes.
+- [ ] **G03 - Inventaires complets** : porter des aliments, matériaux et objets avec une capacité bornée.
+- [ ] **G04 - Transport des ressources** : choisir une ressource connue, la ramasser, rejoindre une destination et la déposer.
+- [ ] **G09 - Alimentation planifiée** : repas, nutrition, préférences, réserves, cuisson et conservation progressive.
+- [ ] **G14 - Vie collective** : repas partagés, veillées, rôles spontanés, célébrations et deuils.
+
+Critère de sortie : un personnage collecte une nourriture, la rapporte au camp
+et un autre personnage peut la consommer ; les journaux expliquent chaque
+intention et l'interface montre la réserve.
+
+### Phase 2 - Transformer le monde
+
+- [ ] **G05 - Chaînes de fabrication** : transformer des ressources par recettes explicites sans création implicite de matière.
+- [ ] **G06 - Outils nécessaires** : fabriquer, équiper, user et réparer les premiers outils.
+- [ ] **G07 - Compétences progressives** : apprendre par la pratique, se spécialiser et transmettre.
+- [ ] **G08 - Construction spatiale** : désigner puis bâtir murs, portes, lits, réserves et ateliers sur la carte.
+- [ ] **G10 - Écosystème renouvelable** : croissance, reproduction, prédation et surexploitation locale.
+
+Critère de sortie : un abri fonctionnel exige une chaîne matière → outil →
+travail → bâtiment, avec coût, durée et compétence observables.
+
+### Phase 3 - Produire des histoires humaines
+
+- [ ] **G11 - Santé détaillée** : blessures, maladies, infections, soins et convalescence.
+- [ ] **G12 - Émotions causales** : relier chaque émotion à un souvenir et à un effet décisionnel borné.
+- [ ] **G13 - Relations actives** : entraide, conflit, avertissement, accompagnement et réconciliation.
+- [ ] **G15 - Population évolutive** : arrivées, départs, vieillissement, naissance et mort.
+- [ ] **G16 - Dangers actifs** : animaux territoriaux, incendies, accidents, tempêtes et pénuries signalées.
+
+Critère de sortie : une difficulté laisse une trace durable dans la santé, les
+relations et les décisions d'au moins deux personnages.
+
+### Phase 4 - Donner une trajectoire au joueur
+
+- [ ] **G17 - Diable adaptatif** : choisir une pression selon stabilité, historique et capacités avec difficulté croissante.
+- [ ] **G18 - Objectifs mesurables** : afficher des objectifs collectifs comme survivre à l'hiver ou constituer une réserve.
+- [ ] **G19 - Lisibilité décisionnelle** : montrer objectif, destination, chemin, priorité et cause des changements.
+- [ ] **G20 - Mise en scène vivante** : cycle lumineux, météo, animations, sons et chronologie des événements majeurs.
+
+Critère de sortie : le joueur comprend ce qui menace le groupe, ce que chacun
+tente et comment son choix d'évolution a changé la trajectoire du monde.
+
+## Travaux techniques et validations
+
+- [ ] Effectuer un run de vérification sur 3 jours et confirmer les 6 appels API au cycle élémentaire 7200, sans appel avant ce point, puis vérifier la pause humaine.
 - [ ] Vérifier la persistance du budget d’appels API et le comportement de la limite configurée.
 - [x] Relier les événements transmis à l’IA aux aspirations, projets, blocages, relations et à la monotonie de chaque personnage.
 - [x] Finaliser le format des demandes d’évolution avec clé sémantique, domaine et critères d’acceptation testables.
@@ -28,11 +79,8 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [x] Maintenir une transition graphique animée pendant les appels IA et rendre les interactions visibles au survol.
 - [x] Donner à l'IA demandeuse le catalogue actif et une mémoire bornée des évolutions pour éviter les propositions rebaptisées.
 - [x] Présenter les trois propositions sous forme de cartes et intégrer leur sélection à la fenêtre graphique.
-- [ ] Afficher le suivi détaillé de Dieu directement dans la fenêtre graphique.
-- [ ] Étendre progressivement le catalogue du Diable lorsque de nouvelles capacités rendent des contraintes réelles jouables.
-- [ ] Ajouter reproduction et renouvellement déterministe des populations et ressources.
-- [ ] Ajouter inventaires, conservation des aliments et partage entre personnages.
-- [ ] Ajouter des actions sociales spécialisées : partager une connaissance, demander de l'aide, avertir et accompagner.
+- [x] Afficher le suivi détaillé de Dieu directement dans la fenêtre graphique.
+- [ ] Étendre progressivement le catalogue du Diable avec **G17**.
 
 ## Garde-fous
 

@@ -14,4 +14,5 @@ COPY --from=build /src/build/autopoiesis_timing_tests /usr/local/bin/autopoiesis
 COPY --from=build /src/build/autopoiesis_validation_tests /usr/local/bin/autopoiesis_validation_tests
 COPY --from=build /src/build/autopoiesis_checkpoint_tests /usr/local/bin/autopoiesis_checkpoint_tests
 COPY --from=build /src/build/autopoiesis_campfire_tests /usr/local/bin/autopoiesis_campfire_tests
+COPY --from=build /src/build/autopoiesis_camp_stockpile_tests /usr/local/bin/autopoiesis_camp_stockpile_tests
 ENTRYPOINT ["/usr/local/bin/autopoiesis"]

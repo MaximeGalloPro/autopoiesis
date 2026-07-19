@@ -14,6 +14,7 @@ struct UiCell {
   int shelter_level{};
   int branches{};
   bool campfire{};
+  int stored_food{};
 };
 
 struct UiAgent {

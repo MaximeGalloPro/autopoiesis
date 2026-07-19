@@ -53,6 +53,11 @@ struct Project {
 struct Relationship { int trust{}; int affinity{}; int interactions{}; };
 struct ShelterConstruction { Position position; int progress{}; };
 struct FoodResource { FoodType type; Position position; int amount; int nutrition; int capacity{}; };
+struct FoodItem {
+  FoodType type{FoodType::Berries};
+  int nutrition{};
+  friend bool operator==(const FoodItem&,const FoodItem&)=default;
+};
 struct Animal { std::string id; AnimalType type; Position position; bool alive{true}; int danger{}; int nutrition{}; };
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};
@@ -68,6 +73,7 @@ struct Agent {
   std::set<std::pair<int,int>> known_campfires;
   int wood_inventory{};
   int branch_inventory{};
+  std::optional<FoodItem> carried_food;
   std::optional<ShelterConstruction> shelter_construction;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };

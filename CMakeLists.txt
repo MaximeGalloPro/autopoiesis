@@ -116,6 +116,9 @@ add_test(NAME seamless_checkpoint_transfer COMMAND autopoiesis_checkpoint_tests)
 add_executable(autopoiesis_campfire_tests tests/test_campfire.cpp)
 target_link_libraries(autopoiesis_campfire_tests PRIVATE autopoiesis_core)
 add_test(NAME campfire_night_routine COMMAND autopoiesis_campfire_tests)
+add_executable(autopoiesis_camp_stockpile_tests tests/test_camp_stockpile.cpp)
+target_link_libraries(autopoiesis_camp_stockpile_tests PRIVATE autopoiesis_core)
+add_test(NAME shared_camp_stockpile COMMAND autopoiesis_camp_stockpile_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -143,6 +146,7 @@ foreach(test_target
     autopoiesis_period_memory_tests
     autopoiesis_ui_model_tests
     autopoiesis_checkpoint_tests
-    autopoiesis_campfire_tests)
+    autopoiesis_campfire_tests
+    autopoiesis_camp_stockpile_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()
