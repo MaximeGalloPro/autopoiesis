@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { BackendEvent, EngineCommand, PublicState } from "../src/protocol";
+import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { createApp, createEventRelay } from "../server/app";
 import type { BackendProcessManager } from "../server/backend-process";
 import { worldSnapshot } from "./fixtures";
@@ -38,21 +39,23 @@ describe("BFF Elysia", () => {
     relay.close();
   });
 
-  test("expose santé et projection d’état", async () => {
+  test("expose le transport navigateur et les alias API", async () => {
     const manager = new FakeManager();
     const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false });
-    const health = await app.handle(new Request("http://localhost/api/health"));
-    expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ status: "ok", has_state: true });
-    const state = await app.handle(new Request("http://localhost/api/state"));
-    expect(state.status).toBe(200);
-    expect((await state.json()).state.simulation_cycle).toBe(7200);
+    for (const prefix of [BROWSER_TRANSPORT_PREFIX, "/api"]) {
+      const health = await app.handle(new Request(`http://localhost${prefix}/health`));
+      expect(health.status).toBe(200);
+      expect(await health.json()).toMatchObject({ status: "ok", has_state: true });
+      const state = await app.handle(new Request(`http://localhost${prefix}/state`));
+      expect(state.status).toBe(200);
+      expect((await state.json()).state.simulation_cycle).toBe(7200);
+    }
   });
 
   test("valide strictement la forme et les bornes des commandes", async () => {
     const manager = new FakeManager();
     const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false });
-    const send = (body: unknown) => app.handle(new Request("http://localhost/api/commands", {
+    const send = (body: unknown) => app.handle(new Request(`http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -72,7 +75,7 @@ describe("BFF Elysia", () => {
       serveStatic: false,
       safePreview: true,
     });
-    const response = await app.handle(new Request("http://localhost/api/commands", {
+    const response = await app.handle(new Request(`http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ type: "validation.decision", request_id: "request-1", decision: "approve" }),

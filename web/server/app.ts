@@ -1,6 +1,7 @@
 import { extname, resolve, sep } from "node:path";
 import { Elysia } from "elysia";
 import type { BackendEvent, EngineCommand } from "../src/protocol";
+import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { BackendProcessManager } from "./backend-process";
 import { isEngineCommand } from "./command-schema";
 
@@ -54,6 +55,44 @@ export function createEventRelay(
   };
 }
 
+function mountTransportRoutes(
+  app: Elysia,
+  prefix: string,
+  manager: BackendProcessManager,
+  safePreview: boolean,
+): void {
+  app
+    .get(`${prefix}/health`, () => {
+      const snapshot = manager.snapshot();
+      return {
+        status: snapshot.engine.status === "running" ? "ok" : "degraded",
+        engine: snapshot.engine,
+        has_state: snapshot.state !== null,
+      };
+    })
+    .get(`${prefix}/state`, ({ set }) => {
+      const snapshot = manager.snapshot();
+      if (!snapshot.state) set.status = 503;
+      return snapshot;
+    })
+    .post(`${prefix}/commands`, ({ body, set }) => {
+      if (!isEngineCommand(body)) {
+        set.status = 422;
+        return { accepted: false, error: "Commande inconnue, mal paramétrée ou hors limites." };
+      }
+      if (safePreview && body.type === "validation.decision" && body.decision === "approve") {
+        set.status = 403;
+        return { accepted: false, error: "L’approbation réelle est désactivée dans cette preview publique." };
+      }
+      if (!manager.send(body)) {
+        set.status = 503;
+        return { accepted: false, error: "Le moteur n’est pas disponible." };
+      }
+      set.status = 202;
+      return { accepted: true };
+    });
+}
+
 export function createApp(
   manager: BackendProcessManager,
   options: {
@@ -71,36 +110,11 @@ export function createApp(
   const snapshotIntervalMs = options.snapshotIntervalMs
     ?? (Number.isFinite(configuredInterval) ? Math.max(16, Math.min(1_000, configuredInterval)) : 100);
 
-  return new Elysia()
-    .get("/api/health", () => {
-      const snapshot = manager.snapshot();
-      return {
-        status: snapshot.engine.status === "running" ? "ok" : "degraded",
-        engine: snapshot.engine,
-        has_state: snapshot.state !== null,
-      };
-    })
-    .get("/api/state", ({ set }) => {
-      const snapshot = manager.snapshot();
-      if (!snapshot.state) set.status = 503;
-      return snapshot;
-    })
-    .post("/api/commands", ({ body, set }) => {
-      if (!isEngineCommand(body)) {
-        set.status = 422;
-        return { accepted: false, error: "Commande inconnue, mal paramétrée ou hors limites." };
-      }
-      if (safePreview && body.type === "validation.decision" && body.decision === "approve") {
-        set.status = 403;
-        return { accepted: false, error: "L’approbation réelle est désactivée dans cette preview publique." };
-      }
-      if (!manager.send(body)) {
-        set.status = 503;
-        return { accepted: false, error: "Le moteur n’est pas disponible." };
-      }
-      set.status = 202;
-      return { accepted: true };
-    })
+  const app = new Elysia();
+  mountTransportRoutes(app, BROWSER_TRANSPORT_PREFIX, manager, safePreview);
+  mountTransportRoutes(app, "/api", manager, safePreview);
+
+  return app
     .ws("/ws", {
       open(ws) {
         ws.send(JSON.stringify({ type: "snapshot", payload: manager.snapshot() }));
@@ -125,7 +139,7 @@ export function createApp(
       },
     })
     .get("*", async ({ path, set }) => {
-      if (path.startsWith("/api/")) {
+      if (path.startsWith("/api/") || path.startsWith(`${BROWSER_TRANSPORT_PREFIX}/`)) {
         set.status = 404;
         return { error: "Point d’API inconnu." };
       }

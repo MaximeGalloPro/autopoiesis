@@ -133,10 +133,14 @@ Les types autorisés sont `status`, `snapshot`, `activity`,
 
 Elysia expose :
 
-- `GET /api/health` : disponibilité du processus C++ ;
-- `GET /api/state` : dernier état projeté en lecture seule ;
-- `POST /api/commands` : commandes strictement validées ;
+- `GET /bridge/health` : disponibilité du processus C++ ;
+- `GET /bridge/state` : dernier état projeté en lecture seule ;
+- `POST /bridge/commands` : commandes strictement validées ;
 - `GET /ws` : instantané initial puis événements descendants.
+
+Le navigateur emploie `/bridge/*` afin de rester sur le port web dans les
+previews Nuagent, où `/api/*` est réservé au port API dédié. Les trois routes
+restent aussi exposées sous `/api/*` pour la compatibilité locale et Docker.
 
 Les seules commandes filaires acceptées par le C++ sont pause/reprise/arrêt,
 vitesse, délai et texte de validation autorisé pour la garde courante. Les
