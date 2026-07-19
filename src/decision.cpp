@@ -49,6 +49,10 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
     if(has_companion&&std::any_of(agents.begin(),agents.end(),[&](const Agent& other){
       return !other.alive&&other.id!=a.id&&!a.mourned_agents.contains(other.id);
     }))r.push_back("mourn");
+    if(fire&&a.last_taught_day!=current_day&&std::any_of(agents.begin(),agents.end(),[&](const Agent& other){
+      return other.alive&&other.id!=a.id&&other.last_lesson_day!=current_day&&
+             w.nearby_campfire(other.position)==fire&&teachable_skill(a,other).has_value();
+    }))r.push_back("teach_skill");
   }
   const bool at_construction_site=!a.shelter_construction||a.shelter_construction->position==a.position;
   if(a.alive&&occupies_current_cell&&a.wood_inventory>0&&w.passable(a.position)&&w.shelter_level(a.position)==0&&at_construction_site) r.push_back("assemble_shelter");
@@ -60,11 +64,22 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
 }
 bool validate_decision(const Decision& d,const Agent& a,const World& w,const std::vector<Agent>& agents,std::string& e,int current_day,DayPhase phase) {
   if (d.type==DecisionType::Blocked) return (!d.need.empty() && !d.obstacle.empty() && !d.desired_result.empty()) || (e="blocked fields missing",false);
-  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","collect_iron_ore","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food","craft_camp_item","equip_axe","repair_axe","share_camp_meal","hold_vigil","celebrate","mourn"}; if (!names.contains(d.action)) {e="unknown action";return false;}
+  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","collect_iron_ore","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food","craft_camp_item","equip_axe","repair_axe","share_camp_meal","hold_vigil","celebrate","mourn","teach_skill"}; if (!names.contains(d.action)) {e="unknown action";return false;}
   auto avail=available_actions(a,w,agents,current_day,phase); if (std::find(avail.begin(),avail.end(),d.action)==avail.end()) {e="action unavailable";return false;}
   if (d.action=="move") { if (!d.parameters.is_object() || !d.parameters.contains("direction") || !d.parameters["direction"].is_string()) {e="direction required";return false;} auto dir=d.parameters["direction"].get<std::string>(); if (!std::set<std::string>{"north","south","east","west"}.contains(dir)){e="invalid direction";return false;} }
   if (d.action=="hunt_animal") { if(!d.parameters.is_object()||!d.parameters.contains("animal_id")||!d.parameters["animal_id"].is_string()){e="animal_id required";return false;}const auto* target=w.animal(d.parameters["animal_id"].get<std::string>());if(!target||!target->alive||!w.adjacent(a.position,target->position)){e="hunt target not adjacent";return false;} }
   if(d.action=="craft_camp_item"){if(!d.parameters.is_object()||!d.parameters.contains("recipe")||!d.parameters["recipe"].is_string()){e="recipe required";return false;}const auto fire=w.nearby_campfire(a.position);if(!fire){e="campfire required";return false;}const auto recipes=w.craftable_recipes(*fire);if(std::find(recipes.begin(),recipes.end(),d.parameters["recipe"].get<std::string>())==recipes.end()){e="recipe unavailable";return false;}}
+  if(d.action=="teach_skill"){
+    if(!d.parameters.is_object()||!d.parameters.contains("target_id")||!d.parameters["target_id"].is_string()||
+       !d.parameters.contains("skill")||!d.parameters["skill"].is_string()){e="lesson fields required";return false;}
+    const auto skill=skill_from_name(d.parameters["skill"].get<std::string>());
+    const auto target_id=d.parameters["target_id"].get<std::string>();
+    const auto fire=w.nearby_campfire(a.position);bool valid=false;
+    if(skill&&fire&&a.last_taught_day!=current_day)for(const auto& learner:agents)if(
+        learner.id==target_id&&learner.alive&&learner.last_lesson_day!=current_day&&
+        w.nearby_campfire(learner.position)==fire&&skill_level(a,*skill)>=skill_level(learner,*skill)+2)valid=true;
+    if(!valid){e="lesson unavailable";return false;}
+  }
   if (d.action=="talk") { if (!d.parameters.is_object() || !d.parameters.contains("target_agent_id") || !d.parameters["target_agent_id"].is_string()) {e="target_agent_id required";return false;} const auto target_id=d.parameters["target_agent_id"].get<std::string>(); bool ok=false; for(const auto&o:agents) if(o.id==target_id && o.alive && w.adjacent(a.position,o.position)) ok=true; if(!ok){e="talk target not adjacent";return false;} }
   return true;
 }

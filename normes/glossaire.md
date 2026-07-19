@@ -100,6 +100,10 @@ Une recette porte une clé stable, des quantités de bois et de branches, une li
 
 Le minerai de fer apparaît en gisements finis sur des cases praticables et occupe une unité de charge. Deux minerais et un charbon produisent un lingot ; un lingot et un manche produisent une hache. `equip_axe` retire exactement une hache de la réserve. `harvest_wood` exige une hache équipée de durabilité positive, transforme un arbre en une unité de bois et retire un point de durabilité seulement en cas de réussite. Près du foyer, `repair_axe` consomme une unité de bois et restaure dix points sans dépasser le maximum de vingt.
 
+### Compétence progressive
+
+Les huit compétences sont coupe du bois, extraction, fabrication, construction, cueillette, chasse, cuisine et sociabilité. Une action n'accorde de l'expérience que si son effet moteur a réussi. Cinq points d'expérience donnent un niveau, avec un maximum de dix ; les niveaux et les trois spécialisations dominantes sont persistants et observables. La coupe du bois augmente directement l'efficacité d'une réparation. Au même foyer, un mentor ayant au moins deux niveaux d'avance peut transmettre un point de la compétence choisie ; chaque personnage donne et reçoit au plus une leçon par journée.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -170,6 +174,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 29. Une activité collective doit exiger la présence réelle de ses participants au même foyer, être bornée par personnage et par journée lorsque répétable, et modifier un état persistant observable.
 30. Une recette ne peut consommer partiellement ses entrées : soit tous les coûts sont retirés et toutes les sorties ajoutées, soit le monde reste strictement identique.
 31. Une action exigeant un outil doit être absente sans cet outil et revérifier son type et sa durabilité à l'exécution. Seule une action réussie peut user l'outil.
+32. Une compétence ne progresse que sur une réussite validée. Une leçon exige la présence au même foyer, un écart de niveau suffisant et les limites quotidiennes du mentor comme de l'élève.
 
 ## Patterns
 

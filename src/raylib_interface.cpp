@@ -61,6 +61,7 @@ std::string action_label(const std::string& action) {
   if(action=="hold_vigil")return "Tenir une veillée";
   if(action=="celebrate")return "Célébrer";
   if(action=="mourn")return "Faire mémoire";
+  if(action=="teach_skill")return "Transmettre un savoir";
   return action;
 }
 
@@ -494,7 +495,10 @@ struct RaylibInterface::Impl {
     if(agent.home_camp)equipment+=" · Foyer "+std::to_string(agent.home_camp->x)+","+
         std::to_string(agent.home_camp->y);
     DrawText(clipped(equipment,width-44,13).c_str(),x+22,inventory_y+40,13,secondary_text);
-    DrawText(TextFormat("Monotonie : %d",agent.boredom),x+22,inventory_y+60,13,secondary_text);
+    std::string skills="Compétences";
+    for(const auto skill:top_skills(agent,3))skills+=" · "+skill_name(skill)+" "+
+        std::to_string(skill_level(agent,skill));
+    DrawText(clipped(skills,width-44,13).c_str(),x+22,inventory_y+60,13,secondary_text);
   }
 
   void draw() const {

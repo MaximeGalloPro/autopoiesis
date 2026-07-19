@@ -113,7 +113,10 @@ json agent_checkpoint(const Agent& agent) {
           {"last_shared_meal_day",agent.last_shared_meal_day},
           {"last_vigil_day",agent.last_vigil_day},
           {"celebration_pending",agent.celebration_pending},
-          {"mourned_agents",std::move(mourned)}};
+          {"mourned_agents",std::move(mourned)},
+          {"skills",skills_json(agent)},
+          {"last_taught_day",agent.last_taught_day},
+          {"last_lesson_day",agent.last_lesson_day}};
 }
 
 Agent restore_agent(const json& state) {
@@ -188,6 +191,11 @@ Agent restore_agent(const json& state) {
   agent.celebration_pending=state.value("celebration_pending",false);
   for(const auto& id:state.value("mourned_agents",json::array()))
     agent.mourned_agents.insert(id.get<std::string>());
+  const auto saved_skills=state.value("skills",json::object());
+  for(const auto&[name,value]:saved_skills.items())if(const auto skill=skill_from_name(name))
+    agent.skills[*skill]={value.value("experience",0),value.value("level",0)};
+  agent.last_taught_day=state.value("last_taught_day",0);
+  agent.last_lesson_day=state.value("last_lesson_day",0);
   return agent;
 }
 
@@ -344,6 +352,10 @@ Decision LocalDecider::decide(const Perception& p) {
       return {DecisionType::Action,"harvest_wood",json::object(),"Je prélève du bois pour mon abri.","projet","","construire un abri"};
   }
   if(best_goal=="social"){
+    const auto lessons=p.value.value("teachable_lessons",json::array());
+    if(has_action("teach_skill")&&!lessons.empty())return {DecisionType::Action,"teach_skill",
+        {{"target_id",lessons.front().value("target_id","")},{"skill",lessons.front().value("skill","")}},
+        "Je transmets un savoir utile au foyer.","relation","","partager une compétence"};
     for(const auto& other:p.value.value("visible_agents",json::array()))if(other.value("adjacent",false))
       return {DecisionType::Action,"talk",{{"target_agent_id",other.value("id","")},{"message","Partageons ce que nous avons appris."}},"Je renforce notre coopération.","relation","","mieux coopérer"};
   }
@@ -774,7 +786,7 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=terrain==Terrain::Ground||terrain==Terrain::Bush;const bool known_fire=a.known_campfires.contains(position);known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",known_fire},{"stored_food",known_fire?world_.stored_food(p):0},{"stored_wood",known_fire?world_.stored_wood(p):0},{"stored_branches",known_fire?world_.stored_branches(p):0},{"stored_iron_ore",known_fire?world_.stored_iron_ore(p):0},{"crafted_items",known_fire?world_.stored_crafted_items(p):0}});}
-  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
+  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
   const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
@@ -802,7 +814,8 @@ Perception Simulation::perceive(Agent& a) {
   json rest_position=nullptr;if(a.camp_rest_position)rest_position={{"x",a.camp_rest_position->x},{"y",a.camp_rest_position->y}};
   json craftable=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& recipe:world_.craftable_recipes(*fire))craftable.push_back(recipe);
   json camp_inventory=json::object();if(const auto fire=world_.nearby_campfire(a.position))camp_inventory={{"wood",world_.stored_wood(*fire)},{"branches",world_.stored_branches(*fire)},{"iron_ore",world_.stored_iron_ore(*fire)},{"wooden_handles",world_.stored_item(*fire,CraftItem::WoodenHandle)},{"charcoal",world_.stored_item(*fire,CraftItem::Charcoal)},{"ropes",world_.stored_item(*fire,CraftItem::Rope)},{"iron_ingots",world_.stored_item(*fire,CraftItem::IronIngot)},{"axes",world_.stored_item(*fire,CraftItem::Axe)}};
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
+  json lessons=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& learner:agents_)if(learner.alive&&learner.id!=a.id&&world_.nearby_campfire(learner.position)==fire)if(const auto skill=teachable_skill(a,learner))lessons.push_back({{"target_id",learner.id},{"target_name",learner.name},{"skill",skill_name(*skill)}});
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -830,23 +843,40 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="drink"){if(!world_.drinkable(a.position))return "ne trouve pas d'eau";a.thirst=clamp_stat(a.thirst-(40+a.attributes.recuperation/10));return "boit de l'eau";}
   if(d.action=="eat_food"){FoodType type{};int nutrition=0;if(world_.consume_food(a.position,&type,&nutrition)){a.hunger=clamp_stat(a.hunger-nutrition);if(type==FoodType::Mushrooms)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange "+food_type_name(type);}return "ne peut pas manger ici";}
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
-  if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
-  if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
-  if(d.action=="build_shelter"){const bool existing=world_.shelter_level(a.position)>0;if(!a.alive||!world_.build_shelter(a.position))return "materiaux insuffisants pour construire";a.remember(existing?"J'ai ameliore l'abri.":"J'ai construit un abri.");return existing?"ameliore un abri":"construit un abri";}
-  if(d.action=="harvest_wood"){if(!a.equipped_tool||a.equipped_tool->type!=CraftItem::Axe||a.equipped_tool->durability<=0)return "hache requise";if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.harvest_tree(a.position))return "aucun arbre vivant a prelever";--a.equipped_tool->durability;++a.wood_inventory;a.remember("J'ai abattu un arbre avec ma hache.");return "preleve du bois";}
-  if(d.action=="collect_branch"){if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.take_branch(a.position))return "aucune branche a ramasser";++a.branch_inventory;a.remember("J'ai ramasse une branche pour le camp.");return "ramasse une branche";}
-  if(d.action=="collect_iron_ore"){if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.take_iron_ore(a.position))return "aucun minerai de fer";++a.iron_ore_inventory;a.remember("J'ai ramassé du minerai de fer.");return "ramasse du minerai de fer";}
+  if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);add_skill_experience(a,Skill::Hunting);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
+  if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);add_skill_experience(a,Skill::Hunting);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
+  if(d.action=="build_shelter"){const bool existing=world_.shelter_level(a.position)>0;if(!a.alive||!world_.build_shelter(a.position))return "materiaux insuffisants pour construire";add_skill_experience(a,Skill::Building);a.remember(existing?"J'ai ameliore l'abri.":"J'ai construit un abri.");return existing?"ameliore un abri":"construit un abri";}
+  if(d.action=="harvest_wood"){if(!a.equipped_tool||a.equipped_tool->type!=CraftItem::Axe||a.equipped_tool->durability<=0)return "hache requise";if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.harvest_tree(a.position))return "aucun arbre vivant a prelever";--a.equipped_tool->durability;++a.wood_inventory;add_skill_experience(a,Skill::Woodcutting);a.remember("J'ai abattu un arbre avec ma hache.");return "preleve du bois";}
+  if(d.action=="collect_branch"){if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.take_branch(a.position))return "aucune branche a ramasser";++a.branch_inventory;add_skill_experience(a,Skill::Foraging);a.remember("J'ai ramasse une branche pour le camp.");return "ramasse une branche";}
+  if(d.action=="collect_iron_ore"){if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.take_iron_ore(a.position))return "aucun minerai de fer";++a.iron_ore_inventory;add_skill_experience(a,Skill::Mining);a.remember("J'ai ramassé du minerai de fer.");return "ramasse du minerai de fer";}
   if(d.action=="build_campfire"){if(!a.alive||a.branch_inventory<3||!world_.place_campfire(a.position))return "ne peut pas allumer de feu";a.branch_inventory-=3;a.known_campfires.insert({a.position.x,a.position.y});a.remember("J'ai allume un feu de camp.");return "allume un feu de camp";}
   if(d.action=="rest_by_campfire"){if(!a.alive||!world_.adjacent_campfire(a.position))return "aucun feu a proximite";a.fatigue=clamp_stat(a.fatigue-1);return "reste pres du feu de camp";}
-  if(d.action=="collect_food"){if(inventory_full(a))return "inventaire plein";FoodItem food;if(!a.alive||a.carried_food||!world_.consume_food(a.position,&food.type,&food.nutrition))return "aucune nourriture a ramasser";food.shelf_life_days=food_shelf_life(food.type);a.carried_food=food;a.remember("J'ai pris une nourriture pour la réserve commune.");return "ramasse de la nourriture";}
+  if(d.action=="collect_food"){if(inventory_full(a))return "inventaire plein";FoodItem food;if(!a.alive||a.carried_food||!world_.consume_food(a.position,&food.type,&food.nutrition))return "aucune nourriture a ramasser";food.shelf_life_days=food_shelf_life(food.type);a.carried_food=food;add_skill_experience(a,Skill::Foraging);a.remember("J'ai pris une nourriture pour la réserve commune.");return "ramasse de la nourriture";}
   if(d.action=="deposit_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!a.carried_food||!fire||!world_.store_food(*fire,*a.carried_food))return "ne peut pas deposer de nourriture";a.carried_food.reset();a.remember("J'ai approvisionne la réserve commune.");return "depose de la nourriture au camp";}
   if(d.action=="deposit_materials"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.store_materials(*fire,a.wood_inventory,a.branch_inventory,a.iron_ore_inventory))return "ne peut pas deposer de materiaux";a.wood_inventory=0;a.branch_inventory=0;a.iron_ore_inventory=0;a.remember("J'ai rapporté des matériaux au foyer.");return "depose des materiaux au camp";}
   if(d.action=="eat_carried_food"){if(!a.alive||!a.carried_food)return "aucune nourriture transportee";const auto food=*a.carried_food;a.carried_food.reset();a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange sa nourriture transportee";}
   if(d.action=="eat_camp_food"){const auto fire=world_.nearby_campfire(a.position);FoodItem food;if(!a.alive||!fire||!world_.take_stored_food(*fire,&food,a.behavior.preferred_foods))return "aucune reserve au camp";a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));a.remember("J'ai mangé une ration "+food_type_name(food.type)+(food.cooked?" cuite.":"."));return "mange une reserve du camp";}
-  if(d.action=="cook_camp_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.cook_stored_food(*fire))return "aucune ration crue au camp";a.remember("J'ai cuit une ration pour le groupe.");return "cuit une ration au camp";}
-  if(d.action=="craft_camp_item"){const auto fire=world_.nearby_campfire(a.position);const auto recipe=d.parameters.value("recipe","");if(!a.alive||!fire||!world_.craft(*fire,recipe))return "recette indisponible";a.remember("J'ai fabriqué "+recipe+" au foyer.");return "fabrique "+recipe;}
+  if(d.action=="cook_camp_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.cook_stored_food(*fire))return "aucune ration crue au camp";add_skill_experience(a,Skill::Cooking);a.remember("J'ai cuit une ration pour le groupe.");return "cuit une ration au camp";}
+  if(d.action=="craft_camp_item"){const auto fire=world_.nearby_campfire(a.position);const auto recipe=d.parameters.value("recipe","");if(!a.alive||!fire||!world_.craft(*fire,recipe))return "recette indisponible";add_skill_experience(a,Skill::Crafting);a.remember("J'ai fabriqué "+recipe+" au foyer.");return "fabrique "+recipe;}
   if(d.action=="equip_axe"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||a.equipped_tool||!fire||!world_.take_stored_item(*fire,CraftItem::Axe))return "aucune hache disponible";a.equipped_tool=Tool{};a.remember("J'ai équipé une hache.");return "equipe une hache";}
-  if(d.action=="repair_axe"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!a.equipped_tool||a.equipped_tool->type!=CraftItem::Axe||a.equipped_tool->durability>=a.equipped_tool->maximum_durability||!fire||!world_.consume_stored_wood(*fire,1))return "reparation impossible";a.equipped_tool->durability=std::min(a.equipped_tool->maximum_durability,a.equipped_tool->durability+10);a.remember("J'ai réparé ma hache avec du bois du foyer.");return "repare sa hache";}
+  if(d.action=="repair_axe"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!a.equipped_tool||a.equipped_tool->type!=CraftItem::Axe||a.equipped_tool->durability>=a.equipped_tool->maximum_durability||!fire||!world_.consume_stored_wood(*fire,1))return "reparation impossible";a.equipped_tool->durability=std::min(a.equipped_tool->maximum_durability,a.equipped_tool->durability+10+skill_level(a,Skill::Woodcutting));add_skill_experience(a,Skill::Crafting);a.remember("J'ai réparé ma hache avec du bois du foyer.");return "repare sa hache";}
+  if(d.action=="teach_skill"){
+    const auto fire=world_.nearby_campfire(a.position);
+    const auto skill=skill_from_name(d.parameters.value("skill",""));
+    Agent* learner=nullptr;
+    if(skill&&fire&&a.last_taught_day!=day_)for(auto& candidate:agents_)if(
+        candidate.id==d.parameters.value("target_id","")&&candidate.alive&&
+        candidate.last_lesson_day!=day_&&world_.nearby_campfire(candidate.position)==fire&&
+        skill_level(a,*skill)>=skill_level(candidate,*skill)+2)learner=&candidate;
+    if(!learner)return "lecon indisponible";
+    add_skill_experience(*learner,*skill);add_skill_experience(a,Skill::Social);
+    a.last_taught_day=day_;learner->last_lesson_day=day_;
+    a.remember("J'ai transmis "+skill_name(*skill)+" à "+learner->name+".");
+    learner->remember(a.name+" m'a enseigné "+skill_name(*skill)+".");
+    auto& relation=a.relationships[learner->id];++relation.interactions;
+    relation.trust=clamp_stat(relation.trust+2);
+    return "transmet "+skill_name(*skill)+" a "+learner->name;
+  }
   if(d.action=="share_camp_meal"){
     const auto fire=world_.nearby_campfire(a.position);
     Agent* companion=nullptr;
@@ -920,7 +950,7 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="assemble_shelter"){
     if(!a.alive||a.wood_inventory<1||!world_.passable(a.position)||world_.shelter_level(a.position)>0||(a.shelter_construction&&a.shelter_construction->position!=a.position))return "assemblage impossible";
     if(!a.shelter_construction)a.shelter_construction=ShelterConstruction{a.position,0};
-    --a.wood_inventory;++a.shelter_construction->progress;
+    --a.wood_inventory;++a.shelter_construction->progress;add_skill_experience(a,Skill::Building);
     if(a.shelter_construction->progress<3){a.remember("J'ai ajoute une unite de bois a l'abri.");return "assemble l'abri";}
     if(!world_.create_shelter(a.position)){--a.shelter_construction->progress;++a.wood_inventory;return "assemblage impossible";}
     a.shelter_construction.reset();a.remember("J'ai construit un abri en bois.");return "construit un abri";

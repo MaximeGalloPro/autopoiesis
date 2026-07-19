@@ -14,6 +14,12 @@ struct Position { int x{}; int y{}; friend bool operator==(const Position&, cons
 enum class Terrain { Ground, Wall, Water, Tree, Bush };
 enum class FoodType { Berries, Roots, Mushrooms, Fish, Venison };
 enum class CraftItem { WoodenHandle, Charcoal, Rope, IronIngot, Axe };
+enum class Skill { Woodcutting, Mining, Crafting, Building, Foraging, Hunting, Cooking, Social };
+struct SkillProgress {
+  int experience{};
+  int level{};
+  friend bool operator==(const SkillProgress&,const SkillProgress&)=default;
+};
 struct CraftingRecipe {
   std::string key;
   int wood{};
@@ -113,8 +119,19 @@ struct Agent {
   int last_vigil_day{};
   bool celebration_pending{};
   std::set<std::string> mourned_agents;
+  std::map<Skill,SkillProgress> skills;
+  int last_taught_day{};
+  int last_lesson_day{};
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
+inline std::string skill_name(Skill skill) { switch(skill){case Skill::Woodcutting:return "woodcutting";case Skill::Mining:return "mining";case Skill::Crafting:return "crafting";case Skill::Building:return "building";case Skill::Foraging:return "foraging";case Skill::Hunting:return "hunting";case Skill::Cooking:return "cooking";case Skill::Social:return "social";}return "unknown"; }
+inline std::optional<Skill> skill_from_name(const std::string& name) { for(const auto skill:{Skill::Woodcutting,Skill::Mining,Skill::Crafting,Skill::Building,Skill::Foraging,Skill::Hunting,Skill::Cooking,Skill::Social})if(skill_name(skill)==name)return skill;return std::nullopt; }
+inline int skill_experience(const Agent& agent,Skill skill) { const auto found=agent.skills.find(skill);return found==agent.skills.end()?0:found->second.experience; }
+inline int skill_level(const Agent& agent,Skill skill) { const auto found=agent.skills.find(skill);return found==agent.skills.end()?0:found->second.level; }
+inline void add_skill_experience(Agent& agent,Skill skill,int amount=1) { if(amount<=0)return;auto& progress=agent.skills[skill];progress.experience=std::min(50,progress.experience+amount);progress.level=std::min(10,progress.experience/5); }
+inline std::vector<Skill> top_skills(const Agent& agent,std::size_t maximum) { std::vector<Skill> result;for(const auto&[skill,progress]:agent.skills)if(progress.experience>0)result.push_back(skill);std::sort(result.begin(),result.end(),[&](Skill left,Skill right){const auto left_level=skill_level(agent,left),right_level=skill_level(agent,right);if(left_level!=right_level)return left_level>right_level;const auto left_xp=skill_experience(agent,left),right_xp=skill_experience(agent,right);return left_xp!=right_xp?left_xp>right_xp:left<right;});if(result.size()>maximum)result.resize(maximum);return result; }
+inline std::optional<Skill> teachable_skill(const Agent& mentor,const Agent& learner) { std::optional<Skill> selected;for(const auto skill:top_skills(mentor,8))if(skill_level(mentor,skill)>=skill_level(learner,skill)+2&&(!selected||skill_level(mentor,skill)>skill_level(mentor,*selected)))selected=skill;return selected; }
+inline json skills_json(const Agent& agent) { json result=json::object();for(const auto&[skill,progress]:agent.skills)result[skill_name(skill)]={{"experience",progress.experience},{"level",progress.level}};return result; }
 inline int inventory_capacity(const Agent& agent) { return std::clamp(4+agent.attributes.strength/25,4,10); }
 inline int inventory_load(const Agent& agent) { return agent.wood_inventory+agent.branch_inventory+agent.iron_ore_inventory+(agent.carried_food?1:0); }
 inline bool inventory_full(const Agent& agent) { return inventory_load(agent)>=inventory_capacity(agent); }

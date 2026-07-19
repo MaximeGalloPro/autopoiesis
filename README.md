@@ -170,6 +170,8 @@ La fabrication suit un registre de recettes explicites. Le foyer peut transforme
 
 Abattre un arbre exige désormais une hache. Le groupe doit trouver du minerai, le rapporter, produire charbon, lingot et manche, assembler la hache puis l'équiper. Chaque arbre use l'outil ; une réparation au foyer consomme du bois et sa durabilité est visible dans l'inspecteur.
 
+Les pratiques réussies font progresser huit compétences locales : coupe du bois, extraction, fabrication, construction, cueillette, chasse, cuisine et sociabilité. Un niveau de coupe améliore la réparation des haches ; les trois spécialisations dominantes sont visibles dans l'inspecteur. Au foyer, un mentor ayant deux niveaux d'avance peut transmettre une unité d'expérience, au maximum une leçon donnée et reçue par journée.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre
