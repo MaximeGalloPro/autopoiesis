@@ -3,6 +3,7 @@
 #include "decision.hpp"
 #include "devil.hpp"
 #include "logger.hpp"
+#include "ui_model.hpp"
 #include <functional>
 
 namespace apo {
@@ -38,7 +39,7 @@ class Simulation {
   using ValidationGate = std::function<bool(int day, int simulation_cycle)>;
   Simulation(unsigned seed, IDecider& decider, Logger& logger, ICycleReporter* reporter = nullptr);
   void run(int days, int delay_ms, int render_every_days,
-           const ValidationGate& validation_gate = {});
+           const ValidationGate& validation_gate = {}, IUserInterface* interface = nullptr);
   void run_day();
   const World& world() const { return world_; } const std::vector<Agent>& agents() const { return agents_; }
   const CalendarDate& date() const { return date_; }

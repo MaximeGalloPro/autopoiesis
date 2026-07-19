@@ -8,4 +8,6 @@ Règle d'horloge à retenir : un cycle élémentaire est une action locale ; 240
 
 Règle calendaire : 30 journées forment un mois, 12 mois une année et quatre saisons déterministes influencent nourriture, soif, faim et fatigue sans ajouter d'appel API. Chaque bilan reçoit seulement les douze couples `bilan` et `ressenti` précédents du personnage.
 
+Règle d'interface : la fenêtre raylib reçoit uniquement un instantané en lecture seule du moteur. La sélection et le rendu ne modifient aucune règle, action ou demande d'évolution ; le mode terminal reste disponible.
+
 Règle de livraison : après chaque run de modifications, les tests et le build Docker doivent être suivis d'un commit puis d'un push. Une modification non poussée n'est pas livrée.

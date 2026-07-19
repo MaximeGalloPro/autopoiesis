@@ -24,6 +24,8 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [x] Notifier macOS à la fin du workflow de Dieu ou lorsqu'il dépasse le délai d'attente.
 - [x] Ajouter mois, années, saisons, climat déterministe et effets bornés sur nourriture et personnages.
 - [x] Conserver douze mémoires de période par personnage sous forme d'une phrase de bilan et d'une phrase de ressenti.
+- [x] Ajouter une interface raylib native avec carte, calendrier et inspecteur de personnage cliquable, tout en conservant le terminal.
+- [ ] Intégrer la validation des propositions et le suivi de Dieu directement dans la fenêtre graphique.
 - [ ] Étendre progressivement le catalogue du Diable lorsque de nouvelles capacités rendent des contraintes réelles jouables.
 - [ ] Ajouter reproduction et renouvellement déterministe des populations et ressources.
 - [ ] Ajouter inventaires, conservation des aliments et partage entre personnages.

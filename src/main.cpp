@@ -1,6 +1,9 @@
 #include "autopoiesis/openai_client.hpp"
 #include "autopoiesis/renderer.hpp"
 #include "autopoiesis/validation.hpp"
+#ifdef AUTOPOIESIS_GUI
+#include "autopoiesis/raylib_interface.hpp"
+#endif
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -47,6 +50,12 @@ int main(int argc,char** argv){
         return human_validation->review_window(day,simulation_cycle);
       };
     }
-    simulation.run(days,delay,render_every_days,validation_gate);return 0;
+#ifdef AUTOPOIESIS_GUI
+    RaylibInterface graphical_interface;
+    simulation.run(days,delay,render_every_days,validation_gate,&graphical_interface);
+#else
+    simulation.run(days,delay,render_every_days,validation_gate);
+#endif
+    return 0;
   }catch(const std::exception&e){std::cerr<<"Fatal: "<<e.what()<<'\n';return 1;}
 }

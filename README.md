@@ -4,6 +4,11 @@ Autopoiesis simule des personnages dans un monde déterministe. Le moteur local
 fait avancer leurs besoins et leurs actions ; l'IA intervient seulement pour
 faire le bilan d'une période et proposer une évolution contrôlée.
 
+Le lancement normal ouvre une fenêtre graphique native raylib. Elle montre la
+carte, le calendrier et le climat ; un clic sur un personnage ouvre son état,
+son humeur, son projet, ses actions disponibles et ses attributs. Cette vue ne
+modifie jamais directement la simulation.
+
 ```text
 actions locales → 3 journées → bilan IA → demande IA à Dieu
                                   (2 appels par personnage)
@@ -74,6 +79,19 @@ Le lancement normal lit `.env` et utilise l'API :
 ```bash
 ./run.sh
 ```
+
+Sur macOS, `./run.sh` compile puis ouvre l'interface graphique native. Le
+terminal qui a lancé le jeu reste utilisé pour les appels IA, la validation et
+le suivi de Dieu. Le rendu terminal historique reste disponible :
+
+```bash
+./run.sh --terminal
+```
+
+`AUTOPOIESIS_UI=gui` et `AUTOPOIESIS_UI=terminal` configurent le mode par
+défaut ; `--gui` et `--terminal` restent prioritaires. La fenêtre peut être
+fermée à tout moment : le processus détecte cette fermeture et termine le run
+proprement.
 
 Les valeurs par défaut sont `SIMULATION_DAYS=100`, `CYCLES_PER_DAY=240`,
 `SIMULATION_DELAY_MS=500`, `SIMULATION_RENDER_EVERY_DAYS=1` et
@@ -176,6 +194,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 docker compose build
 ```
+
+Le modèle de l'interface est testé sans fenêtre. Pour un contrôle visuel local,
+`AUTOPOIESIS_GUI_SCREENSHOT=interface.png` enregistre le framebuffer du jeu
+après le premier instantané, sans capturer les autres fenêtres du Mac.
 
 La suite inclut un scénario local de six journées vérifiant que les trois
 personnages explorent, boivent, mangent, récupèrent et restent sous les seuils

@@ -403,13 +403,19 @@ void Simulation::run_day(){
   for(auto& agent:agents_) if(agent.alive){update_needs(agent);apply_climate_effects(agent,date_,climate_);}
 }
 
-void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate){
+void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate,
+                     IUserInterface* interface){
   for(int i=0;i<days;++i){
     run_day();
     bool period_complete=day_%report_every_days_==0;
     bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
     if(all_dead) logger_.message("Simulation arrêtée : tous les personnages sont morts.");
-    if((render_every_days>0&&day_%render_every_days==0)||all_dead) render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
+    if((render_every_days>0&&day_%render_every_days==0)||all_dead){
+      if(interface){
+        const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,logger_.recent());
+        if(!interface->present(snapshot)){logger_.message("Interface graphique fermée par l'utilisateur.");break;}
+      }else render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
+    }
 
     if(period_complete){
       std::cout << "\n=== FENETRE IA : " << calendar_label(date_) << " / Jour absolu " << day_ << " / Cycle elementaire "
@@ -455,7 +461,10 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
     }
     if(all_dead) break;
     if(period_complete&&validation_gate&&!validation_gate(day_,simulation_cycle_)){logger_.message("Simulation mise en pause après la validation humaine.");break;}
-    if(delay_ms>0) std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+    if(delay_ms>0){
+      if(interface){if(!interface->idle_for(delay_ms)){logger_.message("Interface graphique fermée par l'utilisateur.");break;}}
+      else std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+    }
   }
 }
 }

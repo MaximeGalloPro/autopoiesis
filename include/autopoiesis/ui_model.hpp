@@ -1,0 +1,57 @@
+#pragma once
+
+#include "calendar.hpp"
+#include "decision.hpp"
+#include <optional>
+
+namespace apo {
+struct UiCell {
+  Position position;
+  Terrain terrain{Terrain::Ground};
+  int food{};
+  int wood{};
+  int fibers{};
+  int shelter_level{};
+};
+
+struct UiAgent {
+  Agent state;
+  std::string mood;
+  std::vector<std::string> available_actions;
+};
+
+struct UiSnapshot {
+  CalendarDate date;
+  int simulation_cycle{};
+  ClimateState climate;
+  int width{};
+  int height{};
+  std::vector<UiCell> cells;
+  std::vector<UiAgent> agents;
+  std::vector<Animal> animals;
+  std::vector<std::string> recent_events;
+};
+
+struct MapViewport {
+  float x{};
+  float y{};
+  float width{};
+  float height{};
+};
+
+class IUserInterface {
+ public:
+  virtual ~IUserInterface() = default;
+  virtual bool present(const UiSnapshot& snapshot) = 0;
+  virtual bool idle_for(int milliseconds) = 0;
+};
+
+std::string mood_for(const Agent& agent);
+UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
+                            const ClimateState& climate, const World& world,
+                            const std::vector<Agent>& agents,
+                            const std::vector<std::string>& recent_events);
+std::optional<Position> map_position_at_pixel(const MapViewport& viewport, float pixel_x,
+                                               float pixel_y, int map_width, int map_height);
+const UiAgent* agent_at_position(const UiSnapshot& snapshot, Position position);
+}

@@ -119,6 +119,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 16. Le Diable ne crée que des demandes structurées issues d'un catalogue local testé ; il n'applique jamais lui-même une contrainte au monde.
 17. Le calendrier et le climat progressent avec le jour absolu et ne se réinitialisent jamais à une frontière de fenêtre IA.
 18. Un effet climatique doit être déterministe, borné, observable et laisser au moins une mitigation compatible avec les capacités actives.
+19. Une interface graphique observe un instantané du moteur ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine.
 
 ## Patterns
 
@@ -169,6 +170,12 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 Vue terminal minimale intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. Elle lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, demande d'abord de sélectionner une proposition ou `aucune`, permet ensuite de traiter au plus une demande et écrit directement les transitions humaines `approved` ou `rejected`. Elle ne devient jamais une source d'état parallèle et ne nécessite pas de script lancé dans un autre terminal.
 
 Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. L'attente est divisée en deux délais indépendants : `GOD_QUEUE_TIMEOUT_SECONDS` (900 secondes par défaut) avant le démarrage effectif, puis `GOD_WAIT_TIMEOUT_SECONDS` (900 secondes par défaut) pour le workflow de Dieu. L'interface affiche régulièrement la phase et la durée écoulée. En cas de dépassement ou d'erreur, elle montre les dernières lignes des journaux utiles et indique le dossier d'artefacts complet ; un timeout laisse le daemon continuer en arrière-plan.
+
+### Interface graphique d'observation
+
+Fenêtre native raylib superposée au run sans remplacer l'interface de validation. Le moteur lui transmet un `UiSnapshot` copié et en lecture seule contenant la carte, le calendrier, le climat, les personnages, les animaux et les événements récents. Un clic sélectionne un personnage uniquement dans l'état local de l'interface ; il ne produit aucune décision et ne modifie jamais le monde.
+
+Le mode graphique est le lancement normal sur le Mac. Le terminal reste attaché au même processus pour les appels IA, les validations et le suivi de Dieu, et `--terminal` conserve le rendu historique. Fermer la fenêtre constitue une demande d'arrêt propre détectée par le moteur.
 
 ### Protocole d'intervention
 
