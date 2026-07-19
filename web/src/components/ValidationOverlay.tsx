@@ -1,4 +1,16 @@
-import { ArrowLeft, Check, Flame, OctagonX, PauseCircle, ShieldCheck, Square, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronUp,
+  Flame,
+  Minimize2,
+  OctagonX,
+  PauseCircle,
+  Play,
+  ShieldCheck,
+  Square,
+  X,
+} from "lucide-react";
 import type { EngineCommand, EvolutionCompletion, EvolutionRequest, ValidationPrompt } from "../protocol";
 import { stringifyMechanism } from "../lib/format";
 
@@ -18,19 +30,56 @@ function RequestCard({ request, devil, onSelect }: {
   );
 }
 
-export function ValidationOverlay({ prompt, sendCommand }: {
+export function ValidationReminder({ prompt, sendCommand, onOpen }: {
   prompt: ValidationPrompt;
   sendCommand: (command: EngineCommand) => Promise<boolean>;
+  onOpen: () => void;
+}) {
+  const isDevil = prompt.kind === "devil";
+  const canResume = (prompt.stage === "empty" || prompt.stage === "complete")
+    && prompt.allowed_commands.includes("o");
+  const title = prompt.stage === "choose"
+    ? (isDevil ? "Contrainte à examiner" : "Évolution à examiner")
+    : prompt.stage === "confirm"
+      ? "Décision à confirmer"
+      : "Reprise à confirmer";
+
+  return (
+    <section className={`guard-reminder${isDevil ? " devil" : ""}`} role="status" aria-label="Décision humaine en attente">
+      <div className="guard-reminder-icon">{isDevil ? <Flame /> : <ShieldCheck />}</div>
+      <div className="guard-reminder-copy">
+        <span>Simulation en attente</span>
+        <strong>{title}</strong>
+        <small>Le monde reste entièrement consultable.</small>
+      </div>
+      <div className="guard-reminder-actions">
+        {canResume && (
+          <button className="guard-resume" onClick={() => void sendCommand({ type: "simulation.resume" })}>
+            <Play /> Reprendre
+          </button>
+        )}
+        <button className="guard-open" onClick={onOpen} aria-haspopup="dialog">
+          <ChevronUp /> {canResume ? "Détails" : "Examiner"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export function ValidationOverlay({ prompt, sendCommand, onMinimize }: {
+  prompt: ValidationPrompt;
+  sendCommand: (command: EngineCommand) => Promise<boolean>;
+  onMinimize: () => void;
 }) {
   const selected = prompt.requests.find((request) => request.request_id === prompt.selected_request_id);
   const isDevil = prompt.kind === "devil";
 
   return (
-    <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="validation-title">
-      <section className={`validation-modal${isDevil ? " devil" : ""}`}>
+    <div className="guard-layer">
+      <section className={`validation-modal${isDevil ? " devil" : ""}`} role="dialog" aria-labelledby="validation-title">
         <header className="validation-heading">
           <div className="validation-icon">{isDevil ? <Flame /> : <ShieldCheck />}</div>
-          <div>
+          <div className="validation-heading-copy">
             <span className="eyebrow">Garde humaine · jour {prompt.day} · cycle {prompt.simulation_cycle}</span>
             <h2 id="validation-title">
               {prompt.stage === "choose" ? (isDevil ? "Une pression réelle se présente" : "Le monde demande à évoluer") : "Confirmer votre décision"}
@@ -39,6 +88,9 @@ export function ValidationOverlay({ prompt, sendCommand }: {
               ? "Cette contrainte locale n’entrera dans le monde qu’après votre décision explicite."
               : "Une seule demande peut être traitée dans cette fenêtre. Les autres resteront pending."}</p>
           </div>
+          <button className="guard-minimize" onClick={onMinimize} aria-label="Réduire la fenêtre de décision">
+            <Minimize2 /><span>Observer le monde</span>
+          </button>
         </header>
 
         {prompt.stage === "choose" && (
@@ -130,21 +182,52 @@ export function ValidationOverlay({ prompt, sendCommand }: {
   );
 }
 
-export function EvolutionCompletionOverlay({ completion, sendCommand }: {
+export function EvolutionCompletionReminder({ completion, sendCommand, onOpen }: {
   completion: EvolutionCompletion;
   sendCommand: (command: EngineCommand) => Promise<boolean>;
+  onOpen: () => void;
+}) {
+  const successful = completion.stage === "complete" && completion.successful;
+  const canResume = successful && completion.allowed_commands.includes("o");
+  return (
+    <section className="guard-reminder" role="status" aria-label="Confirmation de transfert en attente">
+      <div className="guard-reminder-icon">{successful ? <Check /> : <OctagonX />}</div>
+      <div className="guard-reminder-copy">
+        <span>Simulation en attente</span>
+        <strong>{successful ? "Nouvelle évolution prête" : "Évolution inactive"}</strong>
+        <small>Le monde reste entièrement consultable.</small>
+      </div>
+      <div className="guard-reminder-actions">
+        {canResume && (
+          <button className="guard-resume" onClick={() => void sendCommand({ type: "simulation.resume" })}>
+            <Play /> Reprendre
+          </button>
+        )}
+        <button className="guard-open" onClick={onOpen} aria-haspopup="dialog"><ChevronUp /> Détails</button>
+      </div>
+    </section>
+  );
+}
+
+export function EvolutionCompletionOverlay({ completion, sendCommand, onMinimize }: {
+  completion: EvolutionCompletion;
+  sendCommand: (command: EngineCommand) => Promise<boolean>;
+  onMinimize: () => void;
 }) {
   const successful = completion.stage === "complete" && completion.successful;
   return (
-    <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="evolution-completion-title">
-      <section className="validation-modal">
+    <div className="guard-layer">
+      <section className="validation-modal" role="dialog" aria-labelledby="evolution-completion-title">
         <header className="validation-heading">
           <div className="validation-icon">{successful ? <Check /> : <OctagonX />}</div>
-          <div>
+          <div className="validation-heading-copy">
             <span className="eyebrow">Garde humaine · transfert de version</span>
             <h2 id="evolution-completion-title">{successful ? "La nouvelle évolution est prête" : "L’évolution reste inactive"}</h2>
             <p>{completion.message}</p>
           </div>
+          <button className="guard-minimize" onClick={onMinimize} aria-label="Réduire la fenêtre de décision">
+            <Minimize2 /><span>Observer le monde</span>
+          </button>
         </header>
         <div className="completion-choice">
           <PauseCircle size={42} />

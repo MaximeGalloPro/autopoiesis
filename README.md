@@ -29,8 +29,8 @@ ajoute une expérience responsive :
   `0` à `10000 ms` ;
 - progression en direct des bilans IA, demandes d’évolution, workflow de Dieu,
   vérification et recompilation ;
-- cartes de validation intégrées pour les demandes des personnages et les
-  contraintes du Diable ;
+- garde humaine intégrée sous forme de rappel compact, avec panneau réductible
+  et cartes de validation pour les personnages comme pour le Diable ;
 - reconnexion WebSocket sans rejouer un cycle ni une commande ;
 - raccourcis clavier : espace, touches `1` à `5`, `[` et `]`, puis `?` pour
   l’aide.
