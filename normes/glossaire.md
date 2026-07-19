@@ -122,6 +122,8 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 19. Une interface graphique observe un instantané après chaque cycle élémentaire ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine. Le rendu terminal peut rester journalier sans modifier la cadence réelle du moteur.
 20. Le rendu animé d'une fenêtre IA ne modifie ni le nombre ni l'ordre des appels : un seul appel réseau est actif à la fois, puis l'étape suivante commence après son retour.
 21. L'IA demandeuse reçoit avant sa proposition le catalogue des mécanismes actifs et une mémoire bornée des évolutions antérieures. Une nouvelle `evolution_key` ne rend jamais nouveau un mécanisme déjà proposé ou actif.
+22. Après l'activation d'une évolution, l'ancien binaire ne peut pas exécuter la journée suivante : il doit sauvegarder, recompiler, transférer l'exécution à la version activée, puis restaurer le checkpoint.
+23. Toute évolution qui modifie un état persistant doit conserver la lecture de la version précédente du checkpoint ou fournir une migration déterministe couverte par un test.
 
 ## Patterns
 
@@ -181,6 +183,8 @@ En mode graphique, raylib présente les trois demandes les plus récentes sous f
 
 Après une approbation, raylib observe les mêmes artefacts que le suivi terminal et affiche les phases `file d'attente → préparation → TDD → compte rendu → vérification → activation`. Il montre la durée et le dernier retour utile sans interpréter ni modifier le résultat. Une activation réussie se termine par une confirmation explicite avant la reprise de la simulation ; cette confirmation remplace l'ancien second écran générique « Reprendre ».
 
+Tout écran graphique de reprise expose le délai entre journées sous forme de slider borné de `0` à `10000 ms`. La valeur initiale vient de `SIMULATION_DELAY_MS`, puis le choix local s'applique aux journées suivantes du run sans modifier `.env`, le nombre de cycles ou le calendrier.
+
 Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. L'attente est divisée en deux délais indépendants : `GOD_QUEUE_TIMEOUT_SECONDS` (900 secondes par défaut) avant le démarrage effectif, puis `GOD_WAIT_TIMEOUT_SECONDS` (900 secondes par défaut) pour le workflow de Dieu. L'interface affiche régulièrement la phase et la durée écoulée. En cas de dépassement ou d'erreur, elle montre les dernières lignes des journaux utiles et indique le dossier d'artefacts complet ; un timeout laisse le daemon continuer en arrière-plan.
 
 ### Interface graphique
@@ -190,6 +194,33 @@ Fenêtre native raylib superposée au run. Le moteur lui transmet un `UiSnapshot
 Pendant un appel IA, le client réseau travaille hors du fil de rendu afin que la fenêtre continue à traiter ses images. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Les éléments cliquables signalent leur disponibilité au survol sans déplacer ni redimensionner la mise en page.
 
 Le mode graphique est le lancement normal sur le Mac. Le terminal reste attaché au même processus pour les appels IA, les validations et le suivi de Dieu, et `--terminal` conserve le rendu historique. Fermer la fenêtre constitue une demande d'arrêt propre détectée par le moteur.
+
+Sur macOS, la fenêtre est créée avec `FLAG_WINDOW_UNFOCUSED` par défaut afin de ne pas imposer un changement d'espace de travail. `AUTOPOIESIS_FOCUS_WINDOW=1` constitue l'opt-in explicite au focus immédiat ; ce réglage ne change aucun état de simulation.
+
+### Transfert de version
+
+Le checkpoint `data/simulation-state.json` est une photographie versionnée et
+atomique de l'état déterministe : calendrier, cycle élémentaire, monde,
+personnages, mémoires, projets, historiques utiles, état du décideur local et
+générateurs pseudo-aléatoires. Il est écrit après chaque journée complète ainsi
+qu'avant la garde de validation. Les journaux narratifs ne remplacent jamais ce
+checkpoint.
+
+Après une activation réussie, l'interface affiche explicitement la phase
+« Recompilation ». La compilation s'exécute dans un processus enfant et publie
+ses détails dans `data/recompilation.log`, tandis que le fil graphique reste
+réactif. Une compilation réussie conduit à un remplacement du processus par
+`exec` : le même `run.sh`, le daemon, l'identifiant de budget API et les
+descripteurs utiles restent en place, tandis que la nouvelle image du moteur
+recharge le checkpoint. La géométrie de la fenêtre, le délai choisi et le
+nombre de journées restantes sont transmis explicitement.
+
+Le transfert reprend au premier cycle élémentaire de la journée suivante ; il
+ne rejoue ni la fenêtre IA ni la validation déjà terminée. Un checkpoint
+inconnu, incomplet ou incompatible provoque un arrêt explicite, jamais une
+réinitialisation silencieuse. `--new-world` est la seule commande normale qui
+autorise l'abandon volontaire de cet état. Si la compilation échoue, aucune
+nouvelle version n'est exécutée et le checkpoint reste intact.
 
 ### Protocole d'intervention
 

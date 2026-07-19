@@ -1,6 +1,8 @@
 #include "autopoiesis/devil.hpp"
 
 #include <algorithm>
+#include <sstream>
+#include <stdexcept>
 
 namespace apo {
 namespace {
@@ -95,6 +97,15 @@ std::vector<json> catalog(const World& world,const std::vector<Agent>& agents){
 }
 
 Devil::Devil(unsigned seed,int one_in):rng_(seed^0xD3A11u),one_in_(std::max(1,one_in)){}
+
+std::string Devil::rng_checkpoint() const {
+  std::ostringstream output;output<<rng_;return output.str();
+}
+
+void Devil::restore_rng_checkpoint(const std::string& state) {
+  std::istringstream input(state);input>>rng_;
+  if(!input)throw std::runtime_error("checkpoint devil RNG is invalid");
+}
 
 std::optional<json> Devil::draw(int day,int simulation_cycle,const World& world,
                                 const std::vector<Agent>& agents,

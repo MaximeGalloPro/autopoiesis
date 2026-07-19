@@ -39,6 +39,8 @@ class World {
   void apply_climate(const CalendarDate& date, const ClimateState& climate);
   void advance_nature(std::mt19937& rng);
   std::string ascii(const std::vector<Agent>& agents) const;
+  json checkpoint() const;
+  void restore_checkpoint(const json& state);
  private:
   std::vector<Terrain> cells_; Position rabbit_; bool rabbit_alive_{true};
   std::vector<FoodResource> food_resources_;

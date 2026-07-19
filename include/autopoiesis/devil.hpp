@@ -12,6 +12,8 @@ class Devil {
   std::optional<json> draw(int day, int simulation_cycle, const World& world,
                            const std::vector<Agent>& agents,
                            const std::set<std::string>& known_evolution_keys);
+  std::string rng_checkpoint() const;
+  void restore_rng_checkpoint(const std::string& state);
 
  private:
   std::mt19937 rng_;

@@ -56,4 +56,10 @@ const UiAgent* agent_at_position(const UiSnapshot& snapshot, Position position) 
     if(agent.state.alive&&agent.state.position==position)return &agent;
   return nullptr;
 }
+
+int simulation_delay_from_slider(float pixel_x,float track_start,float track_end) {
+  if(track_end<=track_start)return 0;
+  const float ratio=std::clamp((pixel_x-track_start)/(track_end-track_start),0.0F,1.0F);
+  return static_cast<int>(std::lround(ratio*100.0F))*100;
+}
 }

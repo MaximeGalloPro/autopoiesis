@@ -203,12 +203,29 @@ struct RaylibInterface::Impl {
   bool activity_screenshot_taken{};
   int activity_rendered_frames{};
   std::string automation_command;
+  int selected_delay_ms{};
+  bool delay_dragging{};
+  bool wants_restart{};
 
-  Impl() {
+  explicit Impl(int initial_delay_ms):selected_delay_ms(std::clamp(initial_delay_ms,0,10000)) {
     SetTraceLogLevel(LOG_WARNING);
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE|FLAG_VSYNC_HINT|FLAG_WINDOW_HIGHDPI);
+    unsigned int flags=FLAG_WINDOW_RESIZABLE|FLAG_VSYNC_HINT|FLAG_WINDOW_HIGHDPI;
+#ifdef __APPLE__
+    const char* focus_window=std::getenv("AUTOPOIESIS_FOCUS_WINDOW");
+    if(!focus_window||std::string(focus_window)=="0")flags|=FLAG_WINDOW_UNFOCUSED;
+#endif
+    SetConfigFlags(flags);
     InitWindow(1280,760,"Autopoiesis");
     SetWindowMinSize(1040,680);
+    if(const char* width=std::getenv("AUTOPOIESIS_WINDOW_WIDTH")){
+      const char* height=std::getenv("AUTOPOIESIS_WINDOW_HEIGHT");
+      try{SetWindowSize(std::max(1040,std::stoi(width)),std::max(680,std::stoi(height?height:"760")));}
+      catch(...){}
+    }
+    if(const char* x=std::getenv("AUTOPOIESIS_WINDOW_X")){
+      const char* y=std::getenv("AUTOPOIESIS_WINDOW_Y");
+      try{SetWindowPosition(std::stoi(x),std::stoi(y?y:"0"));}catch(...){}
+    }
     SetTargetFPS(60);
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_SCREENSHOT"))screenshot_path=configured;
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_VALIDATION_SCREENSHOT"))
@@ -217,6 +234,42 @@ struct RaylibInterface::Impl {
       activity_screenshot_path=configured;
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_AUTOMATION_COMMAND"))
       automation_command=configured;
+  }
+
+  Rectangle delay_slider_hitbox(float x,float y,float width) const {
+    return {x-10.0F,y+24.0F,width+20.0F,38.0F};
+  }
+
+  void handle_delay_slider(float x,float y,float width) {
+    const auto mouse=GetMousePosition();
+    const auto hitbox=delay_slider_hitbox(x,y,width);
+    if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&CheckCollisionPointRec(mouse,hitbox))
+      delay_dragging=true;
+    if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT))delay_dragging=false;
+    if(delay_dragging&&IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+      selected_delay_ms=simulation_delay_from_slider(mouse.x,x,x+width);
+    if(CheckCollisionPointRec(mouse,hitbox)){
+      if(IsKeyPressed(KEY_LEFT))selected_delay_ms=std::max(0,selected_delay_ms-100);
+      if(IsKeyPressed(KEY_RIGHT))selected_delay_ms=std::min(10000,selected_delay_ms+100);
+    }
+  }
+
+  void draw_delay_slider(float x,float y,float width) const {
+    DrawText("PAUSE ENTRE JOURNÉES",static_cast<int>(x),static_cast<int>(y),13,secondary_text);
+    const std::string value=std::to_string(selected_delay_ms)+" ms";
+    DrawText(value.c_str(),static_cast<int>(x+width)-MeasureText(value.c_str(),16),
+             static_cast<int>(y)-2,16,primary_text);
+    const Rectangle track{x,y+36.0F,width,6.0F};
+    DrawRectangleRec(track,{61,66,64,255});
+    const float ratio=selected_delay_ms/10000.0F;
+    DrawRectangleRec({track.x,track.y,track.width*ratio,track.height},accent);
+    const float knob_x=track.x+track.width*ratio;
+    const bool hovered=CheckCollisionPointRec(GetMousePosition(),delay_slider_hitbox(x,y,width));
+    DrawCircle(static_cast<int>(knob_x),static_cast<int>(track.y+track.height/2),
+               hovered||delay_dragging?10.0F:8.0F,hovered?ColorBrightness(accent,0.2F):accent);
+    DrawText("0 ms · vitesse maximale",static_cast<int>(x),static_cast<int>(y+54),13,secondary_text);
+    const char* slow="10000 ms";
+    DrawText(slow,static_cast<int>(x+width)-MeasureText(slow,13),static_cast<int>(y+54),13,secondary_text);
   }
 
   const UiAgent* selected_agent() const {
@@ -399,7 +452,9 @@ struct RaylibInterface::Impl {
         ||CheckCollisionPointRec(mouse,{action_x,screen_height-90.0F,action_width,44.0F});
     }else{
       clickable_hovered=CheckCollisionPointRec(mouse,{36.0F,246.0F,250.0F,54.0F})
-        ||CheckCollisionPointRec(mouse,{304.0F,246.0F,210.0F,54.0F});
+        ||CheckCollisionPointRec(mouse,{304.0F,246.0F,210.0F,54.0F})
+        ||CheckCollisionPointRec(mouse,delay_slider_hitbox(36.0F,340.0F,
+                                                           std::min(620.0F,screen_width-72.0F)));
     }
     SetMouseCursor(clickable_hovered?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
     BeginDrawing();
@@ -444,6 +499,7 @@ struct RaylibInterface::Impl {
       const Rectangle stop{304.0F,246.0F,210.0F,54.0F};
       draw_button(resume,"Reprendre",{50,116,77,255},mouse);
       draw_button(stop,"Arrêter le run",{117,61,58,255},mouse);
+      draw_delay_slider(36.0F,340.0F,std::min(620.0F,screen_width-72.0F));
     }
     EndDrawing();
   }
@@ -512,8 +568,11 @@ struct RaylibInterface::Impl {
     const auto mouse=GetMousePosition();
     const Rectangle next_button{margin,static_cast<float>(screen_height-118),330.0F,56.0F};
     const Rectangle stop_button{margin+350.0F,static_cast<float>(screen_height-118),220.0F,56.0F};
+    const float slider_y=std::max(430.0F,screen_height-320.0F);
     const bool clickable=completion&&(CheckCollisionPointRec(mouse,next_button)||
-                                      CheckCollisionPointRec(mouse,stop_button));
+                                      CheckCollisionPointRec(mouse,stop_button)||
+                                      CheckCollisionPointRec(mouse,delay_slider_hitbox(
+                                          margin,slider_y,std::min(620.0F,content_width))));
     SetMouseCursor(clickable?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
     BeginDrawing();
     ClearBackground(background);
@@ -537,6 +596,7 @@ struct RaylibInterface::Impl {
       }
       DrawText(TextFormat("Durée du suivi : %lld s",progress.elapsed_seconds),
                static_cast<int>(margin),screen_height-168,14,secondary_text);
+      draw_delay_slider(margin,slider_y,std::min(620.0F,content_width));
       draw_button(next_button,"Passer à l'étape suivante",{50,116,77,255},mouse);
       draw_button(stop_button,"Arrêter le run",{117,61,58,255},mouse);
       EndDrawing();
@@ -595,6 +655,47 @@ struct RaylibInterface::Impl {
     EndDrawing();
   }
 
+  void draw_recompilation(const RecompileProgress& progress) const {
+    SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+    const int screen_width=GetScreenWidth(),screen_height=GetScreenHeight();
+    const float margin=std::clamp(screen_width*0.07F,42.0F,92.0F);
+    const float content_width=screen_width-margin*2.0F;
+    const bool failed=progress.stage==RecompileStage::Failed;
+    const bool ready=progress.stage==RecompileStage::Ready;
+    BeginDrawing();
+    ClearBackground(background);
+    DrawRectangle(0,0,screen_width,86,{30,33,34,255});
+    DrawText("TRANSFERT DU MONDE",static_cast<int>(margin),18,27,primary_text);
+    DrawText("Le checkpoint est enregistré. Aucun cycle n'est exécuté pendant le transfert.",
+             static_cast<int>(margin),53,14,secondary_text);
+    const std::string title=failed?"La recompilation a échoué":
+                            ready?"La nouvelle version est prête":"Recompilation en arrière-plan";
+    DrawText(title.c_str(),static_cast<int>(margin),170,34,
+             failed?Color{218,116,96,255}:primary_text);
+    const std::string subtitle=failed?"Le monde reste sauvegardé pour un prochain lancement.":
+       ready?"Transfert vers le nouveau moteur...":"Construction du nouveau binaire C++ et liaison de l'interface raylib.";
+    DrawText(subtitle.c_str(),static_cast<int>(margin),225,18,secondary_text);
+    if(!progress.detail.empty()){
+      DrawText("DERNIER RETOUR",static_cast<int>(margin),310,13,secondary_text);
+      int detail_y=344;
+      draw_lines(wrapped_lines(progress.detail,static_cast<int>(content_width),15,6),
+                 static_cast<int>(margin),detail_y,15,23,primary_text);
+    }
+    const Rectangle track{margin,static_cast<float>(screen_height-105),content_width,7.0F};
+    DrawRectangleRec(track,{52,56,55,255});
+    if(ready)DrawRectangleRec(track,accent);
+    else if(!failed){
+      const float sweep_width=std::min(220.0F,content_width*0.22F);
+      const float phase=static_cast<float>(std::fmod(GetTime()*0.28,1.0));
+      DrawRectangleRec({track.x+phase*(track.width-sweep_width),track.y,sweep_width,track.height},accent);
+    }
+    DrawText(TextFormat("%lld s",progress.elapsed_ms/1000),static_cast<int>(margin),
+             screen_height-72,15,failed?Color{218,116,96,255}:accent);
+    DrawText("Le processus sera remplacé, puis le checkpoint sera restauré.",
+             static_cast<int>(margin)+70,screen_height-72,15,secondary_text);
+    EndDrawing();
+  }
+
   void capture(const std::string& path) {
     if(path.empty())return;
     Image framebuffer=LoadImageFromScreen();
@@ -609,7 +710,9 @@ struct RaylibInterface::Impl {
   }
 };
 
-RaylibInterface::RaylibInterface():impl_(std::make_unique<Impl>()) { impl_->draw(); }
+RaylibInterface::RaylibInterface(int initial_delay_ms):impl_(std::make_unique<Impl>(initial_delay_ms)) {
+  impl_->draw();
+}
 RaylibInterface::~RaylibInterface() { if(IsWindowReady())CloseWindow(); }
 
 bool RaylibInterface::present(const UiSnapshot& snapshot) {
@@ -647,6 +750,27 @@ bool RaylibInterface::present_activity(const UiActivity& activity) {
   return !WindowShouldClose();
 }
 
+int RaylibInterface::simulation_delay_ms(int fallback) const {
+  (void)fallback;
+  return impl_->selected_delay_ms;
+}
+
+bool RaylibInterface::restart_requested() const { return impl_->wants_restart; }
+
+bool RaylibInterface::present_recompilation(const RecompileProgress& progress) {
+  if(WindowShouldClose())return false;
+  impl_->draw_recompilation(progress);
+  return !WindowShouldClose();
+}
+
+void RaylibInterface::prepare_restart_environment() const {
+  const auto position=GetWindowPosition();
+  setenv("AUTOPOIESIS_WINDOW_X",std::to_string(static_cast<int>(position.x)).c_str(),1);
+  setenv("AUTOPOIESIS_WINDOW_Y",std::to_string(static_cast<int>(position.y)).c_str(),1);
+  setenv("AUTOPOIESIS_WINDOW_WIDTH",std::to_string(GetScreenWidth()).c_str(),1);
+  setenv("AUTOPOIESIS_WINDOW_HEIGHT",std::to_string(GetScreenHeight()).c_str(),1);
+}
+
 std::string RaylibInterface::request_command(const ValidationPrompt& prompt) {
   int rendered_frames=0;
   while(true){
@@ -679,6 +803,7 @@ std::string RaylibInterface::request_command(const ValidationPrompt& prompt) {
       if(clicked&&CheckCollisionPointRec(
           mouse,{action_x,screen_height-90.0F,action_width,44.0F}))return "q";
     }else{
+      impl_->handle_delay_slider(36.0F,340.0F,std::min(620.0F,screen_width-72.0F));
       if(IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_O)||(clicked&&CheckCollisionPointRec(
           mouse,{36.0F,246.0F,250.0F,54.0F})))return "o";
       if(clicked&&CheckCollisionPointRec(mouse,{304.0F,246.0F,210.0F,54.0F}))return "q";
@@ -708,13 +833,21 @@ std::string RaylibInterface::request_evolution_completion(const EvolutionProgres
     const Rectangle next_button{margin,static_cast<float>(screen_height-118),330.0F,56.0F};
     const Rectangle stop_button{margin+350.0F,static_cast<float>(screen_height-118),220.0F,56.0F};
     const auto mouse=GetMousePosition();
+    const float content_width=GetScreenWidth()-margin*2.0F;
+    impl_->handle_delay_slider(margin,std::max(430.0F,screen_height-320.0F),
+                               std::min(620.0F,content_width));
     if(IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_O)||
-       (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&CheckCollisionPointRec(mouse,next_button)))return "o";
+       (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&CheckCollisionPointRec(mouse,next_button))){
+      impl_->wants_restart=progress.stage==EvolutionProgressStage::Complete&&progress.successful;
+      return "o";
+    }
     if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&CheckCollisionPointRec(mouse,stop_button))return "q";
     impl_->draw_evolution_progress(progress,true);
     ++rendered_frames;
     if(rendered_frames>=2&&!impl_->automation_command.empty()){
       impl_->capture(impl_->validation_screenshot_path);
+      impl_->wants_restart=progress.stage==EvolutionProgressStage::Complete&&progress.successful&&
+                           impl_->automation_command=="o";
       return impl_->automation_command;
     }
   }

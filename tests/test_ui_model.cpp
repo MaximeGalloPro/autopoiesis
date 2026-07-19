@@ -19,9 +19,13 @@ class FakeInterface final : public IUserInterface {
     idle_milliseconds+=milliseconds;
     return true;
   }
+  int simulation_delay_ms(int fallback) const override {
+    return selected_delay_ms>=0?selected_delay_ms:fallback;
+  }
   int present_count{};
   int idle_milliseconds{};
   bool stay_open{true};
+  int selected_delay_ms{-1};
   UiSnapshot last_snapshot;
 };
 }
@@ -94,6 +98,20 @@ int main() {
   assert(closing_interface.present_count==1);
   assert(closing_simulation.date().absolute_day==1);
   assert(closing_interface.last_snapshot.simulation_cycle==1);
+
+  setenv("REPORT_EVERY_DAYS", "1", 1);
+  Logger speed_logger(data_directory+"-speed");
+  std::mt19937 speed_rng(42);
+  LocalDecider speed_decider(speed_rng);
+  Simulation speed_simulation(42,speed_decider,speed_logger);
+  FakeInterface speed_interface;
+  speed_interface.selected_delay_ms=2500;
+  speed_simulation.run(1,7,1,[](int,int){return true;},&speed_interface);
+  assert(speed_interface.idle_milliseconds==2500);
+
+  assert(simulation_delay_from_slider(100.0F,100.0F,500.0F)==0);
+  assert(simulation_delay_from_slider(300.0F,100.0F,500.0F)==5000);
+  assert(simulation_delay_from_slider(500.0F,100.0F,500.0F)==10000);
 
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");

@@ -14,7 +14,7 @@ find_package(Threads REQUIRED)
 add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
     src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
-    src/devil.cpp src/calendar.cpp src/ui_model.cpp)
+    src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
@@ -110,6 +110,9 @@ add_test(NAME persistent_period_memory COMMAND autopoiesis_period_memory_tests)
 add_executable(autopoiesis_ui_model_tests tests/test_ui_model.cpp)
 target_link_libraries(autopoiesis_ui_model_tests PRIVATE autopoiesis_core)
 add_test(NAME graphical_ui_model COMMAND autopoiesis_ui_model_tests)
+add_executable(autopoiesis_checkpoint_tests tests/test_checkpoint.cpp)
+target_link_libraries(autopoiesis_checkpoint_tests PRIVATE autopoiesis_core)
+add_test(NAME seamless_checkpoint_transfer COMMAND autopoiesis_checkpoint_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -135,6 +138,7 @@ foreach(test_target
     autopoiesis_devil_tests
     autopoiesis_calendar_tests
     autopoiesis_period_memory_tests
-    autopoiesis_ui_model_tests)
+    autopoiesis_ui_model_tests
+    autopoiesis_checkpoint_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

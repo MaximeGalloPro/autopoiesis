@@ -45,6 +45,13 @@ struct UiActivity {
   long long elapsed_ms{};
 };
 
+enum class RecompileStage { Compiling, Ready, Failed };
+struct RecompileProgress {
+  RecompileStage stage{RecompileStage::Compiling};
+  long long elapsed_ms{};
+  std::string detail;
+};
+
 struct MapViewport {
   float x{};
   float y{};
@@ -58,6 +65,9 @@ class IUserInterface {
   virtual bool present(const UiSnapshot& snapshot) = 0;
   virtual bool idle_for(int milliseconds) = 0;
   virtual bool present_activity(const UiActivity&) { return true; }
+  virtual int simulation_delay_ms(int fallback) const { return fallback; }
+  virtual bool restart_requested() const { return false; }
+  virtual bool present_recompilation(const RecompileProgress&) { return true; }
 };
 
 std::string mood_for(const Agent& agent);
@@ -68,4 +78,5 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
 std::optional<Position> map_position_at_pixel(const MapViewport& viewport, float pixel_x,
                                                float pixel_y, int map_width, int map_height);
 const UiAgent* agent_at_position(const UiSnapshot& snapshot, Position position);
+int simulation_delay_from_slider(float pixel_x, float track_start, float track_end);
 }

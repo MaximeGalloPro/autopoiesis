@@ -17,7 +17,13 @@ struct EvolutionContext {
   json evolution_history=json::array();
   std::vector<std::string> currently_available_actions;
 };
-class IDecider { public: virtual ~IDecider() = default; virtual Decision decide(const Perception&) = 0; };
+class IDecider {
+ public:
+  virtual ~IDecider() = default;
+  virtual Decision decide(const Perception&) = 0;
+  virtual json checkpoint() const { return json::object(); }
+  virtual void restore_checkpoint(const json&) {}
+};
 class ICycleReporter {
  public:
   virtual ~ICycleReporter() = default;
@@ -38,22 +44,35 @@ class ICycleReporter {
   virtual std::string last_error() const { return {}; }
 };
 class LocalDecider final : public IDecider {
- public: explicit LocalDecider(std::mt19937& rng) : rng_(rng) {} Decision decide(const Perception&) override;
+ public:
+  explicit LocalDecider(std::mt19937& rng) : rng_(rng) {}
+  Decision decide(const Perception&) override;
+  json checkpoint() const override;
+  void restore_checkpoint(const json& state) override;
  private:
   struct GoalState { std::string name; int remaining{}; };
   std::mt19937& rng_;
   std::map<std::string,GoalState> goals_;
 };
+struct SimulationRunResult {
+  bool restart_requested{};
+  int remaining_days{};
+};
 class Simulation {
  public:
   using ValidationGate = std::function<bool(int day, int simulation_cycle)>;
-  Simulation(unsigned seed, IDecider& decider, Logger& logger, ICycleReporter* reporter = nullptr);
-  void run(int days, int delay_ms, int render_every_days,
-           const ValidationGate& validation_gate = {}, IUserInterface* interface = nullptr);
+  Simulation(unsigned seed, IDecider& decider, Logger& logger, ICycleReporter* reporter = nullptr,
+             std::string checkpoint_path = {});
+  SimulationRunResult run(int days, int delay_ms, int render_every_days,
+                          const ValidationGate& validation_gate = {},
+                          IUserInterface* interface = nullptr);
   void run_day();
   const World& world() const { return world_; } const std::vector<Agent>& agents() const { return agents_; }
   const CalendarDate& date() const { return date_; }
   const ClimateState& climate() const { return climate_; }
+  int simulation_cycle() const { return simulation_cycle_; }
+  bool restored_checkpoint() const { return restored_checkpoint_; }
+  void save_checkpoint() const;
   friend struct SimulationTestAccess;
  private:
   World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; Devil devil_;
@@ -62,7 +81,10 @@ class Simulation {
   int cycles_per_day_{240}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
   std::map<std::string,std::vector<std::string>> action_history_;
   std::map<std::string,json> planning_history_;
+  std::string checkpoint_path_;
+  bool restored_checkpoint_{};
   bool run_day(IUserInterface* interface);
+  void load_checkpoint();
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
   void apply_climate_effects(Agent&, const CalendarDate&, const ClimateState&);
   void update_behavior_after_action(Agent&, const Agent& before, const Decision&,

@@ -1,5 +1,6 @@
 #include "autopoiesis/world.hpp"
 #include <cstdlib>
+#include <stdexcept>
 #include <sstream>
 
 namespace apo {
@@ -66,5 +67,62 @@ std::string World::ascii(const std::vector<Agent>& agents) const {
   std::ostringstream out;
   for (int y=0;y<height;++y) { for (int x=0;x<width;++x) { Position p{x,y}; char c='.'; switch(terrain(p)){case Terrain::Wall:c='#';break;case Terrain::Water:c='~';break;case Terrain::Tree:c='T';break;case Terrain::Bush:c='B';break;default:break;} for(const auto& resource:food_resources_)if(resource.position==p&&resource.amount>0){if(resource.type==FoodType::Roots)c='u';if(resource.type==FoodType::Mushrooms)c='m';} for(const auto& animal:animals_)if(animal.alive&&animal.position==p){if(animal.type==AnimalType::Rabbit)c='r';if(animal.type==AnimalType::Deer)c='d';if(animal.type==AnimalType::Boar)c='b';if(animal.type==AnimalType::Wolf)c='w';if(animal.type==AnimalType::Fish)c='f';} for (const auto& a:agents) if (a.alive && a.position==p) c='A'; out<<c; } out<<'\n'; }
   return out.str();
+}
+
+json World::checkpoint() const {
+  json cells=json::array();
+  for(const auto terrain:cells_)cells.push_back(static_cast<int>(terrain));
+  json foods=json::array();
+  for(const auto& resource:food_resources_)foods.push_back({
+      {"type",static_cast<int>(resource.type)},
+      {"x",resource.position.x},{"y",resource.position.y},
+      {"amount",resource.amount},{"nutrition",resource.nutrition},{"capacity",resource.capacity}});
+  json animals=json::array();
+  for(const auto& animal:animals_)animals.push_back({
+      {"id",animal.id},{"type",static_cast<int>(animal.type)},
+      {"x",animal.position.x},{"y",animal.position.y},{"alive",animal.alive},
+      {"danger",animal.danger},{"nutrition",animal.nutrition}});
+  json construction=json::array();
+  for(const auto&[position,cell]:construction_cells_)construction.push_back({
+      {"x",position.first},{"y",position.second},{"wood",cell.wood},
+      {"fibers",cell.fibers},{"shelter_level",cell.shelter_level}});
+  return {{"width",width},{"height",height},{"cells",std::move(cells)},
+          {"rabbit",{{"x",rabbit_.x},{"y",rabbit_.y},{"alive",rabbit_alive_}}},
+          {"food_resources",std::move(foods)},{"animals",std::move(animals)},
+          {"construction",std::move(construction)}};
+}
+
+void World::restore_checkpoint(const json& state) {
+  if(state.at("width").get<int>()!=width||state.at("height").get<int>()!=height)
+    throw std::runtime_error("checkpoint world dimensions are incompatible");
+  const auto& cells=state.at("cells");
+  if(!cells.is_array()||cells.size()!=static_cast<std::size_t>(width*height))
+    throw std::runtime_error("checkpoint world cells are invalid");
+  std::vector<Terrain> restored_cells;
+  restored_cells.reserve(cells.size());
+  for(const auto& value:cells)restored_cells.push_back(static_cast<Terrain>(value.get<int>()));
+  std::vector<FoodResource> restored_foods;
+  for(const auto& value:state.at("food_resources"))restored_foods.push_back({
+      static_cast<FoodType>(value.at("type").get<int>()),
+      {value.at("x").get<int>(),value.at("y").get<int>()},
+      value.at("amount").get<int>(),value.at("nutrition").get<int>(),
+      value.at("capacity").get<int>()});
+  std::vector<Animal> restored_animals;
+  for(const auto& value:state.at("animals"))restored_animals.push_back({
+      value.at("id").get<std::string>(),static_cast<AnimalType>(value.at("type").get<int>()),
+      {value.at("x").get<int>(),value.at("y").get<int>()},value.at("alive").get<bool>(),
+      value.at("danger").get<int>(),value.at("nutrition").get<int>()});
+  std::map<std::pair<int,int>,ConstructionCell> restored_construction;
+  for(const auto& value:state.at("construction"))restored_construction[
+      {value.at("x").get<int>(),value.at("y").get<int>()}]={
+          value.at("wood").get<int>(),value.at("fibers").get<int>(),
+          value.at("shelter_level").get<int>()};
+  const auto& rabbit=state.at("rabbit");
+  cells_=std::move(restored_cells);
+  food_resources_=std::move(restored_foods);
+  animals_=std::move(restored_animals);
+  construction_cells_=std::move(restored_construction);
+  rabbit_={rabbit.at("x").get<int>(),rabbit.at("y").get<int>()};
+  rabbit_alive_=rabbit.at("alive").get<bool>();
 }
 }

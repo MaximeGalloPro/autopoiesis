@@ -6,9 +6,13 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <queue>
+#include <sstream>
+#include <stdexcept>
 #include <thread>
 
 namespace apo {
@@ -41,6 +45,106 @@ ActivityResult run_with_activity(IUserInterface* interface, UiActivity activity,
   worker.join();
   if(failure)std::rethrow_exception(failure);
   return {std::move(payload),interface_open};
+}
+
+std::string rng_checkpoint(const std::mt19937& rng) {
+  std::ostringstream output;output<<rng;return output.str();
+}
+
+void restore_rng(std::mt19937& rng,const std::string& state) {
+  std::istringstream input(state);input>>rng;
+  if(!input)throw std::runtime_error("checkpoint simulation RNG is invalid");
+}
+
+json agent_checkpoint(const Agent& agent) {
+  json memories=json::array();for(const auto& memory:agent.memories)memories.push_back(memory);
+  json map_memory=json::array();
+  for(const auto&[position,terrain]:agent.map_memory)map_memory.push_back({
+      {"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)}});
+  json visits=json::array();
+  for(const auto&[position,count]:agent.map_visit_counts)visits.push_back({
+      {"x",position.first},{"y",position.second},{"count",count}});
+  json foods=json::array();
+  for(const auto food:agent.behavior.preferred_foods)foods.push_back(static_cast<int>(food));
+  json observed=json::array();for(const auto& animal:agent.observed_animals)observed.push_back(animal);
+  json shelter=nullptr;
+  if(agent.shelter_construction)shelter={{"x",agent.shelter_construction->position.x},
+      {"y",agent.shelter_construction->position.y},{"progress",agent.shelter_construction->progress}};
+  return {{"id",agent.id},{"name",agent.name},{"x",agent.position.x},{"y",agent.position.y},
+          {"health",agent.health},{"hunger",agent.hunger},{"fatigue",agent.fatigue},
+          {"thirst",agent.thirst},{"personality",personality_json(agent.personality)},
+          {"attributes",attributes_json(agent.attributes)},{"memories",std::move(memories)},
+          {"alive",agent.alive},{"sleeping_days",agent.sleeping_days},
+          {"critical_hunger_days",agent.critical_hunger_days},
+          {"critical_thirst_days",agent.critical_thirst_days},
+          {"map_memory",std::move(map_memory)},{"map_visit_counts",std::move(visits)},
+          {"behavior",{{"archetype",agent.behavior.archetype},{"aspiration",agent.behavior.aspiration},
+                       {"construction_drive",agent.behavior.construction_drive},
+                       {"provision_drive",agent.behavior.provision_drive},
+                       {"exploration_drive",agent.behavior.exploration_drive},
+                       {"social_drive",agent.behavior.social_drive},{"preferred_foods",std::move(foods)}}},
+          {"project",{{"key",agent.project.key},{"title",agent.project.title},
+                      {"status",static_cast<int>(agent.project.status)},{"step",agent.project.step},
+                      {"progress",agent.project.progress},{"target",agent.project.target},
+                      {"blocked_reason",agent.project.blocked_reason},
+                      {"missing_capability",agent.project.missing_capability},
+                      {"started_day",agent.project.started_day},
+                      {"last_progress_cycle",agent.project.last_progress_cycle}}},
+          {"boredom",agent.boredom},{"relationships",relationships_json(agent.relationships)},
+          {"observed_animals",std::move(observed)},{"wood_inventory",agent.wood_inventory},
+          {"shelter_construction",std::move(shelter)}};
+}
+
+Agent restore_agent(const json& state) {
+  Agent agent;
+  agent.id=state.at("id").get<std::string>();agent.name=state.at("name").get<std::string>();
+  agent.position={state.at("x").get<int>(),state.at("y").get<int>()};
+  agent.health=state.at("health").get<int>();agent.hunger=state.at("hunger").get<int>();
+  agent.fatigue=state.at("fatigue").get<int>();agent.thirst=state.at("thirst").get<int>();
+  const auto& personality=state.at("personality");
+  agent.personality={personality.at("curiosity").get<int>(),personality.at("prudence").get<int>(),
+      personality.at("sociability").get<int>(),personality.at("patience").get<int>(),
+      personality.at("empathy").get<int>()};
+  const auto& attributes=state.at("attributes");
+  agent.attributes={attributes.at("strength").get<int>(),attributes.at("agility").get<int>(),
+      attributes.at("endurance").get<int>(),attributes.at("toughness").get<int>(),
+      attributes.at("recuperation").get<int>(),attributes.at("disease_resistance").get<int>(),
+      attributes.at("focus").get<int>(),attributes.at("willpower").get<int>(),
+      attributes.at("memory").get<int>(),attributes.at("spatial_sense").get<int>()};
+  for(const auto& memory:state.at("memories"))agent.memories.push_back(memory.get<std::string>());
+  agent.alive=state.at("alive").get<bool>();agent.sleeping_days=state.at("sleeping_days").get<int>();
+  agent.critical_hunger_days=state.at("critical_hunger_days").get<int>();
+  agent.critical_thirst_days=state.at("critical_thirst_days").get<int>();
+  for(const auto& value:state.at("map_memory"))agent.map_memory[
+      {value.at("x").get<int>(),value.at("y").get<int>()}]=static_cast<Terrain>(value.at("terrain").get<int>());
+  for(const auto& value:state.at("map_visit_counts"))agent.map_visit_counts[
+      {value.at("x").get<int>(),value.at("y").get<int>()}]=value.at("count").get<int>();
+  const auto& behavior=state.at("behavior");
+  agent.behavior.archetype=behavior.at("archetype").get<std::string>();
+  agent.behavior.aspiration=behavior.at("aspiration").get<std::string>();
+  agent.behavior.construction_drive=behavior.at("construction_drive").get<int>();
+  agent.behavior.provision_drive=behavior.at("provision_drive").get<int>();
+  agent.behavior.exploration_drive=behavior.at("exploration_drive").get<int>();
+  agent.behavior.social_drive=behavior.at("social_drive").get<int>();
+  for(const auto& food:behavior.at("preferred_foods"))
+    agent.behavior.preferred_foods.push_back(static_cast<FoodType>(food.get<int>()));
+  const auto& project=state.at("project");
+  agent.project={project.at("key").get<std::string>(),project.at("title").get<std::string>(),
+      static_cast<ProjectStatus>(project.at("status").get<int>()),project.at("step").get<int>(),
+      project.at("progress").get<int>(),project.at("target").get<int>(),
+      project.at("blocked_reason").get<std::string>(),project.at("missing_capability").get<std::string>(),
+      project.at("started_day").get<int>(),project.at("last_progress_cycle").get<int>()};
+  agent.boredom=state.at("boredom").get<int>();
+  for(const auto&[id,value]:state.at("relationships").items())agent.relationships[id]={
+      value.at("trust").get<int>(),value.at("affinity").get<int>(),value.at("interactions").get<int>()};
+  for(const auto& animal:state.at("observed_animals"))agent.observed_animals.insert(animal.get<std::string>());
+  agent.wood_inventory=state.at("wood_inventory").get<int>();
+  if(!state.at("shelter_construction").is_null()){
+    const auto& shelter=state.at("shelter_construction");
+    agent.shelter_construction=ShelterConstruction{
+        {shelter.at("x").get<int>(),shelter.at("y").get<int>()},shelter.at("progress").get<int>()};
+  }
+  return agent;
 }
 }
 
@@ -268,6 +372,19 @@ Decision LocalDecider::decide(const Perception& p) {
   return {DecisionType::Action,"move",{{"direction",selected}},reason,"exploration","","discover the world"};
 }
 
+json LocalDecider::checkpoint() const {
+  json goals=json::array();
+  for(const auto&[agent,state]:goals_)goals.push_back({
+      {"agent_id",agent},{"name",state.name},{"remaining",state.remaining}});
+  return {{"type","local"},{"goals",std::move(goals)}};
+}
+
+void LocalDecider::restore_checkpoint(const json& state) {
+  goals_.clear();
+  for(const auto& goal:state.value("goals",json::array()))goals_[goal.at("agent_id").get<std::string>()]={
+      goal.at("name").get<std::string>(),goal.at("remaining").get<int>()};
+}
+
 static bool action_succeeded(const Decision& decision, const std::string& result) {
   if (decision.type == DecisionType::Blocked) return false;
   if (decision.action == "move") return result != "deplacement bloque";
@@ -293,7 +410,8 @@ static Agent initial_agent(std::string id,std::string name,Position position,int
   return agent;
 }
 
-Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",240)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)){
+Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter,
+                       std::string checkpoint_path):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",240)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)),checkpoint_path_(std::move(checkpoint_path)){
   agents_={initial_agent("a1","Ada",{3,2},45,20,{90,20,30,30,40},{55,65,50,45,50,45,70,60,75,80},25,
                          {"builder","Créer un foyer sûr et organisé",95,45,55,70,{FoodType::Berries,FoodType::Mushrooms}},
                          {"build_shelter","Préparer un abri durable",ProjectStatus::Active,0,0,2,"","",1,0}),
@@ -303,6 +421,50 @@ Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* repor
            initial_agent("a3","Cyra",{16,7},35,60,{40,45,95,55,90},{45,80,60,50,65,55,75,55,70,85},20,
                          {"explorer","Comprendre et cartographier le monde vivant",25,35,100,55,{FoodType::Roots,FoodType::Mushrooms}},
                          {"map_region","Cartographier une région inconnue",ProjectStatus::Active,0,0,180,"","",1,0})};
+  load_checkpoint();
+}
+
+void Simulation::load_checkpoint() {
+  if(checkpoint_path_.empty()||!std::filesystem::exists(checkpoint_path_))return;
+  std::ifstream input(checkpoint_path_);
+  json state;input>>state;
+  if(state.at("version").get<int>()!=1)throw std::runtime_error("unsupported simulation checkpoint version");
+  world_.restore_checkpoint(state.at("world"));
+  std::vector<Agent> restored_agents;
+  for(const auto& agent:state.at("agents"))restored_agents.push_back(restore_agent(agent));
+  if(restored_agents.empty())throw std::runtime_error("simulation checkpoint has no agents");
+  agents_=std::move(restored_agents);
+  day_=state.at("day").get<int>();simulation_cycle_=state.at("simulation_cycle").get<int>();
+  date_=date_from_absolute_day(std::max(1,day_));climate_=climate_for(date_);
+  action_history_=state.value("action_history",decltype(action_history_){});
+  planning_history_=state.value("planning_history",decltype(planning_history_){});
+  restore_rng(rng_,state.at("rng").get<std::string>());
+  devil_.restore_rng_checkpoint(state.at("devil_rng").get<std::string>());
+  decider_.restore_checkpoint(state.value("decider",json::object()));
+  restored_checkpoint_=true;
+  logger_.message("Checkpoint restauré : jour "+std::to_string(day_)+
+                  ", cycle élémentaire "+std::to_string(simulation_cycle_)+".");
+}
+
+void Simulation::save_checkpoint() const {
+  if(checkpoint_path_.empty())return;
+  json agents=json::array();for(const auto& agent:agents_)agents.push_back(agent_checkpoint(agent));
+  const json state={{"version",1},{"day",day_},{"simulation_cycle",simulation_cycle_},
+      {"world",world_.checkpoint()},{"agents",std::move(agents)},
+      {"action_history",action_history_},{"planning_history",planning_history_},
+      {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
+      {"decider",decider_.checkpoint()}};
+  const std::filesystem::path target(checkpoint_path_);
+  if(!target.parent_path().empty())std::filesystem::create_directories(target.parent_path());
+  const auto temporary=target.string()+".tmp";
+  {
+    std::ofstream output(temporary,std::ios::trunc);
+    if(!output)throw std::runtime_error("cannot write simulation checkpoint");
+    output<<state.dump(2)<<'\n';
+    output.flush();
+    if(!output)throw std::runtime_error("cannot flush simulation checkpoint");
+  }
+  std::filesystem::rename(temporary,target);
 }
 
 Perception Simulation::perceive(Agent& a) {
@@ -462,8 +624,9 @@ bool Simulation::run_day(IUserInterface* interface){
   return true;
 }
 
-void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate,
-                     IUserInterface* interface){
+SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
+                                    const ValidationGate& validation_gate,
+                                    IUserInterface* interface){
   bool stop_requested=false;
   for(int i=0;i<days;++i){
     if(!run_day(interface))break;
@@ -532,12 +695,21 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
         std::cout << "Tirage du Diable : aucune apparition cette fenêtre.\n" << std::flush;
       }
     }
+    save_checkpoint();
     if(all_dead) break;
-    if(period_complete&&validation_gate&&!validation_gate(day_,simulation_cycle_)){logger_.message("Simulation mise en pause après la validation humaine.");break;}
+    if(period_complete&&validation_gate){
+      if(!validation_gate(day_,simulation_cycle_)){
+        logger_.message("Simulation mise en pause après la validation humaine.");
+        break;
+      }
+      if(interface)delay_ms=std::clamp(interface->simulation_delay_ms(delay_ms),0,10000);
+      if(interface&&interface->restart_requested())return {true,days-i-1};
+    }
     if(delay_ms>0){
       if(interface){if(!interface->idle_for(delay_ms)){logger_.message("Interface graphique fermée par l'utilisateur.");break;}}
       else std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
     }
   }
+  return {false,0};
 }
 }

@@ -46,7 +46,7 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
 - La fenêtre graphique et le terminal affichent l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
 - Après l'approbation d'une évolution, la fenêtre graphique suit aussi Dieu : file d'attente, préparation, TDD, compte rendu, vérification et activation. Le dernier retour utile et le temps écoulé restent visibles, tandis que les logs complets continuent dans le terminal.
-- Une activation terminée affiche « C'est terminé. Voulez-vous passer à l'étape suivante ? ». Continuer reprend directement la simulation ; arrêter termine proprement le run.
+- Une activation terminée affiche « C'est terminé. Voulez-vous passer à l'étape suivante ? ». Continuer ouvre l'écran « Recompilation », construit la nouvelle version en arrière-plan, puis lui transfère le monde au jour suivant ; arrêter termine proprement le run.
 - La validation est intégrée au même terminal et ne présente que les trois propositions les plus récentes de la fenêtre : choisir `1`, `2`, `3` ou `n` pour aucune, puis `a` approuve ou `r` refuse la proposition sélectionnée. `o` reprend et `q` ou `exit` arrête proprement. Les autres demandes restent `pending`.
 
 ## Le Diable
@@ -111,6 +111,10 @@ défaut ; `--gui` et `--terminal` restent prioritaires. La fenêtre peut être
 fermée à tout moment : le processus détecte cette fermeture et termine le run
 proprement.
 
+Sur macOS, la fenêtre graphique s'ouvre sans prendre le focus afin de ne pas
+changer automatiquement d'espace de travail. `AUTOPOIESIS_FOCUS_WINDOW=1`
+restaure l'activation immédiate de la fenêtre si ce comportement est préféré.
+
 Les valeurs par défaut sont `SIMULATION_DAYS=100`, `CYCLES_PER_DAY=240`,
 `SIMULATION_DELAY_MS=500`, `SIMULATION_RENDER_EVERY_DAYS=1` et
 `REPORT_EVERY_DAYS=3`. Les options de commande sont prioritaires :
@@ -135,11 +139,25 @@ ou le statut HTTP et les champs d'erreur API utiles, avec masquage des secrets.
 `WAIT_FOR_HUMAN_VALIDATION=1` active la pause et l'interface de validation
 intégrée à chaque fin de fenêtre ; `0` est réservé aux runs automatisés.
 
+Avant chaque reprise graphique, un slider permet de remplacer ce délai pour la
+suite du run entre `0 ms` et `10000 ms`, par pas de `100 ms`. Le choix reste en
+mémoire pendant le processus courant sans réécrire `.env`.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre
 les fenêtres du run actif ; les deux phrases de mémoire restent disponibles
 entre plusieurs lancements grâce au journal.
+
+L'état exécutable du monde est sauvegardé atomiquement dans
+`data/simulation-state.json` après chaque journée complète et avant toute
+validation. Après une activation, l'ancienne version ne reprend pas la
+simulation : elle recompile `autopoiesis_gui`, se remplace par le nouveau
+binaire dans le même processus, puis recharge exactement le monde, les
+personnages, le calendrier et les générateurs aléatoires. La fenêtre peut
+clignoter brièvement lors du remplacement, mais conserve sa taille et sa
+position. `./run.sh --new-world` efface volontairement ce checkpoint et démarre
+un nouveau monde.
 
 ## Évolution contrôlée
 
@@ -152,6 +170,11 @@ entre plusieurs lancements grâce au journal.
 7. Dieu applique le TDD dans un worktree isolé : test rouge, changement minimal, test vert.
 8. En cas d'échec, Dieu reçoit le diagnostic et peut corriger jusqu'à `GOD_MAX_CORRECTIONS=2` fois.
 9. Le vérificateur lance les tests, la compilation et le build Docker ; après succès, l'orchestrateur committe, pousse et active la modification.
+10. L'interface affiche la recompilation, remplace le binaire actif et reprend au jour suivant depuis le checkpoint.
+
+Les détails de compilation sont écrits dans `data/recompilation.log`. Si la
+compilation ou le transfert échoue, la simulation ne reprend pas avec un
+binaire partiel : le checkpoint reste disponible pour le prochain lancement.
 
 Dieu ne tente pas d'accéder à la socket Docker du Mac depuis sa sandbox. Ce
 n'est ni une erreur ni une vérification manquante : le build Docker appartient
