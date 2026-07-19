@@ -60,6 +60,14 @@ class World {
   std::vector<std::string> craftable_recipes(Position campfire_position) const;
   bool craft(Position campfire_position, const std::string& recipe_key);
   bool take_stored_item(Position campfire_position, CraftItem item);
+  bool can_designate_building(Position site, Position campfire_position, BuildingType type) const;
+  bool designate_building(Position site, Position campfire_position, BuildingType type);
+  std::optional<Building> building(Position site) const;
+  std::vector<std::pair<Position,Building>> buildings() const;
+  bool work_on_building(Position site, int amount = 1);
+  bool has_completed_building(BuildingType type) const;
+  int rest_bonus(Position p) const;
+  int workshop_bonus(Position p) const;
   bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
@@ -86,6 +94,7 @@ class World {
     std::vector<FoodItem> food_stockpile;
   };
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
+  std::map<std::pair<int,int>, Building> buildings_;
   std::optional<Position> primary_campfire_;
   void replenish_branches();
   int index(Position p) const { const auto canonical=wrap(p); return canonical.y * width + canonical.x; }

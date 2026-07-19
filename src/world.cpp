@@ -29,7 +29,7 @@ Position World::step(Position p,const std::string& direction) const { if(directi
 int World::toroidal_distance(Position a,Position b) const { a=wrap(a);b=wrap(b);const int dx=std::abs(a.x-b.x),dy=std::abs(a.y-b.y);return std::min(dx,width-dx)+std::min(dy,height-dy); }
 std::vector<Position> World::neighbors(Position p) const { return {step(p,"north"),step(p,"east"),step(p,"south"),step(p,"west")}; }
 Terrain World::terrain(Position p) const { return cells_[index(p)]; }
-bool World::passable(Position p) const { auto t=terrain(p); return t==Terrain::Ground || t==Terrain::Bush; }
+bool World::passable(Position p) const { p=wrap(p);const auto structure=buildings_.find({p.x,p.y});if(structure!=buildings_.end()&&structure->second.complete&&structure->second.type==BuildingType::Wall)return false;auto t=terrain(p); return t==Terrain::Ground || t==Terrain::Bush; }
 bool World::drinkable(Position p) const { for(const auto neighbor:neighbors(p))if(terrain(neighbor)==Terrain::Water)return true;return terrain(p)==Terrain::Water; }
 int World::food(Position p) const { p=wrap(p);int total=0;for(const auto& resource:food_resources_)if(resource.position==p)total+=resource.amount;return total; }
 int World::berries(Position p) const { p=wrap(p);for(const auto& resource:food_resources_)if(resource.type==FoodType::Berries&&resource.position==p)return resource.amount;return 0; }
@@ -65,6 +65,14 @@ int World::stored_crafted_items(Position p) const { p=wrap(p);const auto found=c
 std::vector<std::string> World::craftable_recipes(Position p) const { p=wrap(p);std::vector<std::string> available;if(!campfire(p))return available;const auto& cell=construction_cells_.at({p.x,p.y});for(const auto& recipe:crafting_recipes()){bool possible=cell.wood_stockpile>=recipe.wood&&cell.branch_stockpile>=recipe.branches&&cell.iron_ore_stockpile>=recipe.iron_ore;for(const auto&[item,amount]:recipe.items)possible=possible&&stored_item(p,item)>=amount;if(possible)available.push_back(recipe.key);}return available; }
 bool World::craft(Position p,const std::string& recipe_key) { p=wrap(p);if(!campfire(p))return false;const auto recipe=std::find_if(crafting_recipes().begin(),crafting_recipes().end(),[&](const CraftingRecipe& candidate){return candidate.key==recipe_key;});if(recipe==crafting_recipes().end())return false;const auto available=craftable_recipes(p);if(std::find(available.begin(),available.end(),recipe_key)==available.end())return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile-=recipe->wood;cell.branch_stockpile-=recipe->branches;cell.iron_ore_stockpile-=recipe->iron_ore;for(const auto&[item,amount]:recipe->items)cell.crafted_stockpile[item]-=amount;cell.crafted_stockpile[recipe->output]+=recipe->output_count;return true; }
 bool World::take_stored_item(Position p,CraftItem item) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire)return false;auto stored=found->second.crafted_stockpile.find(item);if(stored==found->second.crafted_stockpile.end()||stored->second<=0)return false;--stored->second;return true; }
+bool World::can_designate_building(Position site,Position camp,BuildingType type) const { site=wrap(site);camp=wrap(camp);if(!campfire(camp)||site==camp||toroidal_distance(site,camp)>3||!passable(site)||campfire(site)||buildings_.contains({site.x,site.y}))return false;const auto found=construction_cells_.find({camp.x,camp.y});if(found==construction_cells_.end())return false;const auto cost=building_cost(type);if(found->second.wood_stockpile<cost.wood||found->second.branch_stockpile<cost.branches||found->second.iron_ore_stockpile<cost.iron_ore)return false;for(const auto&[item,amount]:cost.items){const auto stored=found->second.crafted_stockpile.find(item);if(stored==found->second.crafted_stockpile.end()||stored->second<amount)return false;}return true; }
+bool World::designate_building(Position site,Position camp,BuildingType type) { site=wrap(site);camp=wrap(camp);if(!can_designate_building(site,camp,type))return false;const auto cost=building_cost(type);auto& stock=construction_cells_.at({camp.x,camp.y});stock.wood_stockpile-=cost.wood;stock.branch_stockpile-=cost.branches;stock.iron_ore_stockpile-=cost.iron_ore;for(const auto&[item,amount]:cost.items)stock.crafted_stockpile[item]-=amount;buildings_[{site.x,site.y}]={type,0,cost.work,false};return true; }
+std::optional<Building> World::building(Position site) const { site=wrap(site);const auto found=buildings_.find({site.x,site.y});return found==buildings_.end()?std::nullopt:std::optional<Building>{found->second}; }
+std::vector<std::pair<Position,Building>> World::buildings() const { std::vector<std::pair<Position,Building>> result;for(const auto&[coordinates,structure]:buildings_)result.push_back({{coordinates.first,coordinates.second},structure});return result; }
+bool World::work_on_building(Position site,int amount) { site=wrap(site);auto found=buildings_.find({site.x,site.y});if(amount<=0||found==buildings_.end()||found->second.complete)return false;found->second.progress=std::min(found->second.required_work,found->second.progress+amount);found->second.complete=found->second.progress>=found->second.required_work;return true; }
+bool World::has_completed_building(BuildingType type) const { return std::any_of(buildings_.begin(),buildings_.end(),[&](const auto& entry){return entry.second.type==type&&entry.second.complete;}); }
+int World::rest_bonus(Position p) const { const auto structure=building(p);return structure&&structure->complete&&structure->type==BuildingType::Bed?10:0; }
+int World::workshop_bonus(Position p) const { for(const auto&[site,structure]:buildings())if(structure.complete&&structure.type==BuildingType::Workshop&&toroidal_distance(p,site)<=3)return 2;return 0; }
 bool World::create_shelter(Position p) { p=wrap(p);if(!passable(p)||shelter_level(p)>0)return false;construction_cells_[{p.x,p.y}].shelter_level=1;return true; }
 void World::add_materials(Position p,int wood_amount,int fiber_amount) { p=wrap(p);auto& cell=construction_cells_[{p.x,p.y}];cell.wood+=std::max(0,wood_amount);cell.fibers+=std::max(0,fiber_amount); }
 bool World::build_shelter(Position p) { p=wrap(p);if(!passable(p))return false;auto& cell=construction_cells_[{p.x,p.y}];if(cell.wood<3||cell.fibers<2)return false;cell.wood-=3;cell.fibers-=2;++cell.shelter_level;return true; }
@@ -104,7 +112,7 @@ void World::replenish_branches() {
 }
 std::string World::ascii(const std::vector<Agent>& agents) const {
   std::ostringstream out;
-  for (int y=0;y<height;++y) { for (int x=0;x<width;++x) { Position p{x,y}; char c='.'; switch(terrain(p)){case Terrain::Wall:c='#';break;case Terrain::Water:c='~';break;case Terrain::Tree:c='T';break;case Terrain::Bush:c='B';break;default:break;} if(branches(p)>0)c=',';if(iron_ore(p)>0)c='i';if(campfire(p))c='*'; for(const auto& resource:food_resources_)if(resource.position==p&&resource.amount>0){if(resource.type==FoodType::Roots)c='u';if(resource.type==FoodType::Mushrooms)c='m';} for(const auto& animal:animals_)if(animal.alive&&animal.position==p){if(animal.type==AnimalType::Rabbit)c='r';if(animal.type==AnimalType::Deer)c='d';if(animal.type==AnimalType::Boar)c='b';if(animal.type==AnimalType::Wolf)c='w';if(animal.type==AnimalType::Fish)c='f';} for (const auto& a:agents) if (a.alive && a.position==p) c='A'; out<<c; } out<<'\n'; }
+  for (int y=0;y<height;++y) { for (int x=0;x<width;++x) { Position p{x,y}; char c='.'; switch(terrain(p)){case Terrain::Wall:c='#';break;case Terrain::Water:c='~';break;case Terrain::Tree:c='T';break;case Terrain::Bush:c='B';break;default:break;} if(branches(p)>0)c=',';if(iron_ore(p)>0)c='i';if(campfire(p))c='*';if(const auto structure=building(p)){if(!structure->complete)c='?';else if(structure->type==BuildingType::Wall)c='W';else if(structure->type==BuildingType::Door)c='D';else if(structure->type==BuildingType::Bed)c='L';else if(structure->type==BuildingType::Stockpile)c='R';else c='X';} for(const auto& resource:food_resources_)if(resource.position==p&&resource.amount>0){if(resource.type==FoodType::Roots)c='u';if(resource.type==FoodType::Mushrooms)c='m';} for(const auto& animal:animals_)if(animal.alive&&animal.position==p){if(animal.type==AnimalType::Rabbit)c='r';if(animal.type==AnimalType::Deer)c='d';if(animal.type==AnimalType::Boar)c='b';if(animal.type==AnimalType::Wolf)c='w';if(animal.type==AnimalType::Fish)c='f';} for (const auto& a:agents) if (a.alive && a.position==p) c='A'; out<<c; } out<<'\n'; }
   return out.str();
 }
 
@@ -135,11 +143,15 @@ json World::checkpoint() const {
       {"crafted_stockpile",std::move(crafted)},
       {"stored_food",std::move(stored)}});
   }
+  json buildings=json::array();for(const auto&[position,structure]:buildings_)buildings.push_back({
+      {"x",position.first},{"y",position.second},{"type",static_cast<int>(structure.type)},
+      {"progress",structure.progress},{"required_work",structure.required_work},{"complete",structure.complete}});
   return {{"width",width},{"height",height},{"cells",std::move(cells)},
           {"rabbit",{{"x",rabbit_.x},{"y",rabbit_.y},{"alive",rabbit_alive_}}},
           {"food_resources",std::move(foods)},{"animals",std::move(animals)},
           {"iron_ore_resources",std::move(iron)},
           {"construction",std::move(construction)},
+          {"buildings",std::move(buildings)},
           {"primary_campfire",primary_campfire_?json{{"x",primary_campfire_->x},{"y",primary_campfire_->y}}:json(nullptr)}};
 }
 
@@ -168,6 +180,11 @@ void World::restore_checkpoint(const json& state) {
     restored_iron[{value.at("x").get<int>(),value.at("y").get<int>()}]=value.at("amount").get<int>();
   if(!state.contains("iron_ore_resources"))restored_iron={{{18,4},6},{{34,13},6},{{8,18},4}};
   std::map<std::pair<int,int>,ConstructionCell> restored_construction;
+  std::map<std::pair<int,int>,Building> restored_buildings;
+  for(const auto& value:state.value("buildings",json::array()))restored_buildings[
+      {value.at("x").get<int>(),value.at("y").get<int>()}]={
+        static_cast<BuildingType>(value.at("type").get<int>()),value.value("progress",0),
+        value.value("required_work",1),value.value("complete",false)};
   bool has_branch_state=false;
   for(const auto& value:state.at("construction")){
     has_branch_state=has_branch_state||value.contains("loose_branches");
@@ -190,6 +207,7 @@ void World::restore_checkpoint(const json& state) {
   animals_=std::move(restored_animals);
   iron_ore_resources_=std::move(restored_iron);
   construction_cells_=std::move(restored_construction);
+  buildings_=std::move(restored_buildings);
   primary_campfire_.reset();
   const auto primary=state.value("primary_campfire",json(nullptr));
   if(!primary.is_null())primary_campfire_=wrap({primary.at("x").get<int>(),primary.at("y").get<int>()});

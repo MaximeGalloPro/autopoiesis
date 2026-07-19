@@ -28,6 +28,16 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
   if(a.alive&&occupies_current_cell){const auto fire=w.nearby_campfire(a.position);if(fire&&!w.craftable_recipes(*fire).empty())r.push_back("craft_camp_item");}
   if(a.alive&&occupies_current_cell&&!a.equipped_tool){const auto fire=w.nearby_campfire(a.position);if(fire&&w.stored_item(*fire,CraftItem::Axe)>0)r.push_back("equip_axe");}
   if(a.alive&&occupies_current_cell&&a.equipped_tool&&a.equipped_tool->type==CraftItem::Axe&&a.equipped_tool->durability<a.equipped_tool->maximum_durability){const auto fire=w.nearby_campfire(a.position);if(fire&&w.stored_wood(*fire)>0)r.push_back("repair_axe");}
+  const auto spatial_buildings=w.buildings();
+  if(a.alive&&occupies_current_cell&&a.equipped_tool&&a.equipped_tool->type==CraftItem::Axe&&a.equipped_tool->durability>0&&
+     std::any_of(spatial_buildings.begin(),spatial_buildings.end(),[&](const auto& entry){return !entry.second.complete&&w.adjacent(a.position,entry.first);}))r.push_back("work_on_building");
+  if(a.alive&&occupies_current_cell){if(const auto fire=w.nearby_campfire(a.position)){
+    bool possible=false;
+    for(const auto type:{BuildingType::Wall,BuildingType::Door,BuildingType::Bed,BuildingType::Stockpile,BuildingType::Workshop})
+      if(!w.has_completed_building(type))for(int dy=-3;dy<=3&&!possible;++dy)for(int dx=-3;dx<=3&&!possible;++dx)
+        possible=w.can_designate_building({fire->x+dx,fire->y+dy},*fire,type);
+    if(possible)r.push_back("designate_building");
+  }}
   if(a.alive&&current_day>0){
     const auto fire=w.nearby_campfire(a.position);
     const bool has_companion=fire&&std::any_of(agents.begin(),agents.end(),[&](const Agent& other){
@@ -64,11 +74,25 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
 }
 bool validate_decision(const Decision& d,const Agent& a,const World& w,const std::vector<Agent>& agents,std::string& e,int current_day,DayPhase phase) {
   if (d.type==DecisionType::Blocked) return (!d.need.empty() && !d.obstacle.empty() && !d.desired_result.empty()) || (e="blocked fields missing",false);
-  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","collect_iron_ore","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food","craft_camp_item","equip_axe","repair_axe","share_camp_meal","hold_vigil","celebrate","mourn","teach_skill"}; if (!names.contains(d.action)) {e="unknown action";return false;}
+  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","collect_iron_ore","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food","craft_camp_item","equip_axe","repair_axe","designate_building","work_on_building","share_camp_meal","hold_vigil","celebrate","mourn","teach_skill"}; if (!names.contains(d.action)) {e="unknown action";return false;}
   auto avail=available_actions(a,w,agents,current_day,phase); if (std::find(avail.begin(),avail.end(),d.action)==avail.end()) {e="action unavailable";return false;}
   if (d.action=="move") { if (!d.parameters.is_object() || !d.parameters.contains("direction") || !d.parameters["direction"].is_string()) {e="direction required";return false;} auto dir=d.parameters["direction"].get<std::string>(); if (!std::set<std::string>{"north","south","east","west"}.contains(dir)){e="invalid direction";return false;} }
   if (d.action=="hunt_animal") { if(!d.parameters.is_object()||!d.parameters.contains("animal_id")||!d.parameters["animal_id"].is_string()){e="animal_id required";return false;}const auto* target=w.animal(d.parameters["animal_id"].get<std::string>());if(!target||!target->alive||!w.adjacent(a.position,target->position)){e="hunt target not adjacent";return false;} }
   if(d.action=="craft_camp_item"){if(!d.parameters.is_object()||!d.parameters.contains("recipe")||!d.parameters["recipe"].is_string()){e="recipe required";return false;}const auto fire=w.nearby_campfire(a.position);if(!fire){e="campfire required";return false;}const auto recipes=w.craftable_recipes(*fire);if(std::find(recipes.begin(),recipes.end(),d.parameters["recipe"].get<std::string>())==recipes.end()){e="recipe unavailable";return false;}}
+  if(d.action=="designate_building"){
+    if(!d.parameters.is_object()||!d.parameters.contains("building")||!d.parameters["building"].is_string()||
+       !d.parameters.contains("x")||!d.parameters["x"].is_number_integer()||!d.parameters.contains("y")||!d.parameters["y"].is_number_integer()){e="building designation fields required";return false;}
+    const auto type=building_type_from_name(d.parameters["building"].get<std::string>());
+    const auto fire=w.nearby_campfire(a.position);
+    if(!type||!fire||!w.can_designate_building({d.parameters["x"].get<int>(),d.parameters["y"].get<int>()},*fire,*type)){e="building designation unavailable";return false;}
+  }
+  if(d.action=="work_on_building"){
+    if(!d.parameters.is_object()||!d.parameters.contains("x")||!d.parameters["x"].is_number_integer()||
+       !d.parameters.contains("y")||!d.parameters["y"].is_number_integer()){e="building site required";return false;}
+    const Position site{d.parameters["x"].get<int>(),d.parameters["y"].get<int>()};
+    const auto building=w.building(site);
+    if(!building||building->complete||!w.adjacent(a.position,site)){e="building site unavailable";return false;}
+  }
   if(d.action=="teach_skill"){
     if(!d.parameters.is_object()||!d.parameters.contains("target_id")||!d.parameters["target_id"].is_string()||
        !d.parameters.contains("skill")||!d.parameters["skill"].is_string()){e="lesson fields required";return false;}

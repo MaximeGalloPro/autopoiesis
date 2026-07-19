@@ -57,6 +57,8 @@ std::string action_label(const std::string& action) {
   if(action=="craft_camp_item")return "Fabriquer un objet";
   if(action=="equip_axe")return "Équiper la hache";
   if(action=="repair_axe")return "Réparer la hache";
+  if(action=="designate_building")return "Désigner un bâtiment";
+  if(action=="work_on_building")return "Travailler au chantier";
   if(action=="share_camp_meal")return "Partager un repas";
   if(action=="hold_vigil")return "Tenir une veillée";
   if(action=="celebrate")return "Célébrer";
@@ -390,6 +392,18 @@ struct RaylibInterface::Impl {
         DrawRectangleLines(x+3,y+3,std::max(4,static_cast<int>(cell_width)-6),
                            std::max(4,static_cast<int>(cell_height)-6),{238,213,171,255});
       }
+      if(cell.building){
+        const auto& structure=*cell.building;
+        const Color structure_color=structure.complete?Color{93,117,106,255}:Color{171,142,83,255};
+        DrawRectangle(x+3,y+3,std::max(4,static_cast<int>(cell_width)-6),
+                      std::max(4,static_cast<int>(cell_height)-6),structure_color);
+        const std::string symbol=structure.complete?
+            (structure.type==BuildingType::Wall?"M":structure.type==BuildingType::Door?"P":
+             structure.type==BuildingType::Bed?"L":structure.type==BuildingType::Stockpile?"R":"A"):"?";
+        const int font=std::max(9,static_cast<int>(cell_width*0.42F));
+        DrawText(symbol.c_str(),x+static_cast<int>(cell_width/2)-MeasureText(symbol.c_str(),font)/2,
+                 y+static_cast<int>(cell_height/2)-font/2,font,primary_text);
+      }
       DrawRectangleLines(x,y,static_cast<int>(std::ceil(cell_width)),
                          static_cast<int>(std::ceil(cell_height)),{34,40,36,75});
     }
@@ -421,13 +435,17 @@ struct RaylibInterface::Impl {
       const int font=std::max(10,static_cast<int>(cell_width*0.48F));
       DrawText(initial.c_str(),x-MeasureText(initial.c_str(),font)/2,y-font/2,font,background);
     }
-    if(hovered_cell&&hovered_cell->campfire&&!hovered_agent){
-      const std::string label=clipped(
+    if(hovered_cell&&(hovered_cell->campfire||hovered_cell->building)&&!hovered_agent){
+      const std::string details=hovered_cell->building?
+          "Bâtiment · "+building_type_name(hovered_cell->building->type)+" · "+
+              std::to_string(hovered_cell->building->progress)+"/"+
+              std::to_string(hovered_cell->building->required_work)+
+              (hovered_cell->building->complete?" · terminé":" · chantier"):
           TextFormat("Réserve · nourriture %d (%d cuite) · bois %d · branches %d · fer %d · objets %d",
                      hovered_cell->stored_food,hovered_cell->cooked_food,
                      hovered_cell->stored_wood,hovered_cell->stored_branches,
-                     hovered_cell->stored_iron_ore,hovered_cell->crafted_items),
-          std::max(80,static_cast<int>(viewport.width)-16),14);
+                     hovered_cell->stored_iron_ore,hovered_cell->crafted_items);
+      const std::string label=clipped(details,std::max(80,static_cast<int>(viewport.width)-16),14);
       const int label_width=MeasureText(label.c_str(),14)+18;
       const int center_x=static_cast<int>(viewport.x+(hovered_cell->position.x+0.5F)*cell_width);
       const int cell_y=static_cast<int>(viewport.y+hovered_cell->position.y*cell_height);

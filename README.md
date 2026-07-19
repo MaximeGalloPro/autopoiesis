@@ -172,6 +172,8 @@ Abattre un arbre exige désormais une hache. Le groupe doit trouver du minerai, 
 
 Les pratiques réussies font progresser huit compétences locales : coupe du bois, extraction, fabrication, construction, cueillette, chasse, cuisine et sociabilité. Un niveau de coupe améliore la réparation des haches ; les trois spécialisations dominantes sont visibles dans l'inspecteur. Au foyer, un mentor ayant deux niveaux d'avance peut transmettre une unité d'expérience, au maximum une leçon donnée et reçue par journée.
 
+Le foyer peut désormais réserver les matériaux d'un chantier puis placer sur la carte un mur, une porte, un lit, une réserve ou un atelier. Un bâtisseur équipé d'une hache rejoint une case voisine et fournit plusieurs unités de travail ; sa compétence accélère le chantier. Les murs bloquent les chemins, les portes restent praticables, les lits améliorent le repos et les ateliers renforcent les réparations.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

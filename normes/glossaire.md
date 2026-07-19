@@ -104,6 +104,10 @@ Le minerai de fer apparaît en gisements finis sur des cases praticables et occu
 
 Les huit compétences sont coupe du bois, extraction, fabrication, construction, cueillette, chasse, cuisine et sociabilité. Une action n'accorde de l'expérience que si son effet moteur a réussi. Cinq points d'expérience donnent un niveau, avec un maximum de dix ; les niveaux et les trois spécialisations dominantes sont persistants et observables. La coupe du bois augmente directement l'efficacité d'une réparation. Au même foyer, un mentor ayant au moins deux niveaux d'avance peut transmettre un point de la compétence choisie ; chaque personnage donne et reçoit au plus une leçon par journée.
 
+### Construction spatiale
+
+Une désignation associe une case et un type parmi mur, porte, lit, réserve et atelier. Le foyer vérifie puis réserve toutes les matières et pièces requises dans une seule transition ; un échec ne crée aucun chantier et ne consomme rien. Depuis une case adjacente, un personnage vivant muni d'une hache fournit une unité de travail, augmentée tous les trois niveaux de construction, et use l'outil uniquement si le travail réussit. Un mur achevé bloque la navigation, une porte reste praticable, un lit améliore le repos et un atelier proche améliore la réparation. État, avancement et effets survivent au checkpoint.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -175,6 +179,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 30. Une recette ne peut consommer partiellement ses entrées : soit tous les coûts sont retirés et toutes les sorties ajoutées, soit le monde reste strictement identique.
 31. Une action exigeant un outil doit être absente sans cet outil et revérifier son type et sa durabilité à l'exécution. Seule une action réussie peut user l'outil.
 32. Une compétence ne progresse que sur une réussite validée. Une leçon exige la présence au même foyer, un écart de niveau suffisant et les limites quotidiennes du mentor comme de l'élève.
+33. Une désignation de bâtiment réserve toutes ses entrées ou aucune. Le travail exige une proximité réelle et un outil valide ; un bâtiment incomplet ne produit aucun effet final.
 
 ## Patterns
 

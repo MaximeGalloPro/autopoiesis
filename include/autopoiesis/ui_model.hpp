@@ -21,6 +21,7 @@ struct UiCell {
   int crafted_items{};
   int iron_ore{};
   int stored_iron_ore{};
+  std::optional<Building> building;
 };
 
 struct UiAgent {
