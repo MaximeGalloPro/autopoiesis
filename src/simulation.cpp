@@ -68,6 +68,7 @@ json agent_checkpoint(const Agent& agent) {
   json foods=json::array();
   for(const auto food:agent.behavior.preferred_foods)foods.push_back(static_cast<int>(food));
   json observed=json::array();for(const auto& animal:agent.observed_animals)observed.push_back(animal);
+  json campfires=json::array();for(const auto& position:agent.known_campfires)campfires.push_back({{"x",position.first},{"y",position.second}});
   json shelter=nullptr;
   if(agent.shelter_construction)shelter={{"x",agent.shelter_construction->position.x},
       {"y",agent.shelter_construction->position.y},{"progress",agent.shelter_construction->progress}};
@@ -92,7 +93,9 @@ json agent_checkpoint(const Agent& agent) {
                       {"started_day",agent.project.started_day},
                       {"last_progress_cycle",agent.project.last_progress_cycle}}},
           {"boredom",agent.boredom},{"relationships",relationships_json(agent.relationships)},
-          {"observed_animals",std::move(observed)},{"wood_inventory",agent.wood_inventory},
+          {"observed_animals",std::move(observed)},{"known_campfires",std::move(campfires)},
+          {"wood_inventory",agent.wood_inventory},
+          {"branch_inventory",agent.branch_inventory},
           {"shelter_construction",std::move(shelter)}};
 }
 
@@ -139,7 +142,10 @@ Agent restore_agent(const json& state) {
   for(const auto&[id,value]:state.at("relationships").items())agent.relationships[id]={
       value.at("trust").get<int>(),value.at("affinity").get<int>(),value.at("interactions").get<int>()};
   for(const auto& animal:state.at("observed_animals"))agent.observed_animals.insert(animal.get<std::string>());
+  for(const auto& fire:state.value("known_campfires",json::array()))
+    agent.known_campfires.insert({fire.at("x").get<int>(),fire.at("y").get<int>()});
   agent.wood_inventory=state.at("wood_inventory").get<int>();
+  agent.branch_inventory=state.value("branch_inventory",0);
   if(!state.at("shelter_construction").is_null()){
     const auto& shelter=state.at("shelter_construction");
     agent.shelter_construction=ShelterConstruction{
@@ -165,6 +171,12 @@ Decision LocalDecider::decide(const Perception& p) {
   auto acts=p.value["available_actions"].get<std::vector<std::string>>();
   const auto has_action=[&](const std::string& action){return std::find(acts.begin(),acts.end(),action)!=acts.end();};
   const int hunger=me.value("hunger",0),thirst=me.value("thirst",0),fatigue=me.value("fatigue",0);
+  const auto time=p.value.value("time",json::object());
+  const bool is_night=time.value("phase","")=="night";
+  const int cycles_until_night=time.value("cycles_until_night",std::numeric_limits<int>::max());
+  const int cycles_per_day=time.value("cycles_per_day",2400);
+  const int camp_preparation_cycles=std::max(1,daylight_cycles(cycles_per_day)/6);
+  const bool camp_time=is_night||cycles_until_night<=camp_preparation_cycles;
   const auto attributes=me.value("attributes",json::object());
   const auto personality=me.value("personality",json::object());
   const auto behavior=me.value("behavior",json::object());
@@ -219,6 +231,16 @@ Decision LocalDecider::decide(const Perception& p) {
     return {DecisionType::Action,"eat_food",json::object(),"Je mange la ressource disponible.","food","","be fed"};
   if(best_goal=="eat"&&has_action("eat_berries"))
     return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
+  const bool vital_emergency=hunger>=75||thirst>=75;
+  if(camp_time&&!vital_emergency&&has_action("rest_by_campfire"))
+    return {DecisionType::Action,"rest_by_campfire",json::object(),
+            "Je passe la nuit près du feu de camp.","repos nocturne","","rester au camp"};
+  if(camp_time&&!vital_emergency&&has_action("build_campfire"))
+    return {DecisionType::Action,"build_campfire",json::object(),
+            "J'allume un feu avant la nuit.","repos nocturne","","établir un camp"};
+  if(!vital_emergency&&me.value("branch_inventory",0)<3&&has_action("collect_branch"))
+    return {DecisionType::Action,"collect_branch",json::object(),
+            "Je ramasse une branche pour préparer un feu.","camp","","réunir du combustible"};
   if(best_goal=="project"&&project.value("key","")=="build_shelter"){
     if(has_action("assemble_shelter"))
       return {DecisionType::Action,"assemble_shelter",json::object(),"J'assemble mon abri.","projet","","construire un abri"};
@@ -319,12 +341,16 @@ Decision LocalDecider::decide(const Perception& p) {
   std::set<std::pair<int,int>> traversable;
   std::set<std::pair<int,int>> food_targets;
   std::set<std::pair<int,int>> water_cells;
+  std::set<std::pair<int,int>> branch_targets;
+  std::set<std::pair<int,int>> campfire_cells;
   for(const auto& cell:known){
     const std::pair<int,int> coordinates{cell.value("x",0),cell.value("y",0)};
     known_cells[coordinates]=cell;
     if(cell.value("status","")=="traversable")traversable.insert(coordinates);
     if(cell.value("food",0)>0)food_targets.insert(coordinates);
     if(cell.value("terrain",-1)==static_cast<int>(Terrain::Water))water_cells.insert(coordinates);
+    if(cell.value("branches",0)>0)branch_targets.insert(coordinates);
+    if(cell.value("campfire",false))campfire_cells.insert(coordinates);
   }
   for(const auto& cell:p.value.value("cells",json::array())){
     const std::pair<int,int> coordinates{cell.value("x",0),cell.value("y",0)};
@@ -332,6 +358,8 @@ Decision LocalDecider::decide(const Perception& p) {
     if(terrain==static_cast<int>(Terrain::Ground)||terrain==static_cast<int>(Terrain::Bush))traversable.insert(coordinates);
     if(cell.value("food",0)>0||terrain==static_cast<int>(Terrain::Bush))food_targets.insert(coordinates);
     if(terrain==static_cast<int>(Terrain::Water))water_cells.insert(coordinates);
+    if(cell.value("branches",0)>0)branch_targets.insert(coordinates);
+    if(cell.value("campfire",false))campfire_cells.insert(coordinates);
   }
   traversable.insert({self.x,self.y});
   auto route_to=[&](const std::set<std::pair<int,int>>& targets){
@@ -344,6 +372,24 @@ Decision LocalDecider::decide(const Perception& p) {
     }
     return std::string{};
   };
+  if(camp_time&&!vital_emergency){
+    std::set<std::pair<int,int>> camp_positions;
+    for(const auto& coordinates:campfire_cells){
+      Position fire{coordinates.first,coordinates.second};
+      for(const auto& direction:directions){
+        const auto candidate=step(fire,direction);
+        if(traversable.contains({candidate.x,candidate.y}))camp_positions.insert({candidate.x,candidate.y});
+      }
+    }
+    const auto camp_direction=route_to(camp_positions);
+    if(!camp_direction.empty())return {DecisionType::Action,"move",{{"direction",camp_direction}},
+        "Je rejoins le feu de camp connu pour la nuit.","repos nocturne","","rester au camp"};
+    if(me.value("branch_inventory",0)<3){
+      const auto branch_direction=route_to(branch_targets);
+      if(!branch_direction.empty())return {DecisionType::Action,"move",{{"direction",branch_direction}},
+          "Je rejoins des branches connues pour préparer le camp.","camp","","réunir du combustible"};
+    }
+  }
   if(best_goal=="hydrate"){
     std::set<std::pair<int,int>> drink_targets;
     for(const auto& coordinates:water_cells){Position water{coordinates.first,coordinates.second};for(const auto& direction:directions){const auto candidate=step(water,direction);if(traversable.contains({candidate.x,candidate.y}))drink_targets.insert({candidate.x,candidate.y});}}
@@ -482,6 +528,9 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "build_shelter") return result == "construit un abri" || result == "ameliore un abri";
   if (decision.action == "harvest_wood") return result == "preleve du bois";
   if (decision.action == "assemble_shelter") return result == "assemble l'abri" || result == "construit un abri";
+  if (decision.action == "collect_branch") return result == "ramasse une branche";
+  if (decision.action == "build_campfire") return result == "allume un feu de camp";
+  if (decision.action == "rest_by_campfire") return result == "reste pres du feu de camp";
   return true;
 }
 
@@ -556,8 +605,8 @@ void Simulation::save_checkpoint() const {
 Perception Simulation::perceive(Agent& a) {
   json cells=json::array();
   std::set<std::pair<int,int>> perceived;
-  for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx)if(std::abs(dx)+std::abs(dy)<=3){Position p=world_.wrap({a.position.x+dx,a.position.y+dy});if(!perceived.insert({p.x,p.y}).second)continue;auto terrain=world_.terrain(p);a.remember_map(p,terrain);json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&animal.position==p){const auto type=animal_type_name(animal.type);a.observed_animals.insert(type);animals.push_back({{"id",animal.id},{"type",type},{"danger",animal.danger},{"nutrition",animal.nutrition}});}cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"food",world_.food(p)},{"water",terrain==Terrain::Water},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()},{"animals",animals}});}
-  json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=terrain==Terrain::Ground||terrain==Terrain::Bush;known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.food(p)}});}
+  for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx)if(std::abs(dx)+std::abs(dy)<=3){Position p=world_.wrap({a.position.x+dx,a.position.y+dy});if(!perceived.insert({p.x,p.y}).second)continue;auto terrain=world_.terrain(p);a.remember_map(p,terrain);if(world_.campfire(p))a.known_campfires.insert({p.x,p.y});json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&animal.position==p){const auto type=animal_type_name(animal.type);a.observed_animals.insert(type);animals.push_back({{"id",animal.id},{"type",type},{"danger",animal.danger},{"nutrition",animal.nutrition}});}cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"food",world_.food(p)},{"branches",world_.branches(p)},{"campfire",world_.campfire(p)},{"water",terrain==Terrain::Water},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()},{"animals",animals}});}
+  json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=terrain==Terrain::Ground||terrain==Terrain::Bush;known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.food(p)},{"branches",world_.branches(p)},{"campfire",a.known_campfires.contains(position)}});}
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
@@ -573,7 +622,8 @@ Perception Simulation::perceive(Agent& a) {
     a.remember("La capacite de construction de l'abri est disponible.");
   }
   json construction=nullptr;if(a.shelter_construction)construction={{"x",a.shelter_construction->position.x},{"y",a.shelter_construction->position.y},{"progress",a.shelter_construction->progress}};
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions}}};
+  const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -605,6 +655,9 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
   if(d.action=="build_shelter"){const bool existing=world_.shelter_level(a.position)>0;if(!a.alive||!world_.build_shelter(a.position))return "materiaux insuffisants pour construire";a.remember(existing?"J'ai ameliore l'abri.":"J'ai construit un abri.");return existing?"ameliore un abri":"construit un abri";}
   if(d.action=="harvest_wood"){if(!a.alive||!world_.harvest_tree(a.position))return "aucun arbre vivant a prelever";++a.wood_inventory;a.remember("J'ai preleve une unite de bois.");return "preleve du bois";}
+  if(d.action=="collect_branch"){if(!a.alive||!world_.take_branch(a.position))return "aucune branche a ramasser";++a.branch_inventory;a.remember("J'ai ramasse une branche pour le camp.");return "ramasse une branche";}
+  if(d.action=="build_campfire"){if(!a.alive||a.branch_inventory<3||!world_.place_campfire(a.position))return "ne peut pas allumer de feu";a.branch_inventory-=3;a.known_campfires.insert({a.position.x,a.position.y});a.remember("J'ai allume un feu de camp.");return "allume un feu de camp";}
+  if(d.action=="rest_by_campfire"){if(!a.alive||!world_.adjacent_campfire(a.position))return "aucun feu a proximite";a.fatigue=clamp_stat(a.fatigue-1);return "reste pres du feu de camp";}
   if(d.action=="assemble_shelter"){
     if(!a.alive||a.wood_inventory<1||!world_.passable(a.position)||world_.shelter_level(a.position)>0||(a.shelter_construction&&a.shelter_construction->position!=a.position))return "assemblage impossible";
     if(!a.shelter_construction)a.shelter_construction=ShelterConstruction{a.position,0};
@@ -681,6 +734,7 @@ bool Simulation::run_day(IUserInterface* interface){
     logger_.message("Jour "+std::to_string(day_)+" / cycle elementaire "+std::to_string(simulation_cycle_)+" — "+agent.name+" dort.");
   }
   for(int action_index=0;action_index<cycles_per_day_;++action_index){
+    cycle_in_day_=action_index+1;
     ++simulation_cycle_;
     for(auto& agent:agents_){
       if(!agent.alive||agent.sleeping_days!=0) continue;
@@ -700,7 +754,11 @@ bool Simulation::run_day(IUserInterface* interface){
       planning.push_back({{"action",decision.type==DecisionType::Blocked?"blocked":decision.action},{"outcome",succeeded?"success":"failure"},{"reason",decision.reason},{"parameters",decision.parameters},{"x",agent.position.x},{"y",agent.position.y},{"project",agent.project.key},{"project_status",project_status_name(agent.project.status)},{"boredom",agent.boredom}});
       while(planning.size()>20) planning.erase(planning.begin());
       auto& history=action_history_[agent.id];
-      std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+" action="+(decision.type==DecisionType::Blocked?"blocked":decision.action)+" outcome="+(succeeded?"success":"failure")+" result="+result;
+      std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+
+                        " cycle_in_day="+std::to_string(cycle_in_day_)+
+                        " phase="+day_phase_name(day_phase_for(cycle_in_day_,cycles_per_day_))+
+                        " action="+(decision.type==DecisionType::Blocked?"blocked":decision.action)+
+                        " outcome="+(succeeded?"success":"failure")+" result="+result;
       if(!decision.reason.empty()) entry+=" reason="+decision.reason;
       if(!decision.need.empty()) entry+=" need="+decision.need;
       if(!decision.obstacle.empty()) entry+=" obstacle="+decision.obstacle;
@@ -713,7 +771,8 @@ bool Simulation::run_day(IUserInterface* interface){
       logger_.event(simulation_cycle_,day_,before,decision,result,agent,date_,climate_);
     }
     if(interface){
-      const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,logger_.recent());
+      const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,
+                                           logger_.recent(),cycle_in_day_,cycles_per_day_);
       if(!interface->present(snapshot)){
         logger_.message("Interface graphique fermée par l'utilisateur.");
         return false;

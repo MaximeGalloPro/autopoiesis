@@ -62,6 +62,14 @@ Un cycle élémentaire est un créneau pendant lequel chaque personnage vivant e
 
 Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `2400` par défaut. Le paramètre `SIMULATION_DAYS` indique le nombre de journées exécutées par le programme.
 
+### Jour et nuit
+
+La phase diurne occupe les trois quarts d'une journée et la phase nocturne le quart restant. Avec l'horloge de référence, cela donne `1800` cycles de jour puis `600` cycles de nuit : la nuit dure un tiers du jour. Cette phase appartient au moteur déterministe, figure dans chaque perception, instantané graphique et historique d'action, et se déduit du cycle persistant.
+
+### Feu de camp
+
+Les cases praticables voisines d'un arbre produisent progressivement des branches. Un personnage peut ramasser une branche locale ; trois branches permettent d'allumer un feu de camp persistant sur sa case. Un feu n'entre dans sa mémoire spatiale qu'après avoir été perçu. Pendant le dernier sixième de la phase diurne et durant la nuit, il rejoint par la carte connue une case adjacente à un feu mémorisé et s'y repose, sauf urgence vitale prioritaire.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -124,6 +132,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 21. L'IA demandeuse reçoit avant sa proposition le catalogue des mécanismes actifs et une mémoire bornée des évolutions antérieures. Une nouvelle `evolution_key` ne rend jamais nouveau un mécanisme déjà proposé ou actif.
 22. Après l'activation d'une évolution, l'ancien binaire ne peut pas exécuter la journée suivante : il doit sauvegarder, recompiler, transférer l'exécution à la version activée, puis restaurer le checkpoint.
 23. Toute évolution qui modifie un état persistant doit conserver la lecture de la version précédente du checkpoint ou fournir une migration déterministe couverte par un test.
+24. Pause et vitesse graphique ne changent ni l'ordre ni le nombre des cycles élémentaires. L'accélération peut réduire les rendus intermédiaires, jamais les décisions ou validations du moteur.
 
 ## Patterns
 
@@ -212,6 +221,8 @@ Pendant un appel IA, le client réseau travaille hors du fil de rendu afin que l
 Le mode graphique est le lancement normal sur le Mac. Le terminal reste attaché au même processus pour les appels IA, les validations et le suivi de Dieu, et `--terminal` conserve le rendu historique. Fermer la fenêtre constitue une demande d'arrêt propre détectée par le moteur.
 
 Sur macOS, la fenêtre est créée avec `FLAG_WINDOW_UNFOCUSED` par défaut afin de ne pas imposer un changement d'espace de travail. `AUTOPOIESIS_FOCUS_WINDOW=1` constitue l'opt-in explicite au focus immédiat ; ce réglage ne change aucun état de simulation.
+
+Pendant une journée, l'interface expose les vitesses `0,25×`, `0,5×`, `1×`, `2×` et `4×`, ainsi qu'une pause. À `2×` et `4×`, le moteur exécute toujours tous les cycles mais l'interface affiche respectivement un instantané sur deux ou sur quatre. Ce contrôle en cours de journée est distinct du slider qui règle le délai entre deux journées.
 
 ### Transfert de version
 

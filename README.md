@@ -10,6 +10,11 @@ son humeur, son projet, ses actions disponibles et ses attributs. Cette vue ne
 modifie jamais directement la simulation. Les personnages, cartes et boutons
 réagissent au survol pour rendre les interactions visibles.
 
+Les commandes `-`, pause et `+` en haut de la fenêtre règlent le run à
+`0,25×`, `0,5×`, `1×`, `2×` ou `4×`. La barre d'espace met également en pause.
+Même en accéléré, chaque cycle et chaque décision sont exécutés ; seule la
+fréquence de rendu diminue à `2×` et `4×`.
+
 Pendant les six appels de fin de fenêtre, l'interface reste animée et affiche
 l'étape active, les étapes terminées, le personnage concerné et le temps
 écoulé. Les appels restent strictement séquentiels : ce rendu n'ajoute aucun
@@ -32,6 +37,7 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 
 - Un **cycle élémentaire** est un créneau d'action pour chaque personnage.
 - Une **journée** contient `CYCLES_PER_DAY=2400` cycles élémentaires.
+- Elle comprend `1800` cycles de jour puis `600` cycles de nuit : la nuit dure donc un tiers de la période diurne.
 - Un **mois** contient 30 journées et une **année** contient 12 mois, soit 360 journées.
 - Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le calendrier ne se remet pas à zéro lors d'une fenêtre IA.
 - La fenêtre IA par défaut est `REPORT_EVERY_DAYS=3`, donc `7200` cycles élémentaires.
@@ -75,6 +81,8 @@ action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 - La carte mesure `40 × 24`, soit quatre fois la surface initiale, et forme un tore : franchir un bord ramène au bord opposé.
 - La saison produit chaque jour une température, une pluviométrie et une condition déterministes. Le printemps régénère les plantes avec la pluie, l'automne favorise racines et champignons, la chaleur estivale augmente la soif et l'hiver raréfie progressivement les végétaux.
 - Les jours de gel augmentent faim et fatigue ; un abri réduit fortement cette exposition. Une pluie importante fatigue légèrement les personnages non abrités.
+- Des branches apparaissent sur les cases praticables au pied des arbres et se renouvellent progressivement. Un personnage peut en ramasser trois pour allumer un feu de camp persistant.
+- En fin de journée et pendant la nuit, un personnage rejoint par pathfinding un feu qu'il a déjà observé, puis reste sur une case adjacente pour s'y reposer. Les urgences de faim et de soif restent prioritaires.
 - La survie suit santé, faim, soif et fatigue. L'eau est recherchée puis consommée avec l'action locale `drink`.
 - Les aliments sont les baies, racines, champignons, poissons et venaison.
 - La faune comprend lapins, cerfs, sangliers, loups et poissons, avec danger, nutrition et habitat distincts.
@@ -131,7 +139,8 @@ USE_API=0 ./run.sh --days 3 --delay-ms 0 --render-every-days 1
 
 Le délai est appliqué entre deux journées, jamais entre deux cycles élémentaires.
 `SIMULATION_DELAY_MS=0` supprime cette pause ; le rafraîchissement raylib reste
-borné à 60 FPS. Le budget API est indépendant de l'horloge ; avec
+borné à 60 FPS. Les commandes de vitesse de la fenêtre agissent pendant la
+journée et sont indépendantes du slider de délai entre deux journées. Le budget API est indépendant de l'horloge ; avec
 `LIMIT_LLM_API_CALLS=100`, il s'arrête lorsque cette limite est atteinte.
 `LLM_API_TIMEOUT_SECONDS=120` borne chaque appel sans ajouter de retry. En cas
 d'échec, le terminal et `data/simulation.log` indiquent la durée, l'erreur cURL

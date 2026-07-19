@@ -162,6 +162,10 @@ int main() {
                      evolution_context.active_world_mechanisms.end(),[](const json& mechanism){
     return mechanism.value("key","")=="shelter_construction";
   }));
+  assert(std::any_of(evolution_context.active_world_mechanisms.begin(),
+                     evolution_context.active_world_mechanisms.end(),[](const json& mechanism){
+    return mechanism.value("key","")=="campfire_night_routine";
+  }));
   assert(std::find(evolution_context.currently_available_actions.begin(),
                    evolution_context.currently_available_actions.end(),"move")!=
          evolution_context.currently_available_actions.end());

@@ -1,7 +1,22 @@
 #include "autopoiesis/ui_model.hpp"
+#include <array>
 #include <cmath>
 
 namespace apo {
+namespace {
+constexpr std::array<float,5> simulation_speeds{0.25F,0.5F,1.0F,2.0F,4.0F};
+}
+
+void SimulationSpeedControl::slower() { level_=std::max(0,level_-1); }
+void SimulationSpeedControl::faster() { level_=std::min(4,level_+1); }
+float SimulationSpeedControl::multiplier() const { return simulation_speeds[level_]; }
+int SimulationSpeedControl::render_stride() const {
+  return multiplier()>=1.0F?static_cast<int>(multiplier()):1;
+}
+int SimulationSpeedControl::target_fps() const {
+  return multiplier()<1.0F?static_cast<int>(60.0F*multiplier()):60;
+}
+
 std::string mood_for(const Agent& agent) {
   if(!agent.alive)return "Sans vie";
   if(agent.sleeping_days>0)return "Repos profond";
@@ -18,11 +33,15 @@ std::string mood_for(const Agent& agent) {
 UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                             const ClimateState& climate, const World& world,
                             const std::vector<Agent>& agents,
-                            const std::vector<std::string>& recent_events) {
+                            const std::vector<std::string>& recent_events,
+                            int cycle_in_day, int cycles_per_day) {
   UiSnapshot snapshot;
   snapshot.date=date;
   snapshot.simulation_cycle=simulation_cycle;
   snapshot.climate=climate;
+  snapshot.cycle_in_day=cycle_in_day;
+  snapshot.cycles_per_day=cycles_per_day;
+  snapshot.phase=day_phase_for(cycle_in_day,cycles_per_day);
   snapshot.width=World::width;
   snapshot.height=World::height;
   snapshot.cells.reserve(static_cast<std::size_t>(World::width*World::height));
@@ -30,7 +49,8 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
     const Position position{x,y};
     snapshot.cells.push_back({position,world.terrain(position),world.food(position),
                               world.wood(position),world.fibers(position),
-                              world.shelter_level(position)});
+                              world.shelter_level(position),world.branches(position),
+                              world.campfire(position)});
   }
   snapshot.agents.reserve(agents.size());
   for(const auto& agent:agents)

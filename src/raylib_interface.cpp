@@ -44,6 +44,9 @@ std::string action_label(const std::string& action) {
   if(action=="talk")return "Échanger";
   if(action=="harvest_wood")return "Prélever du bois";
   if(action=="assemble_shelter"||action=="build_shelter")return "Construire un abri";
+  if(action=="collect_branch")return "Ramasser une branche";
+  if(action=="build_campfire")return "Allumer un feu";
+  if(action=="rest_by_campfire")return "Rester près du feu";
   return action;
 }
 
@@ -206,6 +209,8 @@ struct RaylibInterface::Impl {
   int selected_delay_ms{};
   bool delay_dragging{};
   bool wants_restart{};
+  SimulationSpeedControl speed;
+  int simulation_frames{};
 
   explicit Impl(int initial_delay_ms):selected_delay_ms(std::clamp(initial_delay_ms,0,10000)) {
     SetTraceLogLevel(LOG_WARNING);
@@ -238,6 +243,45 @@ struct RaylibInterface::Impl {
 
   Rectangle delay_slider_hitbox(float x,float y,float width) const {
     return {x-10.0F,y+24.0F,width+20.0F,38.0F};
+  }
+
+  Rectangle speed_button(int index) const {
+    return {static_cast<float>(GetScreenWidth()-232+index*42),20.0F,34.0F,34.0F};
+  }
+
+  bool speed_controls_hovered() const {
+    const auto mouse=GetMousePosition();
+    return CheckCollisionPointRec(mouse,speed_button(0))||
+           CheckCollisionPointRec(mouse,speed_button(1))||
+           CheckCollisionPointRec(mouse,speed_button(2));
+  }
+
+  void handle_speed_controls() {
+    const auto mouse=GetMousePosition();
+    const bool clicked=IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    if(IsKeyPressed(KEY_SPACE)||(clicked&&CheckCollisionPointRec(mouse,speed_button(1))))
+      speed.toggle_pause();
+    if(IsKeyPressed(KEY_MINUS)||(clicked&&CheckCollisionPointRec(mouse,speed_button(0))))
+      speed.slower();
+    if(IsKeyPressed(KEY_EQUAL)||(clicked&&CheckCollisionPointRec(mouse,speed_button(2))))
+      speed.faster();
+    SetTargetFPS(speed.paused()?60:speed.target_fps());
+  }
+
+  void draw_speed_controls() const {
+    const auto mouse=GetMousePosition();
+    const std::array<const char*,3> labels{"-",speed.paused()?">":"||","+"};
+    for(int index=0;index<3;++index){
+      const auto rectangle=speed_button(index);
+      const bool hovered=CheckCollisionPointRec(mouse,rectangle);
+      DrawRectangleRec(rectangle,hovered?ColorBrightness(panel,0.25F):panel);
+      DrawRectangleLinesEx(rectangle,1.0F,hovered?accent:divider);
+      const int font=index==1?17:21;
+      DrawText(labels[index],static_cast<int>(rectangle.x+rectangle.width/2-MeasureText(labels[index],font)/2),
+               static_cast<int>(rectangle.y+rectangle.height/2-font/2),font,primary_text);
+    }
+    const std::string value=TextFormat("%.2gx",speed.multiplier());
+    DrawText(value.c_str(),GetScreenWidth()-96,29,15,speed.paused()?secondary_text:accent);
   }
 
   void handle_delay_slider(float x,float y,float width) {
@@ -302,6 +346,17 @@ struct RaylibInterface::Impl {
                     terrain_color(cell.terrain));
       if(cell.food>0)DrawCircle(x+static_cast<int>(cell_width*0.72F),y+static_cast<int>(cell_height*0.28F),
                                 std::max(2.0F,cell_width*0.10F),{232,203,92,255});
+      if(cell.branches>0){
+        DrawLine(x+4,y+static_cast<int>(cell_height)-5,x+static_cast<int>(cell_width*0.45F),
+                 y+static_cast<int>(cell_height*0.58F),{154,108,65,255});
+        DrawLine(x+7,y+static_cast<int>(cell_height)-4,x+static_cast<int>(cell_width*0.58F),
+                 y+static_cast<int>(cell_height*0.72F),{194,142,82,255});
+      }
+      if(cell.campfire){
+        const int center_x=x+static_cast<int>(cell_width/2),center_y=y+static_cast<int>(cell_height/2);
+        DrawCircle(center_x,center_y,std::max(4.0F,cell_width*0.22F),{219,78,45,255});
+        DrawCircle(center_x,center_y,std::max(2.0F,cell_width*0.10F),{249,197,66,255});
+      }
       if(cell.shelter_level>0){
         DrawRectangle(x+3,y+3,std::max(4,static_cast<int>(cell_width)-6),
                       std::max(4,static_cast<int>(cell_height)-6),{151,105,67,255});
@@ -380,7 +435,8 @@ struct RaylibInterface::Impl {
                column_x,cursor+row*21,13,index%2==0?primary_text:secondary_text);
     }
     cursor+=112;
-    DrawText(TextFormat("Bois : %d   Monotonie : %d",agent.wood_inventory,agent.boredom),
+    DrawText(TextFormat("Bois : %d   Branches : %d   Monotonie : %d",agent.wood_inventory,
+                        agent.branch_inventory,agent.boredom),
              x+22,std::min(cursor,height-28),13,secondary_text);
   }
 
@@ -392,9 +448,9 @@ struct RaylibInterface::Impl {
       const auto position=map_position_at_pixel(viewport,mouse.x,mouse.y,snapshot.width,snapshot.height);
       agent_hovered=position&&agent_at_position(snapshot,*position);
     }
-    SetMouseCursor(agent_hovered?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
+    SetMouseCursor(agent_hovered||speed_controls_hovered()?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
     BeginDrawing();
-    ClearBackground(background);
+    ClearBackground(has_snapshot&&snapshot.phase==DayPhase::Night?Color{13,18,27,255}:background);
     if(!has_snapshot){
       DrawText("AUTOPOIESIS",32,30,28,primary_text);
       DrawText("Initialisation de la simulation...",32,78,18,secondary_text);
@@ -411,6 +467,9 @@ struct RaylibInterface::Impl {
     DrawText(TextFormat("%d °C · %s · jour absolu %d · cycle %d",snapshot.climate.temperature_c,
                         snapshot.climate.condition.c_str(),snapshot.date.absolute_day,
                         snapshot.simulation_cycle),210,44,14,secondary_text);
+    DrawText(snapshot.phase==DayPhase::Night?"NUIT":"JOUR",112,48,12,
+             snapshot.phase==DayPhase::Night?Color{137,170,219,255}:accent);
+    draw_speed_controls();
     draw_map(viewport);
     const int legend_y=static_cast<int>(viewport.y+viewport.height+23);
     DrawText("Terrain",static_cast<int>(viewport.x),legend_y-7,14,secondary_text);
@@ -719,8 +778,18 @@ bool RaylibInterface::present(const UiSnapshot& snapshot) {
   const bool already_had_snapshot=impl_->has_snapshot;
   impl_->snapshot=snapshot;
   impl_->has_snapshot=true;
+  ++impl_->simulation_frames;
   if(impl_->selected_agent_id.empty()&&!snapshot.agents.empty())
     impl_->selected_agent_id=snapshot.agents.front().state.id;
+  impl_->handle_speed_controls();
+  while(impl_->speed.paused()){
+    if(WindowShouldClose())return false;
+    impl_->handle_input();
+    impl_->draw();
+    impl_->capture_if_requested();
+    impl_->handle_speed_controls();
+  }
+  if(impl_->simulation_frames%impl_->speed.render_stride()!=0)return !WindowShouldClose();
   impl_->handle_input();
   impl_->draw();
   if(already_had_snapshot)impl_->capture_if_requested();

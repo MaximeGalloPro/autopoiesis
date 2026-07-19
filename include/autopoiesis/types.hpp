@@ -65,7 +65,9 @@ struct Agent {
   int boredom{};
   std::map<std::string, Relationship> relationships;
   std::set<std::string> observed_animals;
+  std::set<std::pair<int,int>> known_campfires;
   int wood_inventory{};
+  int branch_inventory{};
   std::optional<ShelterConstruction> shelter_construction;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };

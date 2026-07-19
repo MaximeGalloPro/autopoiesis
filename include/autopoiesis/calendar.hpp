@@ -4,6 +4,7 @@
 
 namespace apo {
 enum class Season { Spring, Summer, Autumn, Winter };
+enum class DayPhase { Day, Night };
 
 struct CalendarDate {
   int absolute_day{};
@@ -27,4 +28,8 @@ std::string season_name(Season season);
 std::string calendar_label(const CalendarDate& date);
 json calendar_json(const CalendarDate& date);
 json climate_json(const ClimateState& climate);
+int daylight_cycles(int cycles_per_day);
+int night_cycles(int cycles_per_day);
+DayPhase day_phase_for(int cycle_in_day, int cycles_per_day);
+std::string day_phase_name(DayPhase phase);
 }

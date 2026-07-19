@@ -31,6 +31,23 @@ class FakeInterface final : public IUserInterface {
 }
 
 int main() {
+  SimulationSpeedControl speed;
+  assert(speed.multiplier() == 1.0F);
+  assert(speed.render_stride() == 1);
+  speed.faster();
+  assert(speed.multiplier() == 2.0F);
+  assert(speed.render_stride() == 2);
+  speed.faster();
+  assert(speed.multiplier() == 4.0F);
+  speed.faster();
+  assert(speed.multiplier() == 4.0F);
+  speed.slower();
+  assert(speed.multiplier() == 2.0F);
+  speed.toggle_pause();
+  assert(speed.paused());
+  speed.toggle_pause();
+  assert(!speed.paused());
+
   World world(42);
   Agent ada;
   ada.id = "a1";

@@ -33,6 +33,11 @@ class World {
   int shelter_level(Position p) const;
   int living_trees(Position p) const;
   bool harvest_tree(Position p);
+  int branches(Position p) const;
+  bool take_branch(Position p);
+  bool campfire(Position p) const;
+  bool adjacent_campfire(Position p) const;
+  bool place_campfire(Position p);
   bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
@@ -45,8 +50,15 @@ class World {
   std::vector<Terrain> cells_; Position rabbit_; bool rabbit_alive_{true};
   std::vector<FoodResource> food_resources_;
   std::vector<Animal> animals_;
-  struct ConstructionCell { int wood{}; int fibers{}; int shelter_level{}; };
+  struct ConstructionCell {
+    int wood{};
+    int fibers{};
+    int shelter_level{};
+    int loose_branches{};
+    bool campfire{};
+  };
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
+  void replenish_branches();
   int index(Position p) const { const auto canonical=wrap(p); return canonical.y * width + canonical.x; }
 };
 }

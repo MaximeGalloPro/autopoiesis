@@ -12,6 +12,8 @@ struct UiCell {
   int wood{};
   int fibers{};
   int shelter_level{};
+  int branches{};
+  bool campfire{};
 };
 
 struct UiAgent {
@@ -24,6 +26,9 @@ struct UiSnapshot {
   CalendarDate date;
   int simulation_cycle{};
   ClimateState climate;
+  DayPhase phase{DayPhase::Day};
+  int cycle_in_day{1};
+  int cycles_per_day{2400};
   int width{};
   int height{};
   std::vector<UiCell> cells;
@@ -59,6 +64,20 @@ struct MapViewport {
   float height{};
 };
 
+class SimulationSpeedControl {
+ public:
+  void slower();
+  void faster();
+  void toggle_pause() { paused_=!paused_; }
+  bool paused() const { return paused_; }
+  float multiplier() const;
+  int render_stride() const;
+  int target_fps() const;
+ private:
+  int level_{2};
+  bool paused_{};
+};
+
 class IUserInterface {
  public:
   virtual ~IUserInterface() = default;
@@ -74,7 +93,8 @@ std::string mood_for(const Agent& agent);
 UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                             const ClimateState& climate, const World& world,
                             const std::vector<Agent>& agents,
-                            const std::vector<std::string>& recent_events);
+                            const std::vector<std::string>& recent_events,
+                            int cycle_in_day = 1, int cycles_per_day = 2400);
 std::optional<Position> map_position_at_pixel(const MapViewport& viewport, float pixel_x,
                                                float pixel_y, int map_width, int map_height);
 const UiAgent* agent_at_position(const UiSnapshot& snapshot, Position position);

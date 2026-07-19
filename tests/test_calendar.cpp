@@ -25,6 +25,12 @@ struct SimulationTestAccess {
 }
 
 int main() {
+  assert(daylight_cycles(2400) == 1800);
+  assert(night_cycles(2400) == 600);
+  assert(day_phase_for(1, 2400) == DayPhase::Day);
+  assert(day_phase_for(1800, 2400) == DayPhase::Day);
+  assert(day_phase_for(1801, 2400) == DayPhase::Night);
+  assert(day_phase_for(2400, 2400) == DayPhase::Night);
   assert((date_from_absolute_day(1) == CalendarDate{1, 1, 1, 1, Season::Spring}));
   assert((date_from_absolute_day(30) == CalendarDate{30, 30, 1, 1, Season::Spring}));
   assert((date_from_absolute_day(31) == CalendarDate{31, 1, 2, 1, Season::Spring}));

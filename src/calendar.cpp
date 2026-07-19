@@ -55,4 +55,21 @@ json climate_json(const ClimateState& climate) {
   return {{"temperature_c",climate.temperature_c},{"rainfall_mm",climate.rainfall_mm},
           {"condition",climate.condition}};
 }
+
+int daylight_cycles(int cycles_per_day) {
+  return std::max(1,cycles_per_day)*3/4;
+}
+
+int night_cycles(int cycles_per_day) {
+  return std::max(1,cycles_per_day)-daylight_cycles(cycles_per_day);
+}
+
+DayPhase day_phase_for(int cycle_in_day,int cycles_per_day) {
+  const int bounded=std::clamp(cycle_in_day,1,std::max(1,cycles_per_day));
+  return bounded<=daylight_cycles(cycles_per_day)?DayPhase::Day:DayPhase::Night;
+}
+
+std::string day_phase_name(DayPhase phase) {
+  return phase==DayPhase::Night?"night":"day";
+}
 }
