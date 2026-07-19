@@ -125,6 +125,9 @@ add_test(NAME collective_home_camp COMMAND autopoiesis_collective_camp_tests)
 add_executable(autopoiesis_inventory_tests tests/test_inventory.cpp)
 target_link_libraries(autopoiesis_inventory_tests PRIVATE autopoiesis_core)
 add_test(NAME bounded_character_inventory COMMAND autopoiesis_inventory_tests)
+add_executable(autopoiesis_resource_transport_tests tests/test_resource_transport.cpp)
+target_link_libraries(autopoiesis_resource_transport_tests PRIVATE autopoiesis_core)
+add_test(NAME resource_transport_to_camp COMMAND autopoiesis_resource_transport_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -155,6 +158,7 @@ foreach(test_target
     autopoiesis_campfire_tests
     autopoiesis_camp_stockpile_tests
     autopoiesis_collective_camp_tests
-    autopoiesis_inventory_tests)
+    autopoiesis_inventory_tests
+    autopoiesis_resource_transport_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

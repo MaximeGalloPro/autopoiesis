@@ -341,6 +341,13 @@ struct RaylibInterface::Impl {
     const auto hovered_position=map_position_at_pixel(viewport,mouse.x,mouse.y,
                                                        snapshot.width,snapshot.height);
     const auto* hovered_agent=hovered_position?agent_at_position(snapshot,*hovered_position):nullptr;
+    const UiCell* hovered_cell=nullptr;
+    if(hovered_position){
+      const auto found=std::find_if(snapshot.cells.begin(),snapshot.cells.end(),[&](const UiCell& cell){
+        return cell.position==*hovered_position;
+      });
+      if(found!=snapshot.cells.end())hovered_cell=&*found;
+    }
     DrawRectangle(static_cast<int>(viewport.x-2),static_cast<int>(viewport.y-2),
                   static_cast<int>(viewport.width+4),static_cast<int>(viewport.height+4),divider);
     for(const auto& cell:snapshot.cells){
@@ -360,7 +367,8 @@ struct RaylibInterface::Impl {
         const int center_x=x+static_cast<int>(cell_width/2),center_y=y+static_cast<int>(cell_height/2);
         DrawCircle(center_x,center_y,std::max(4.0F,cell_width*0.22F),{219,78,45,255});
         DrawCircle(center_x,center_y,std::max(2.0F,cell_width*0.10F),{249,197,66,255});
-        if(cell.stored_food>0)DrawText(TextFormat("%d",cell.stored_food),x+2,y+2,10,primary_text);
+        const int stored_total=cell.stored_food+cell.stored_wood+cell.stored_branches;
+        if(stored_total>0)DrawText(TextFormat("%d",stored_total),x+2,y+2,10,primary_text);
       }
       if(cell.shelter_level>0){
         DrawRectangle(x+3,y+3,std::max(4,static_cast<int>(cell_width)-6),
@@ -398,6 +406,21 @@ struct RaylibInterface::Impl {
       const std::string initial=agent.state.name.empty()?"?":agent.state.name.substr(0,1);
       const int font=std::max(10,static_cast<int>(cell_width*0.48F));
       DrawText(initial.c_str(),x-MeasureText(initial.c_str(),font)/2,y-font/2,font,background);
+    }
+    if(hovered_cell&&hovered_cell->campfire&&!hovered_agent){
+      const std::string label=clipped(
+          TextFormat("Réserve · nourriture %d · bois %d · branches %d",hovered_cell->stored_food,
+                     hovered_cell->stored_wood,hovered_cell->stored_branches),
+          std::max(80,static_cast<int>(viewport.width)-16),14);
+      const int label_width=MeasureText(label.c_str(),14)+18;
+      const int center_x=static_cast<int>(viewport.x+(hovered_cell->position.x+0.5F)*cell_width);
+      const int cell_y=static_cast<int>(viewport.y+hovered_cell->position.y*cell_height);
+      const int label_x=std::clamp(center_x-label_width/2,static_cast<int>(viewport.x),
+                                   static_cast<int>(viewport.x+viewport.width)-label_width);
+      const int label_y=std::max(static_cast<int>(viewport.y),cell_y-29);
+      DrawRectangle(label_x,label_y,label_width,23,{24,26,27,235});
+      DrawRectangleLines(label_x,label_y,label_width,23,accent);
+      DrawText(label.c_str(),label_x+9,label_y+5,14,primary_text);
     }
   }
 

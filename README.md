@@ -160,6 +160,8 @@ reste traitée par incréments TDD.
 
 Les personnages disposent d'un inventaire de transport borné par leur force. Bois, branches et ration utilisent la même capacité ; la charge courante est visible dans l'inspecteur graphique et toute collecte excédentaire est refusée par le moteur.
 
+Le foyer stocke séparément nourriture, bois et branches. Les personnages rejoignent les ressources repérées puis rapportent leur charge par la carte qu'ils connaissent ; survoler le feu affiche le détail de la réserve.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

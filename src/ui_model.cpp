@@ -50,7 +50,8 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
     snapshot.cells.push_back({position,world.terrain(position),world.food(position),
                               world.wood(position),world.fibers(position),
                               world.shelter_level(position),world.branches(position),
-                              world.campfire(position),world.stored_food(position)});
+                              world.campfire(position),world.stored_food(position),
+                              world.stored_wood(position),world.stored_branches(position)});
   }
   snapshot.agents.reserve(agents.size());
   for(const auto& agent:agents)
