@@ -40,9 +40,9 @@ std::vector<std::string> restart_arguments(const std::vector<std::string>& origi
   return result;
 }
 
-int recompile_gui(const std::filesystem::path& project_root,
-                  const std::filesystem::path& data_directory,
-                  IUserInterface& interface) {
+static int recompile_target(const std::filesystem::path& project_root,
+                            const std::filesystem::path& data_directory,
+                            IUserInterface& interface,const char* target) {
   std::filesystem::create_directories(data_directory);
   const auto log_path=data_directory/"recompilation.log";
   const auto started=std::chrono::steady_clock::now();
@@ -52,7 +52,7 @@ int recompile_gui(const std::filesystem::path& project_root,
     const int log=open(log_path.c_str(),O_WRONLY|O_CREAT|O_TRUNC,0644);
     if(log>=0){dup2(log,STDOUT_FILENO);dup2(log,STDERR_FILENO);close(log);}
     const auto build=(project_root/"build").string();
-    execlp("cmake","cmake","--build",build.c_str(),"--target","autopoiesis_gui","-j2",
+    execlp("cmake","cmake","--build",build.c_str(),"--target",target,"-j2",
            static_cast<char*>(nullptr));
     _exit(127);
   }
@@ -76,6 +76,18 @@ int recompile_gui(const std::filesystem::path& project_root,
   interface.present_recompilation({code==0?RecompileStage::Ready:RecompileStage::Failed,
                                     elapsed,last_non_empty_line(log_path)});
   return code;
+}
+
+int recompile_gui(const std::filesystem::path& project_root,
+                  const std::filesystem::path& data_directory,
+                  IUserInterface& interface) {
+  return recompile_target(project_root,data_directory,interface,"autopoiesis_gui");
+}
+
+int recompile_backend(const std::filesystem::path& project_root,
+                      const std::filesystem::path& data_directory,
+                      IUserInterface& interface) {
+  return recompile_target(project_root,data_directory,interface,"autopoiesis_backend");
 }
 
 [[noreturn]] void replace_process(const std::filesystem::path& executable,
