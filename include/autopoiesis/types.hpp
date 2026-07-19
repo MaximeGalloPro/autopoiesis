@@ -112,7 +112,7 @@ struct Project {
   int started_day{};
   int last_progress_cycle{};
 };
-struct Relationship { int trust{}; int affinity{}; int interactions{}; };
+struct Relationship { int trust{}; int affinity{}; int interactions{}; bool conflict{}; friend bool operator==(const Relationship&,const Relationship&)=default; };
 struct ShelterConstruction { Position position; int progress{}; };
 struct FoodResource { FoodType type; Position position; int amount; int nutrition; int capacity{}; int depleted_days{}; };
 struct FoodItem {
@@ -173,6 +173,10 @@ struct Agent {
   int last_convalescence_day{};
   std::vector<Emotion> emotions;
   int next_emotion_id{1};
+  std::string companion_id;
+  int companion_until_day{};
+  int last_help_day{};
+  int last_warning_day{};
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
 inline HealthCondition& add_health_condition(Agent& agent,HealthConditionType type,int severity,const std::string& cause) { agent.conditions.push_back({agent.id+"-condition-"+std::to_string(agent.next_condition_id++),type,std::clamp(severity,1,100),0,false,cause});return agent.conditions.back(); }
@@ -211,7 +215,7 @@ inline int food_shelf_life(FoodType type) { switch(type){case FoodType::Berries:
 inline std::string project_status_name(ProjectStatus status) { switch(status){case ProjectStatus::Candidate:return "candidate";case ProjectStatus::Active:return "active";case ProjectStatus::Blocked:return "blocked";case ProjectStatus::Completed:return "completed";case ProjectStatus::Abandoned:return "abandoned";} return "unknown"; }
 inline json behavior_json(const BehaviorProfile& behavior) { json foods=json::array();for(const auto food:behavior.preferred_foods)foods.push_back(food_type_name(food));return {{"archetype",behavior.archetype},{"aspiration",behavior.aspiration},{"construction_drive",behavior.construction_drive},{"provision_drive",behavior.provision_drive},{"exploration_drive",behavior.exploration_drive},{"social_drive",behavior.social_drive},{"preferred_foods",foods}}; }
 inline json project_json(const Project& project) { return {{"key",project.key},{"title",project.title},{"status",project_status_name(project.status)},{"step",project.step},{"progress",project.progress},{"target",project.target},{"blocked_reason",project.blocked_reason},{"missing_capability",project.missing_capability},{"started_day",project.started_day},{"last_progress_cycle",project.last_progress_cycle}}; }
-inline json relationships_json(const std::map<std::string,Relationship>& relationships) { json value=json::object();for(const auto&[id,relationship]:relationships)value[id]={{"trust",relationship.trust},{"affinity",relationship.affinity},{"interactions",relationship.interactions}};return value; }
+inline json relationships_json(const std::map<std::string,Relationship>& relationships) { json value=json::object();for(const auto&[id,relationship]:relationships)value[id]={{"trust",relationship.trust},{"affinity",relationship.affinity},{"interactions",relationship.interactions},{"conflict",relationship.conflict}};return value; }
 inline std::string food_type_name(FoodType type) { switch(type){case FoodType::Berries:return "berries";case FoodType::Roots:return "roots";case FoodType::Mushrooms:return "mushrooms";case FoodType::Fish:return "fish";case FoodType::Venison:return "venison";} return "unknown"; }
 inline std::string animal_type_name(AnimalType type) { switch(type){case AnimalType::Rabbit:return "rabbit";case AnimalType::Deer:return "deer";case AnimalType::Boar:return "boar";case AnimalType::Wolf:return "wolf";case AnimalType::Fish:return "fish";} return "unknown"; }
 }

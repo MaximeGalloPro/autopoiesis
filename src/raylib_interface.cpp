@@ -61,6 +61,11 @@ std::string action_label(const std::string& action) {
   if(action=="work_on_building")return "Travailler au chantier";
   if(action=="convalesce")return "Récupérer";
   if(action=="treat_condition")return "Soigner un compagnon";
+  if(action=="warn_danger")return "Avertir d'un danger";
+  if(action=="help_companion")return "Aider un compagnon";
+  if(action=="accompany")return "Accompagner";
+  if(action=="confront")return "Exprimer un conflit";
+  if(action=="reconcile")return "Se réconcilier";
   if(action=="share_camp_meal")return "Partager un repas";
   if(action=="hold_vigil")return "Tenir une veillée";
   if(action=="celebrate")return "Célébrer";
@@ -489,6 +494,13 @@ struct RaylibInterface::Impl {
           std::to_string(dominant->intensity)+" · "+dominant->cause;
       DrawText(clipped(emotion,width-44,13).c_str(),x+22,cursor-22,13,{232,190,91,255});
       cursor+=18;
+    }
+    const int conflicts=static_cast<int>(std::count_if(agent.relationships.begin(),agent.relationships.end(),
+        [](const auto& entry){return entry.second.conflict;}));
+    if(!agent.companion_id.empty()||conflicts>0){
+      const std::string relation=agent.companion_id.empty()?"Conflits actifs · "+std::to_string(conflicts):
+          "Accompagne · "+agent.companion_id+(conflicts>0?" · conflits "+std::to_string(conflicts):"");
+      DrawText(clipped(relation,width-44,13).c_str(),x+22,cursor-22,13,{111,188,196,255});cursor+=18;
     }
     const int bar_width=width-44;
     draw_stat("Santé",agent.health,x+22,cursor,bar_width,{86,184,111,255});cursor+=38;

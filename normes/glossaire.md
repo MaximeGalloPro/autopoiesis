@@ -120,6 +120,10 @@ Une affection typée conserve un identifiant, une cause, une sévérité, un âg
 
 Une émotion nomme toujours un événement déclencheur conservé comme souvenir, une intensité, une durée et un effet décisionnel explicite. Son intensité décroît une fois par journée selon la volonté du personnage et elle disparaît à intensité ou durée nulle. Huit émotions actives au maximum sont conservées ; la moins intense cède la place. Une peur suffisante interdit une chasse dont le danger dépasse la tolérance courante du personnage.
 
+### Relations actives
+
+Une relation conserve confiance, affinité, nombre d'interactions et conflit actif. Toute interaction exige deux personnages vivants réellement adjacents. L'avertissement partage les espèces observées et l'entraide réduit une fatigue élevée, au plus une fois par jour pour leur initiateur. L'accompagnement mémorise un compagnon jusqu'au lendemain et infléchit les déplacements locaux. Le conflit est réciproque, causé par la colère et dégrade le lien ; seule une réconciliation valide le clôt et restaure partiellement le lien.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -195,6 +199,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 34. Une transition écologique ne crée jamais une population au-dessus de sa capacité ni une ressource au-dessus de son maximum. Une prédation retire une proie réelle et une parcelle épuisée conserve une pénalité de récupération persistante.
 35. Toute affection nomme sa cause et évolue une fois par journée. Un soin exige un patient réel au même foyer ; une convalescence est bornée à une fois par jour et aucune guérison ne peut augmenter la sévérité.
 36. Toute émotion nomme sa cause et son effet. Elle est bornée en nombre, intensité et durée ; son effet ne contourne jamais la validation déterministe d'une action.
+37. Une interaction relationnelle nomme une cible vivante adjacente et valide ses propres préconditions. Conflit et réconciliation sont réciproques ; avertissement et entraide sont bornés à une fois par journée.
 
 ## Patterns
 

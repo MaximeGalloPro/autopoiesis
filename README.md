@@ -180,6 +180,8 @@ La santé conserve désormais les blessures de chasse, maladies et infections av
 
 Les émotions sont causales et temporaires : joie, peur, colère, tristesse, espoir et stress conservent leur événement déclencheur, leur intensité, leur durée et leur effet. La peur d'une blessure peut écarter une chasse trop dangereuse ; l'émotion dominante et sa cause apparaissent dans l'inspecteur.
 
+Les relations produisent des actes locaux : avertir partage les dangers observés, aider soulage la fatigue, accompagner maintient un personnage auprès d'un autre jusqu'au lendemain, et une colère peut devenir un conflit persistant. La réconciliation clôt ce conflit et restaure confiance et affinité. L'inspecteur signale compagnon et conflits actifs.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

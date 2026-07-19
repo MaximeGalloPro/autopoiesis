@@ -37,7 +37,7 @@ travail → bâtiment, avec coût, durée et compétence observables.
 
 - [x] **G11 - Santé détaillée** : blessures et maladies causales, infection des plaies négligées, soin par un compagnon et convalescence quotidienne accélérée par abri ou lit.
 - [x] **G12 - Émotions causales** : joie, peur, colère, tristesse, espoir et stress relient une cause mémorisée à une intensité, une durée et un effet décisionnel borné.
-- [ ] **G13 - Relations actives** : entraide, conflit, avertissement, accompagnement et réconciliation.
+- [x] **G13 - Relations actives** : entraide, avertissement, accompagnement temporaire, conflit émotionnel et réconciliation modifient les liens et les comportements.
 - [ ] **G15 - Population évolutive** : arrivées, départs, vieillissement, naissance et mort.
 - [ ] **G16 - Dangers actifs** : animaux territoriaux, incendies, accidents, tempêtes et pénuries signalées.
 

@@ -127,7 +127,9 @@ json agent_checkpoint(const Agent& agent) {
           {"conditions",std::move(conditions)},
           {"next_condition_id",agent.next_condition_id},
           {"last_convalescence_day",agent.last_convalescence_day},
-          {"emotions",std::move(emotions)},{"next_emotion_id",agent.next_emotion_id}};
+          {"emotions",std::move(emotions)},{"next_emotion_id",agent.next_emotion_id},
+          {"companion_id",agent.companion_id},{"companion_until_day",agent.companion_until_day},
+          {"last_help_day",agent.last_help_day},{"last_warning_day",agent.last_warning_day}};
 }
 
 Agent restore_agent(const json& state) {
@@ -171,7 +173,8 @@ Agent restore_agent(const json& state) {
       project.at("started_day").get<int>(),project.at("last_progress_cycle").get<int>()};
   agent.boredom=state.at("boredom").get<int>();
   for(const auto&[id,value]:state.at("relationships").items())agent.relationships[id]={
-      value.at("trust").get<int>(),value.at("affinity").get<int>(),value.at("interactions").get<int>()};
+      value.at("trust").get<int>(),value.at("affinity").get<int>(),value.at("interactions").get<int>(),
+      value.value("conflict",false)};
   for(const auto& animal:state.at("observed_animals"))agent.observed_animals.insert(animal.get<std::string>());
   for(const auto& fire:state.value("known_campfires",json::array()))
     agent.known_campfires.insert({fire.at("x").get<int>(),fire.at("y").get<int>()});
@@ -219,6 +222,10 @@ Agent restore_agent(const json& state) {
       emotion.value("memory",emotion.value("cause","")),emotion.value("created_day",0),
       emotion.value("remaining_days",1)});
   agent.next_emotion_id=state.value("next_emotion_id",1);
+  agent.companion_id=state.value("companion_id","");
+  agent.companion_until_day=state.value("companion_until_day",0);
+  agent.last_help_day=state.value("last_help_day",0);
+  agent.last_warning_day=state.value("last_warning_day",0);
   return agent;
 }
 
@@ -263,7 +270,7 @@ Decision LocalDecider::decide(const Perception& p) {
   const auto project=me.value("project",json::object());
   const int boredom=me.value("boredom",0);
   const auto emotions=me.value("emotions",json::array());
-  int fear=0;for(const auto& emotion:emotions)if(emotion.value("type","")=="fear")fear=std::max(fear,emotion.value("intensity",0));
+  int fear=0,anger=0;for(const auto& emotion:emotions){if(emotion.value("type","")=="fear")fear=std::max(fear,emotion.value("intensity",0));if(emotion.value("type","")=="anger")anger=std::max(anger,emotion.value("intensity",0));}
   const int focus=attributes.value("focus",50),willpower=attributes.value("willpower",50);
   const int width=p.value.value("world_width",World::width),height=p.value.value("world_height",World::height);
   const auto wrap=[&](Position position){return Position{((position.x%width)+width)%width,((position.y%height)+height)%height};};
@@ -328,6 +335,28 @@ Decision LocalDecider::decide(const Perception& p) {
         {{"target_id",care.front().value("target_id","")},{"condition_id",care.front().value("condition_id","")}},
         "Je soigne l'affection la plus grave du foyer.","santé","","stabiliser un compagnon"};
   }
+  for(const auto& other:visible_agents)if(other.value("adjacent",false)){
+    const auto relationship=other.value("relationship",json::object());
+    const auto target=other.value("id","");
+    if(has_action("reconcile")&&relationship.value("conflict",false)&&personality.value("empathy",50)>=40)
+      return {DecisionType::Action,"reconcile",{{"target_id",target}},"Je cherche à réparer notre conflit.","relation","","rétablir la confiance"};
+    if(has_action("help_companion")&&other.value("fatigue",0)>=70)
+      return {DecisionType::Action,"help_companion",{{"target_id",target}},"J'aide un compagnon épuisé.","entraide","","soutenir le groupe"};
+    if(has_action("warn_danger")&&!me.value("observed_animals",json::array()).empty())
+      return {DecisionType::Action,"warn_danger",{{"target_id",target}},"Je partage le danger observé.","sécurité","","avertir le groupe"};
+    if(has_action("confront")&&anger>=30)
+      return {DecisionType::Action,"confront",{{"target_id",target}},"Ma colère déborde en désaccord.","relation","","exprimer le conflit"};
+  }
+  const auto companion_id=me.value("companion_id","");
+  const int companion_until_day=me.value("companion_until_day",0);
+  if(!vital_emergency&&!companion_id.empty()&&companion_until_day>=time.value("day",0))for(const auto& other:visible_agents)
+    if(other.value("id","")==companion_id&&!other.value("adjacent",false)){
+      int dx=other.value("x",self.x)-self.x,dy=other.value("y",self.y)-self.y;
+      if(std::abs(dx)>width/2)dx=dx>0?dx-width:dx+width;
+      if(std::abs(dy)>height/2)dy=dy>0?dy-height:dy+height;
+      const std::string direction=std::abs(dx)>=std::abs(dy)?(dx>0?"east":"west"):(dy>0?"south":"north");
+      return {DecisionType::Action,"move",{{"direction",direction}},"Je reste auprès de mon compagnon.","relation","","accompagner"};
+    }
   if(!vital_emergency&&has_action("convalesce"))
     return {DecisionType::Action,"convalesce",json::object(),
             "Je consacre cette journée à ma guérison.","santé","","récupérer"};
@@ -752,6 +781,11 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "hold_vigil") return result.starts_with("veille avec ");
   if (decision.action == "celebrate") return result == "celebre avec le groupe";
   if (decision.action == "mourn") return result.starts_with("honore la memoire de ");
+  if (decision.action == "warn_danger") return result.starts_with("avertit ");
+  if (decision.action == "help_companion") return result.starts_with("aide ");
+  if (decision.action == "accompany") return result.starts_with("accompagne ");
+  if (decision.action == "confront") return result.starts_with("se dispute avec ");
+  if (decision.action == "reconcile") return result.starts_with("se réconcilie avec ");
   if (decision.action == "convalesce") return result == "recupere en convalescence";
   if (decision.action == "treat_condition") return result.starts_with("soigne ");
   return true;
@@ -847,7 +881,7 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=world_.passable(p);const bool known_fire=a.known_campfires.contains(position);json building=nullptr;if(const auto structure=world_.building(p))building={{"type",building_type_name(structure->type)},{"complete",structure->complete}};known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",known_fire},{"building",building},{"stored_food",known_fire?world_.stored_food(p):0},{"stored_wood",known_fire?world_.stored_wood(p):0},{"stored_branches",known_fire?world_.stored_branches(p):0},{"stored_iron_ore",known_fire?world_.stored_iron_ore(p):0},{"crafted_items",known_fire?world_.stored_crafted_items(p):0}});}
-  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"conditions",health_conditions_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
+  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"fatigue",o.fatigue},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"conditions",health_conditions_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
   const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
@@ -888,7 +922,7 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   const auto ecology=world_.ecology();
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"emotions",emotions_json(a)},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"day",day_},{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"emotions",emotions_json(a)},{"companion_id",a.companion_id},{"companion_until_day",a.companion_until_day},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -1103,6 +1137,48 @@ std::string Simulation::execute(Agent&a,const Decision&d){
     a.shelter_construction.reset();a.remember("J'ai construit un abri en bois.");return "construit un abri";
   }
   if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=world_.step(a.position,dir);if(world_.passable(p)){a.position=p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
+  if(d.action=="warn_danger"||d.action=="help_companion"||d.action=="accompany"||d.action=="confront"||d.action=="reconcile"){
+    Agent* target=nullptr;for(auto& other:agents_)if(other.alive&&other.id!=a.id&&other.id==d.parameters.value("target_id","")&&world_.adjacent(a.position,other.position))target=&other;
+    if(!target)return "interaction relationnelle indisponible";
+    auto& outgoing=a.relationships[target->id];auto& incoming=target->relationships[a.id];
+    if(d.action=="warn_danger"){
+      if(a.observed_animals.empty()||a.last_warning_day==day_)return "avertissement indisponible";
+      target->observed_animals.insert(a.observed_animals.begin(),a.observed_animals.end());a.last_warning_day=day_;
+      ++outgoing.interactions;++incoming.interactions;outgoing.trust=clamp_stat(outgoing.trust+3);incoming.trust=clamp_stat(incoming.trust+2);
+      a.remember("J'ai averti "+target->name+" des animaux dangereux observés.");target->remember(a.name+" m'a averti d'un danger.");
+      return "avertit "+target->name+" du danger";
+    }
+    if(d.action=="help_companion"){
+      if(target->fatigue<70||a.last_help_day==day_)return "aide indisponible";
+      target->fatigue=clamp_stat(target->fatigue-(8+a.personality.empathy/20));a.fatigue=clamp_stat(a.fatigue+3);a.last_help_day=day_;
+      ++outgoing.interactions;++incoming.interactions;outgoing.affinity=clamp_stat(outgoing.affinity+3);incoming.trust=clamp_stat(incoming.trust+4);
+      a.remember("J'ai aidé "+target->name+" à récupérer.");target->remember(a.name+" m'a aidé à récupérer.");
+      return "aide "+target->name+" à récupérer";
+    }
+    if(d.action=="accompany"){
+      a.companion_id=target->id;a.companion_until_day=day_+1;
+      ++outgoing.interactions;++incoming.interactions;outgoing.affinity=clamp_stat(outgoing.affinity+2);incoming.trust=clamp_stat(incoming.trust+2);
+      a.remember("J'accompagne "+target->name+" jusqu'à demain.");return "accompagne "+target->name;
+    }
+    if(d.action=="confront"){
+      if(outgoing.conflict||outgoing.affinity>15)return "conflit indisponible";
+      outgoing.conflict=true;incoming.conflict=true;++outgoing.interactions;++incoming.interactions;
+      outgoing.trust=clamp_stat(outgoing.trust-5);incoming.trust=clamp_stat(incoming.trust-5);
+      outgoing.affinity=clamp_stat(outgoing.affinity-4);incoming.affinity=clamp_stat(incoming.affinity-4);
+      add_emotion(a,EmotionType::Anger,40,"désaccord avec "+target->name,"éviter la coopération",4,day_);
+      add_emotion(*target,EmotionType::Anger,35,"dispute avec "+a.name,"éviter la coopération",4,day_);
+      a.remember("Je me suis disputé avec "+target->name+".");target->remember("Je me suis disputé avec "+a.name+".");
+      return "se dispute avec "+target->name;
+    }
+    if(!outgoing.conflict)return "réconciliation indisponible";
+    outgoing.conflict=false;incoming.conflict=false;++outgoing.interactions;++incoming.interactions;
+    outgoing.trust=clamp_stat(outgoing.trust+5);incoming.trust=clamp_stat(incoming.trust+5);
+    outgoing.affinity=clamp_stat(outgoing.affinity+5);incoming.affinity=clamp_stat(incoming.affinity+5);
+    add_emotion(a,EmotionType::Hope,30,"réconciliation avec "+target->name,"reprendre la coopération",4,day_);
+    add_emotion(*target,EmotionType::Hope,30,"réconciliation avec "+a.name,"reprendre la coopération",4,day_);
+    a.remember("Je me suis réconcilié avec "+target->name+".");target->remember("Je me suis réconcilié avec "+a.name+".");
+    return "se réconcilie avec "+target->name;
+  }
   if(d.action=="talk"){auto id=d.parameters["target_agent_id"].get<std::string>();for(auto&o:agents_)if(o.id==id){std::string msg=d.parameters.value("message","Bonjour.");a.remember("J'ai parle a "+o.name+" : "+msg);o.remember(a.name+" m'a parle : "+msg);auto& outgoing=a.relationships[o.id];++outgoing.interactions;outgoing.trust=clamp_stat(outgoing.trust+1+std::max(0,a.personality.empathy-50)/25);outgoing.affinity=clamp_stat(outgoing.affinity+1);auto& incoming=o.relationships[a.id];++incoming.interactions;incoming.trust=clamp_stat(incoming.trust+1+std::max(0,o.personality.empathy-50)/25);incoming.affinity=clamp_stat(incoming.affinity+1);return "parle a "+o.name;}}
   return "attend";
 }
@@ -1122,6 +1198,9 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
   agent.boredom=clamp_stat(agent.boredom+boredom_delta);
   if(!succeeded)add_emotion(agent,EmotionType::Stress,25,"échec de l'action "+decision.action,
                             "réduire la prise de risque",3,day_);
+  if(!succeeded&&agent.boredom>=70&&agent.personality.patience<50)
+    add_emotion(agent,EmotionType::Anger,35,"échecs répétés de "+decision.action,
+                "exprimer un conflit avec un proche",3,day_);
   else if(decision.action=="hunt_animal"||decision.action=="hunt_rabbit"||decision.action=="build_shelter"||
           decision.action=="celebrate")add_emotion(agent,EmotionType::Joy,25,"réussite de l'action "+decision.action,
                                                     "soutenir l'engagement",3,day_);
