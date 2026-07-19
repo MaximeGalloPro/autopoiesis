@@ -39,6 +39,8 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Les bilans et tous les champs des demandes d'évolution sont produits en français dans ces mêmes appels.
 - Avec trois personnages, cela représente six appels API au cycle élémentaire `720`.
 - Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
+- L'interface graphique publie un nouvel instantané après chaque cycle élémentaire. À 60 FPS, les déplacements restent visibles pendant les 720 cycles qui précèdent la fenêtre IA.
+- Le rendu terminal reste un résumé journalier réglé par `SIMULATION_RENDER_EVERY_DAYS` ; cette variable ne ralentit ni ne masque les cycles dans l'interface graphique.
 - Chaque nouveau bilan reçoit au maximum les douze souvenirs précédents du personnage, chacun réduit à une phrase de bilan et une phrase de ressenti de 180 caractères maximum. Cette mémoire vient de `ai_reports.jsonl`, survit aux relancements et n'ajoute aucun appel API.
 - Le second appel reçoit aussi le catalogue compact des mécanismes actifs, les actions actuellement disponibles et au maximum 24 évolutions antérieures `pending`, `approved` ou `activated`. Il doit proposer un mécanisme réellement nouveau plutôt que rebaptiser une ancienne demande ; ce contexte n'ajoute aucun appel API.
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
@@ -121,8 +123,9 @@ Pour un run local sans réseau :
 USE_API=0 ./run.sh --days 3 --delay-ms 0 --render-every-days 1
 ```
 
-Le délai est appliqué entre deux journées. `SIMULATION_DELAY_MS=0` lance le
-moteur à pleine vitesse. Le budget API est indépendant de l'horloge ; avec
+Le délai est appliqué entre deux journées, jamais entre deux cycles élémentaires.
+`SIMULATION_DELAY_MS=0` supprime cette pause ; le rafraîchissement raylib reste
+borné à 60 FPS. Le budget API est indépendant de l'horloge ; avec
 `LIMIT_LLM_API_CALLS=100`, il s'arrête lorsque cette limite est atteinte.
 `LLM_API_TIMEOUT_SECONDS=120` borne chaque appel sans ajouter de retry. En cas
 d'échec, le terminal et `data/simulation.log` indiquent la durée, l'erreur cURL

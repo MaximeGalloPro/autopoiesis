@@ -391,6 +391,10 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
 }
 
 void Simulation::run_day(){
+  (void)run_day(nullptr);
+}
+
+bool Simulation::run_day(IUserInterface* interface){
   ++day_;
   date_=date_from_absolute_day(day_);
   climate_=climate_for(date_);
@@ -434,24 +438,28 @@ void Simulation::run_day(){
       if(history.size()>1200) history.erase(history.begin());
       logger_.event(simulation_cycle_,day_,before,decision,result,agent,date_,climate_);
     }
+    if(interface){
+      const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,logger_.recent());
+      if(!interface->present(snapshot)){
+        logger_.message("Interface graphique fermée par l'utilisateur.");
+        return false;
+      }
+    }
   }
   for(auto& agent:agents_) if(agent.alive){update_needs(agent);apply_climate_effects(agent,date_,climate_);}
+  return true;
 }
 
 void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate,
                      IUserInterface* interface){
   bool stop_requested=false;
   for(int i=0;i<days;++i){
-    run_day();
+    if(!run_day(interface))break;
     bool period_complete=day_%report_every_days_==0;
     bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
     if(all_dead) logger_.message("Simulation arrêtée : tous les personnages sont morts.");
-    if((render_every_days>0&&day_%render_every_days==0)||all_dead){
-      if(interface){
-        const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,logger_.recent());
-        if(!interface->present(snapshot)){logger_.message("Interface graphique fermée par l'utilisateur.");break;}
-      }else render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
-    }
+    if(!interface&&((render_every_days>0&&day_%render_every_days==0)||all_dead))
+      render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
 
     if(period_complete){
       std::cout << "\n=== FENETRE IA : " << calendar_label(date_) << " / Jour absolu " << day_ << " / Cycle elementaire "

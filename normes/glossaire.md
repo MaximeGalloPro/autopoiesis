@@ -119,7 +119,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 16. Le Diable ne crée que des demandes structurées issues d'un catalogue local testé ; il n'applique jamais lui-même une contrainte au monde.
 17. Le calendrier et le climat progressent avec le jour absolu et ne se réinitialisent jamais à une frontière de fenêtre IA.
 18. Un effet climatique doit être déterministe, borné, observable et laisser au moins une mitigation compatible avec les capacités actives.
-19. Une interface graphique observe un instantané du moteur ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine.
+19. Une interface graphique observe un instantané après chaque cycle élémentaire ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine. Le rendu terminal peut rester journalier sans modifier la cadence réelle du moteur.
 20. Le rendu animé d'une fenêtre IA ne modifie ni le nombre ni l'ordre des appels : un seul appel réseau est actif à la fois, puis l'étape suivante commence après son retour.
 21. L'IA demandeuse reçoit avant sa proposition le catalogue des mécanismes actifs et une mémoire bornée des évolutions antérieures. Une nouvelle `evolution_key` ne rend jamais nouveau un mécanisme déjà proposé ou actif.
 

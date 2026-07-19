@@ -71,14 +71,17 @@ int main() {
 
   const std::string data_directory="/tmp/autopoiesis-ui-model-"+std::to_string(getpid());
   Logger logger(data_directory);
+  setenv("CYCLES_PER_DAY", "4", 1);
+  setenv("REPORT_EVERY_DAYS", "3", 1);
   std::mt19937 rng(42);
   LocalDecider decider(rng);
   Simulation simulation(42,decider,logger);
   FakeInterface interface;
   simulation.run(1,7,1,{},&interface);
-  assert(interface.present_count==1);
+  assert(interface.present_count==4);
   assert(interface.idle_milliseconds==7);
   assert(interface.last_snapshot.date.absolute_day==1);
+  assert(interface.last_snapshot.simulation_cycle==4);
   assert(interface.last_snapshot.agents.size()==3);
 
   Logger closing_logger(data_directory+"-closing");
@@ -90,6 +93,10 @@ int main() {
   closing_simulation.run(3,0,1,{},&closing_interface);
   assert(closing_interface.present_count==1);
   assert(closing_simulation.date().absolute_day==1);
+  assert(closing_interface.last_snapshot.simulation_cycle==1);
+
+  unsetenv("CYCLES_PER_DAY");
+  unsetenv("REPORT_EVERY_DAYS");
 
   std::cout << "graphical ui model tests passed\n";
 }
