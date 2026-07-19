@@ -8,6 +8,7 @@
 
 namespace apo {
 enum class ValidationStage { Empty, Choose, Confirm, Complete };
+enum class ValidationPromptKind { Feature, Devil };
 
 struct ValidationPrompt {
   ValidationStage stage{ValidationStage::Empty};
@@ -15,6 +16,7 @@ struct ValidationPrompt {
   int simulation_cycle{};
   std::vector<json> requests;
   std::size_t selected_index{};
+  ValidationPromptKind kind{ValidationPromptKind::Feature};
 };
 
 enum class EvolutionProgressStage {
