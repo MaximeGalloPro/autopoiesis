@@ -6,7 +6,7 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-ROOT="$(git rev-parse --show-toplevel)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DATA_DIR="$1"
 RUNS_DIR="$DATA_DIR/evolution_runs"
 SESSION_FILE="$DATA_DIR/evolution-session-started"
