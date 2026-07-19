@@ -141,9 +141,11 @@ Rectangle validation_bottom_button(int index, int screen_width, int screen_heigh
 }
 
 void draw_button(Rectangle rectangle, const std::string& label, Color fill, Vector2 mouse) {
-  if(CheckCollisionPointRec(mouse,rectangle))fill=ColorBrightness(fill,0.12F);
+  const bool hovered=CheckCollisionPointRec(mouse,rectangle);
+  if(hovered)fill=ColorBrightness(fill,0.12F);
   DrawRectangleRec(rectangle,fill);
-  DrawRectangleLinesEx(rectangle,1,ColorBrightness(fill,0.25F));
+  DrawRectangleLinesEx(rectangle,hovered?2.0F:1.0F,
+                       hovered?primary_text:ColorBrightness(fill,0.25F));
   const int font_size=16;
   DrawText(label.c_str(),static_cast<int>(rectangle.x+(rectangle.width-MeasureText(label.c_str(),font_size))/2),
            static_cast<int>(rectangle.y+(rectangle.height-font_size)/2),font_size,primary_text);
@@ -153,10 +155,12 @@ Color request_color(const json& request) {
   return agent_color(request.value("agent_id",""));
 }
 
-void draw_request_card(const json& request, Rectangle rectangle, bool expanded) {
+void draw_request_card(const json& request, Rectangle rectangle, bool expanded, bool hovered=false) {
   const auto card_color=request_color(request);
-  DrawRectangleRec(rectangle,{42,45,44,255});
-  DrawRectangleLinesEx(rectangle,2,card_color);
+  const Color fill=hovered?Color{51,55,53,255}:Color{42,45,44,255};
+  DrawRectangleRec(rectangle,fill);
+  DrawRectangleLinesEx(rectangle,hovered?3.0F:2.0F,
+                       hovered?ColorBrightness(card_color,0.25F):card_color);
   DrawRectangle(static_cast<int>(rectangle.x),static_cast<int>(rectangle.y),
                 static_cast<int>(rectangle.width),7,card_color);
   const int x=static_cast<int>(rectangle.x+20),maximum_width=static_cast<int>(rectangle.width-40);
@@ -182,7 +186,8 @@ void draw_request_card(const json& request, Rectangle rectangle, bool expanded) 
     DrawLine(x,static_cast<int>(rectangle.y+rectangle.height-42),
              static_cast<int>(rectangle.x+rectangle.width-20),
              static_cast<int>(rectangle.y+rectangle.height-42),divider);
-    DrawText("Cliquer pour choisir",x,static_cast<int>(rectangle.y+rectangle.height-29),14,secondary_text);
+    DrawText("Cliquer pour choisir",x,static_cast<int>(rectangle.y+rectangle.height-29),14,
+             hovered?primary_text:secondary_text);
   }
 }
 }
@@ -194,6 +199,9 @@ struct RaylibInterface::Impl {
   std::string screenshot_path;
   bool screenshot_taken{};
   std::string validation_screenshot_path;
+  std::string activity_screenshot_path;
+  bool activity_screenshot_taken{};
+  int activity_rendered_frames{};
   std::string automation_command;
 
   Impl() {
@@ -205,6 +213,8 @@ struct RaylibInterface::Impl {
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_SCREENSHOT"))screenshot_path=configured;
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_VALIDATION_SCREENSHOT"))
       validation_screenshot_path=configured;
+    if(const char* configured=std::getenv("AUTOPOIESIS_GUI_ACTIVITY_SCREENSHOT"))
+      activity_screenshot_path=configured;
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_AUTOMATION_COMMAND"))
       automation_command=configured;
   }
@@ -226,6 +236,10 @@ struct RaylibInterface::Impl {
   void draw_map(const MapViewport& viewport) const {
     const float cell_width=viewport.width/snapshot.width;
     const float cell_height=viewport.height/snapshot.height;
+    const auto mouse=GetMousePosition();
+    const auto hovered_position=map_position_at_pixel(viewport,mouse.x,mouse.y,
+                                                       snapshot.width,snapshot.height);
+    const auto* hovered_agent=hovered_position?agent_at_position(snapshot,*hovered_position):nullptr;
     DrawRectangle(static_cast<int>(viewport.x-2),static_cast<int>(viewport.y-2),
                   static_cast<int>(viewport.width+4),static_cast<int>(viewport.height+4),divider);
     for(const auto& cell:snapshot.cells){
@@ -258,6 +272,16 @@ struct RaylibInterface::Impl {
       const float radius=std::max(5.0F,cell_width*0.34F);
       DrawCircle(x,y,radius,agent_color(agent.state.id));
       if(agent.state.id==selected_agent_id)DrawCircleLines(x,y,radius+3,primary_text);
+      if(hovered_agent&&hovered_agent->state.id==agent.state.id){
+        DrawCircleLines(x,y,radius+5,ColorBrightness(agent_color(agent.state.id),0.35F));
+        const int label_width=MeasureText(agent.state.name.c_str(),14)+18;
+        const int label_x=std::clamp(x-label_width/2,static_cast<int>(viewport.x),
+                                     static_cast<int>(viewport.x+viewport.width)-label_width);
+        const int label_y=std::max(static_cast<int>(viewport.y),y-static_cast<int>(radius)-31);
+        DrawRectangle(label_x,label_y,label_width,23,{24,26,27,235});
+        DrawRectangleLines(label_x,label_y,label_width,23,agent_color(agent.state.id));
+        DrawText(agent.state.name.c_str(),label_x+9,label_y+5,14,primary_text);
+      }
       const std::string initial=agent.state.name.empty()?"?":agent.state.name.substr(0,1);
       const int font=std::max(10,static_cast<int>(cell_width*0.48F));
       DrawText(initial.c_str(),x-MeasureText(initial.c_str(),font)/2,y-font/2,font,background);
@@ -308,6 +332,14 @@ struct RaylibInterface::Impl {
   }
 
   void draw() const {
+    bool agent_hovered=false;
+    if(has_snapshot){
+      const auto mouse=GetMousePosition();
+      const auto viewport=calculate_map_viewport(GetScreenWidth(),GetScreenHeight());
+      const auto position=map_position_at_pixel(viewport,mouse.x,mouse.y,snapshot.width,snapshot.height);
+      agent_hovered=position&&agent_at_position(snapshot,*position);
+    }
+    SetMouseCursor(agent_hovered?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
     BeginDrawing();
     ClearBackground(background);
     if(!has_snapshot){
@@ -350,6 +382,26 @@ struct RaylibInterface::Impl {
   void draw_validation(const ValidationPrompt& prompt) const {
     const int screen_width=GetScreenWidth(),screen_height=GetScreenHeight();
     const auto mouse=GetMousePosition();
+    bool clickable_hovered=false;
+    if(prompt.stage==ValidationStage::Choose){
+      const auto rectangles=validation_card_rectangles(prompt.requests.size(),screen_width,screen_height);
+      clickable_hovered=std::any_of(rectangles.begin(),rectangles.end(),[&](Rectangle rectangle){
+        return CheckCollisionPointRec(mouse,rectangle);
+      })||CheckCollisionPointRec(mouse,validation_bottom_button(0,screen_width,screen_height))
+        ||CheckCollisionPointRec(mouse,validation_bottom_button(1,screen_width,screen_height));
+    }else if(prompt.stage==ValidationStage::Confirm){
+      const float card_width=std::min(720.0F,screen_width*0.64F);
+      const float action_x=36.0F+card_width+30.0F;
+      const float action_width=screen_width-action_x-36.0F;
+      clickable_hovered=CheckCollisionPointRec(mouse,{action_x,200.0F,action_width,54.0F})
+        ||CheckCollisionPointRec(mouse,{action_x,270.0F,action_width,54.0F})
+        ||CheckCollisionPointRec(mouse,{action_x,340.0F,action_width,48.0F})
+        ||CheckCollisionPointRec(mouse,{action_x,screen_height-90.0F,action_width,44.0F});
+    }else{
+      clickable_hovered=CheckCollisionPointRec(mouse,{36.0F,246.0F,250.0F,54.0F})
+        ||CheckCollisionPointRec(mouse,{304.0F,246.0F,210.0F,54.0F});
+    }
+    SetMouseCursor(clickable_hovered?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
     BeginDrawing();
     ClearBackground(background);
     DrawRectangle(0,0,screen_width,86,{30,33,34,255});
@@ -361,7 +413,8 @@ struct RaylibInterface::Impl {
                36,102,16,secondary_text);
       const auto rectangles=validation_card_rectangles(prompt.requests.size(),screen_width,screen_height);
       for(std::size_t index=0;index<rectangles.size();++index)
-        draw_request_card(prompt.requests[index],rectangles[index],false);
+        draw_request_card(prompt.requests[index],rectangles[index],false,
+                          CheckCollisionPointRec(mouse,rectangles[index]));
       draw_button(validation_bottom_button(0,screen_width,screen_height),"Aucune évolution",
                   {71,76,74,255},mouse);
       draw_button(validation_bottom_button(1,screen_width,screen_height),"Arrêter le run",
@@ -392,6 +445,63 @@ struct RaylibInterface::Impl {
       draw_button(resume,"Reprendre",{50,116,77,255},mouse);
       draw_button(stop,"Arrêter le run",{117,61,58,255},mouse);
     }
+    EndDrawing();
+  }
+
+  void draw_activity(const UiActivity& activity) const {
+    SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+    const int screen_width=GetScreenWidth(),screen_height=GetScreenHeight();
+    const float margin=std::clamp(screen_width*0.07F,42.0F,92.0F);
+    const float content_width=screen_width-margin*2.0F;
+    const float gap=10.0F;
+    const std::size_t total_steps=std::max<std::size_t>(1,activity.total_calls);
+    const float step_width=(content_width-gap*static_cast<float>(total_steps-1))/total_steps;
+    const double pulse=(std::sin(GetTime()*4.0)+1.0)*0.5;
+    BeginDrawing();
+    ClearBackground(background);
+    DrawRectangle(0,0,screen_width,86,{30,33,34,255});
+    DrawText("FENÊTRE IA",static_cast<int>(margin),18,27,primary_text);
+    DrawText(TextFormat("Année %d · mois %d · jour %d · cycle %d",activity.date.year,
+                        activity.date.month,activity.date.day_of_month,activity.simulation_cycle),
+             static_cast<int>(margin),52,14,secondary_text);
+
+    DrawText(TextFormat("Appel %zu sur %zu",activity.call_number,activity.total_calls),
+             static_cast<int>(margin),112,15,secondary_text);
+    for(std::size_t index=0;index<total_steps;++index){
+      const Rectangle step{margin+index*(step_width+gap),145.0F,step_width,9.0F};
+      Color color={58,62,61,255};
+      if(index+1<activity.call_number)color={69,147,98,255};
+      if(index+1==activity.call_number)
+        color=ColorBrightness(accent,static_cast<float>(pulse*0.16));
+      DrawRectangleRec(step,color);
+      DrawText(TextFormat("%zu",index+1),static_cast<int>(step.x),164,13,
+               index+1<=activity.call_number?primary_text:secondary_text);
+    }
+
+    const int center_x=screen_width/2;
+    const Color character_color=agent_color(activity.agent_id);
+    DrawCircle(center_x,266,38,character_color);
+    const std::string initial=activity.agent_name.empty()?"?":activity.agent_name.substr(0,1);
+    DrawText(initial.c_str(),center_x-MeasureText(initial.c_str(),25)/2,253,25,background);
+    const std::string operation=activity.kind==UiActivityKind::PeriodReport?
+        "Création du bilan":"Formulation d'une évolution";
+    DrawText(activity.agent_name.c_str(),center_x-MeasureText(activity.agent_name.c_str(),18)/2,
+             323,18,character_color);
+    DrawText(operation.c_str(),center_x-MeasureText(operation.c_str(),30)/2,359,30,primary_text);
+    DrawText("Réponse en attente...",center_x-MeasureText("Réponse en attente...",17)/2,
+             408,17,secondary_text);
+
+    const Rectangle track{margin,474.0F,content_width,6.0F};
+    DrawRectangleRec(track,{52,56,55,255});
+    const float sweep_width=std::min(180.0F,content_width*0.22F);
+    const float phase=static_cast<float>(std::fmod(GetTime()*0.32,1.0));
+    DrawRectangleRec({track.x+phase*(track.width-sweep_width),track.y,sweep_width,track.height},accent);
+    const int seconds=static_cast<int>(activity.elapsed_ms/1000);
+    const std::string elapsed=seconds<1?"Connexion au modèle...":
+        "Traitement en cours · "+std::to_string(seconds)+" s";
+    DrawText(elapsed.c_str(),static_cast<int>(margin),500,15,primary_text);
+    DrawText("La simulation reprendra après le choix d'évolution.",static_cast<int>(margin),
+             screen_height-55,15,secondary_text);
     EndDrawing();
   }
 
@@ -432,6 +542,18 @@ bool RaylibInterface::idle_for(int milliseconds) {
     impl_->draw();
     impl_->capture_if_requested();
   }while(GetTime()<deadline);
+  return !WindowShouldClose();
+}
+
+bool RaylibInterface::present_activity(const UiActivity& activity) {
+  if(WindowShouldClose())return false;
+  impl_->draw_activity(activity);
+  ++impl_->activity_rendered_frames;
+  if(impl_->activity_rendered_frames>=2&&!impl_->activity_screenshot_taken&&
+     !impl_->activity_screenshot_path.empty()){
+    impl_->capture(impl_->activity_screenshot_path);
+    impl_->activity_screenshot_taken=true;
+  }
   return !WindowShouldClose();
 }
 

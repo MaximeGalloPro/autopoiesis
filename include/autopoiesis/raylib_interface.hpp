@@ -13,6 +13,7 @@ class RaylibInterface final : public IUserInterface, public IValidationInterface
   RaylibInterface& operator=(const RaylibInterface&) = delete;
   bool present(const UiSnapshot& snapshot) override;
   bool idle_for(int milliseconds) override;
+  bool present_activity(const UiActivity& activity) override;
   std::string request_command(const ValidationPrompt& prompt) override;
 
  private:

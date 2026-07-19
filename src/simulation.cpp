@@ -1,14 +1,48 @@
 #include "autopoiesis/simulation.hpp"
 #include "autopoiesis/renderer.hpp"
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <limits>
 #include <queue>
 #include <thread>
 
 namespace apo {
+namespace {
+struct ActivityResult {
+  json payload;
+  bool interface_open{true};
+};
+
+template<typename Work>
+ActivityResult run_with_activity(IUserInterface* interface, UiActivity activity, Work work) {
+  if(!interface)return {work(),true};
+
+  std::atomic_bool finished{false};
+  json payload=nullptr;
+  std::exception_ptr failure;
+  std::thread worker([&]{
+    try{payload=work();}catch(...){failure=std::current_exception();}
+    finished.store(true,std::memory_order_release);
+  });
+  const auto started=std::chrono::steady_clock::now();
+  bool interface_open=true;
+  do{
+    activity.elapsed_ms=std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now()-started).count();
+    if(interface_open)interface_open=interface->present_activity(activity);
+    if(!finished.load(std::memory_order_acquire))
+      std::this_thread::sleep_for(std::chrono::milliseconds(16));
+  }while(!finished.load(std::memory_order_acquire));
+  worker.join();
+  if(failure)std::rethrow_exception(failure);
+  return {std::move(payload),interface_open};
+}
+}
+
 static int positive_int_from_env(const char* name, int fallback) {
   const char* configured=std::getenv(name);
   if(!configured) return fallback;
@@ -405,6 +439,7 @@ void Simulation::run_day(){
 
 void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate,
                      IUserInterface* interface){
+  bool stop_requested=false;
   for(int i=0;i<days;++i){
     run_day();
     bool period_complete=day_%report_every_days_==0;
@@ -430,25 +465,39 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — bilan de " << agent.name << " (en cours...)\n" << std::flush;
           const PeriodContext period_context{date_,climate_,logger_.period_memories(agent.id,12)};
-          auto report=reporter_->report_period(simulation_cycle_,day_,agent,history,period_context);
+          auto report_result=run_with_activity(interface,
+              {UiActivityKind::PeriodReport,date_,simulation_cycle_,agent.id,agent.name,
+               call_number,total_calls,0},
+              [&]{return reporter_->report_period(simulation_cycle_,day_,agent,history,period_context);});
+          auto report=std::move(report_result.payload);
           std::cout << "Appel " << call_number << "/" << total_calls << " — bilan de "
                     << agent.name << (report.is_null()?" indisponible":" terminé");
           if(report.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
           std::cout << "\n" << std::flush;
           if(!report.is_null()) logger_.ai_report(simulation_cycle_,day_,agent,report,date_,climate_);
+          if(!report_result.interface_open){stop_requested=true;break;}
 
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;
-          auto request=reporter_->request_evolution(simulation_cycle_,day_,agent,history,report);
+          auto request_result=run_with_activity(interface,
+              {UiActivityKind::EvolutionRequest,date_,simulation_cycle_,agent.id,agent.name,
+               call_number,total_calls,0},
+              [&]{return reporter_->request_evolution(simulation_cycle_,day_,agent,history,report);});
+          auto request=std::move(request_result.payload);
           std::cout << "Appel " << call_number << "/" << total_calls << " — demande d'évolution pour "
                     << agent.name << (request.is_null()?" indisponible":" terminée");
           if(request.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
           std::cout << "\n" << std::flush;
           if(!request.is_null()) logger_.ai_feature_request(simulation_cycle_,day_,agent,report,request);
+          if(!request_result.interface_open){stop_requested=true;break;}
           history.clear();
         }
-        std::cout << "Fenêtre IA terminée : " << total_calls << " appels tentés.\n" << std::flush;
+        if(stop_requested)
+          logger_.message("Interface graphique fermée pendant la fenêtre IA.");
+        else
+          std::cout << "Fenêtre IA terminée : " << total_calls << " appels tentés.\n" << std::flush;
       }
+      if(stop_requested)break;
       const auto constraint=devil_.draw(day_,simulation_cycle_,world_,agents_,logger_.known_evolution_keys());
       if(constraint){
         const auto id=logger_.devil_constraint(simulation_cycle_,day_,*constraint);

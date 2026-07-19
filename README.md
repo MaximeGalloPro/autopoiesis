@@ -7,7 +7,13 @@ faire le bilan d'une période et proposer une évolution contrôlée.
 Le lancement normal ouvre une fenêtre graphique native raylib. Elle montre la
 carte, le calendrier et le climat ; un clic sur un personnage ouvre son état,
 son humeur, son projet, ses actions disponibles et ses attributs. Cette vue ne
-modifie jamais directement la simulation.
+modifie jamais directement la simulation. Les personnages, cartes et boutons
+réagissent au survol pour rendre les interactions visibles.
+
+Pendant les six appels de fin de fenêtre, l'interface reste animée et affiche
+l'étape active, les étapes terminées, le personnage concerné et le temps
+écoulé. Les appels restent strictement séquentiels : ce rendu n'ajoute aucun
+appel et ne change pas leur ordre.
 
 À la fin d'une fenêtre IA, les trois propositions les plus récentes prennent la
 forme de cartes à jouer dans cette même fenêtre. Un clic ouvre la confirmation :
@@ -35,7 +41,7 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
 - Chaque nouveau bilan reçoit au maximum les douze souvenirs précédents du personnage, chacun réduit à une phrase de bilan et une phrase de ressenti de 180 caractères maximum. Cette mémoire vient de `ai_reports.jsonl`, survit aux relancements et n'ajoute aucun appel API.
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
-- Le terminal affiche l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
+- La fenêtre graphique et le terminal affichent l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
 - La validation est intégrée au même terminal et ne présente que les trois propositions les plus récentes de la fenêtre : choisir `1`, `2`, `3` ou `n` pour aucune, puis `a` approuve ou `r` refuse la proposition sélectionnée. `o` reprend et `q` ou `exit` arrête proprement. Les autres demandes restent `pending`.
 
 ## Le Diable
@@ -205,6 +211,8 @@ docker compose build
 Le modèle de l'interface est testé sans fenêtre. Pour un contrôle visuel local,
 `AUTOPOIESIS_GUI_SCREENSHOT=interface.png` enregistre le framebuffer du jeu
 après le premier instantané, sans capturer les autres fenêtres du Mac.
+`AUTOPOIESIS_GUI_ACTIVITY_SCREENSHOT=activity.png` permet de capturer l'écran
+de transition des appels dans le scénario de prévisualisation dédié.
 
 La suite inclut un scénario local de six journées vérifiant que les trois
 personnages explorent, boivent, mangent, récupèrent et restent sous les seuils

@@ -1,4 +1,5 @@
 #include "autopoiesis/raylib_interface.hpp"
+#include "raylib.h"
 #include <cstdlib>
 
 using namespace apo;
@@ -27,5 +28,6 @@ int main() {
     prompt.selected_index=2;
   }
   RaylibInterface interface;
+  if(prompt.stage==ValidationStage::Choose)SetMousePosition(180,220);
   return interface.request_command(prompt)=="q"?0:1;
 }

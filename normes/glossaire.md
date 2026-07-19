@@ -120,6 +120,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 17. Le calendrier et le climat progressent avec le jour absolu et ne se réinitialisent jamais à une frontière de fenêtre IA.
 18. Un effet climatique doit être déterministe, borné, observable et laisser au moins une mitigation compatible avec les capacités actives.
 19. Une interface graphique observe un instantané du moteur ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine.
+20. Le rendu animé d'une fenêtre IA ne modifie ni le nombre ni l'ordre des appels : un seul appel réseau est actif à la fois, puis l'étape suivante commence après son retour.
 
 ## Patterns
 
@@ -176,6 +177,8 @@ Après approbation, elle persiste la transition puis attend le workflow de Dieu 
 ### Interface graphique
 
 Fenêtre native raylib superposée au run. Le moteur lui transmet un `UiSnapshot` copié et en lecture seule contenant la carte, le calendrier, le climat, les personnages, les animaux et les événements récents. Un clic sélectionne un personnage uniquement dans l'état local de l'interface ; il ne produit aucune décision et ne modifie jamais le monde. Lors d'une validation, elle devient une source de commande pour `HumanValidation`, jamais une source de statut parallèle.
+
+Pendant un appel IA, le client réseau travaille hors du fil de rendu afin que la fenêtre continue à traiter ses images. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Les éléments cliquables signalent leur disponibilité au survol sans déplacer ni redimensionner la mise en page.
 
 Le mode graphique est le lancement normal sur le Mac. Le terminal reste attaché au même processus pour les appels IA, les validations et le suivi de Dieu, et `--terminal` conserve le rendu historique. Fermer la fenêtre constitue une demande d'arrêt propre détectée par le moteur.
 

@@ -32,6 +32,19 @@ struct UiSnapshot {
   std::vector<std::string> recent_events;
 };
 
+enum class UiActivityKind { PeriodReport, EvolutionRequest };
+
+struct UiActivity {
+  UiActivityKind kind{UiActivityKind::PeriodReport};
+  CalendarDate date;
+  int simulation_cycle{};
+  std::string agent_id;
+  std::string agent_name;
+  std::size_t call_number{};
+  std::size_t total_calls{};
+  long long elapsed_ms{};
+};
+
 struct MapViewport {
   float x{};
   float y{};
@@ -44,6 +57,7 @@ class IUserInterface {
   virtual ~IUserInterface() = default;
   virtual bool present(const UiSnapshot& snapshot) = 0;
   virtual bool idle_for(int milliseconds) = 0;
+  virtual bool present_activity(const UiActivity&) { return true; }
 };
 
 std::string mood_for(const Agent& agent);

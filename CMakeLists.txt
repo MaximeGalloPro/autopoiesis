@@ -9,13 +9,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(Threads REQUIRED)
 
 add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
     src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
     src/devil.cpp src/calendar.cpp src/ui_model.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
-target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json)
+target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(autopoiesis src/main.cpp)
@@ -42,6 +43,8 @@ if(AUTOPOIESIS_BUILD_GUI)
   target_compile_options(autopoiesis_gui PRIVATE -Wall -Wextra -Wpedantic)
   add_executable(autopoiesis_validation_cards_preview tests/validation_cards_preview.cpp)
   target_link_libraries(autopoiesis_validation_cards_preview PRIVATE autopoiesis_raylib_ui)
+  add_executable(autopoiesis_activity_preview tests/activity_preview.cpp)
+  target_link_libraries(autopoiesis_activity_preview PRIVATE autopoiesis_raylib_ui)
 endif()
 
 enable_testing()

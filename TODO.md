@@ -25,6 +25,7 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [x] Ajouter mois, années, saisons, climat déterministe et effets bornés sur nourriture et personnages.
 - [x] Conserver douze mémoires de période par personnage sous forme d'une phrase de bilan et d'une phrase de ressenti.
 - [x] Ajouter une interface raylib native avec carte, calendrier et inspecteur de personnage cliquable, tout en conservant le terminal.
+- [x] Maintenir une transition graphique animée pendant les appels IA et rendre les interactions visibles au survol.
 - [x] Présenter les trois propositions sous forme de cartes et intégrer leur sélection à la fenêtre graphique.
 - [ ] Afficher le suivi détaillé de Dieu directement dans la fenêtre graphique.
 - [ ] Étendre progressivement le catalogue du Diable lorsque de nouvelles capacités rendent des contraintes réelles jouables.
