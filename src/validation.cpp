@@ -208,6 +208,52 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
   std::string last_verification_status;
   bool reported_result = false;
 
+  const auto progress_stage=[](const std::string& current_phase){
+    if(current_phase=="preparation")return EvolutionProgressStage::Preparing;
+    if(current_phase=="implementation")return EvolutionProgressStage::Implementing;
+    if(current_phase=="compte-rendu")return EvolutionProgressStage::Reporting;
+    if(current_phase=="verification")return EvolutionProgressStage::Verifying;
+    if(current_phase=="correction")return EvolutionProgressStage::Correcting;
+    if(current_phase=="activation")return EvolutionProgressStage::Activating;
+    if(current_phase=="activation-terminee")return EvolutionProgressStage::Complete;
+    if(current_phase=="echec"||current_phase=="activation-echec")return EvolutionProgressStage::Failed;
+    return EvolutionProgressStage::Queued;
+  };
+  const auto progress_message=[](EvolutionProgressStage stage){
+    switch(stage){
+      case EvolutionProgressStage::Queued:return "En attente du daemon d'évolution";
+      case EvolutionProgressStage::Preparing:return "Préparation de la demande pour Dieu";
+      case EvolutionProgressStage::Implementing:return "Dieu écrit le test rouge puis l'implémentation minimale";
+      case EvolutionProgressStage::Reporting:return "Compte rendu reçu, vérification en préparation";
+      case EvolutionProgressStage::Verifying:return "Compilation, tests et Docker en cours";
+      case EvolutionProgressStage::Correcting:return "Une correction est en cours";
+      case EvolutionProgressStage::Activating:return "Commit, push et activation de la version vérifiée";
+      case EvolutionProgressStage::Complete:return "La nouvelle évolution est active";
+      case EvolutionProgressStage::Failed:return "L'évolution n'a pas pu être activée";
+      case EvolutionProgressStage::TimedOut:return "Le délai de suivi est dépassé";
+    }
+    return "Traitement en cours";
+  };
+  const auto show_progress=[&](EvolutionProgressStage stage,const std::string& detail,bool successful){
+    if(!interface_)return true;
+    const auto now=std::chrono::steady_clock::now();
+    const auto reference=work_started?work_started_at:queue_started_at;
+    const auto elapsed=std::chrono::duration_cast<std::chrono::seconds>(now-reference).count();
+    return interface_->present_evolution_progress(
+        {stage,request_id,progress_message(stage),detail,elapsed,successful});
+  };
+  const auto finish_progress=[&](EvolutionProgressStage stage,const std::string& detail,
+                                 bool successful,bool can_continue){
+    if(!interface_)return can_continue;
+    const auto now=std::chrono::steady_clock::now();
+    const auto reference=work_started?work_started_at:queue_started_at;
+    const auto elapsed=std::chrono::duration_cast<std::chrono::seconds>(now-reference).count();
+    const EvolutionProgress progress{stage,request_id,progress_message(stage),detail,elapsed,successful};
+    if(!interface_->present_evolution_progress(progress))return false;
+    const auto command=interface_->request_evolution_completion(progress);
+    return can_continue&&command!="q"&&command!="Q";
+  };
+
   output_ << "\n=== SUIVI DE DIEU ===\n"
           << "Demande " << request_id << " approuvee."
           << " Le daemon lance Dieu automatiquement.\n"
@@ -292,10 +338,12 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
         if (verification.value("status", "") == "verified" && activation_ready) {
           try {
             const auto activation = json::parse(read_text(run_directory / "activation.json"));
+            const bool activated=activation.value("status", "")=="activated";
             output_ << "[Activation] statut=" << activation.value("status", "inconnu")
                     << " | commit=" << activation.value("commit", "inconnu") << '\n'
                     << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-            return activation.value("status", "") == "activated";
+            return finish_progress(activated?EvolutionProgressStage::Complete:EvolutionProgressStage::Failed,
+                                   "Commit "+activation.value("commit", "inconnu"),activated,activated);
           } catch (const json::parse_error&) {
             output_ << "[Activation] activation.json est encore en cours d'ecriture.\n";
           }
@@ -305,7 +353,8 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
             if (std::stoi(count_text) >= god_max_corrections()) {
               output_ << "[Dieu] Limite de corrections atteinte.\n"
                       << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-              return false;
+              return finish_progress(EvolutionProgressStage::Failed,
+                                     "La limite de corrections est atteinte.",false,false);
             }
           } catch (...) {
           }
@@ -317,7 +366,9 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
     if (god_failed || correction_failed || activation_failed) {
       print_evolution_diagnostics(output_, data_directory, run_directory);
       output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-      return false;
+      return finish_progress(EvolutionProgressStage::Failed,
+                             current_log.empty()?"Consultez les diagnostics dans le terminal.":current_log,
+                             false,false);
     }
 
     if (!work_started && now >= queue_deadline) {
@@ -327,7 +378,8 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
               << "le daemon peut poursuivre en arriere-plan.\n";
       print_evolution_diagnostics(output_, data_directory, run_directory);
       output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-      return true;
+      return finish_progress(EvolutionProgressStage::TimedOut,
+                             "Dieu peut encore démarrer dans le daemon.",false,true);
     }
     if (work_started && now >= work_deadline) {
       std::ofstream(run_directory / "ui-work-timeout") << timestamp() << '\n';
@@ -335,7 +387,8 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
               << "L'instance a bien demarre et peut poursuivre dans le daemon.\n";
       print_evolution_diagnostics(output_, data_directory, run_directory);
       output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-      return true;
+      return finish_progress(EvolutionProgressStage::TimedOut,
+                             "Le daemon peut poursuivre le travail en arrière-plan.",false,true);
     }
     if (now - last_heartbeat >= std::chrono::seconds(15)) {
       const auto reference = work_started ? work_started_at : queue_started_at;
@@ -344,7 +397,9 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
               << " depuis " << elapsed << " seconde(s).\n" << std::flush;
       last_heartbeat = now;
     }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    const auto detail=!current_log.empty()?current_log:last_daemon_log;
+    if(!show_progress(progress_stage(phase),detail,phase=="activation-terminee"))return false;
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 }
 
@@ -499,6 +554,7 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
       if (approve && !wait_for_evolution(request_id)) return false;
       selected_index=0;
       decision_made=true;
+      if(approve&&interface_)return true;
       continue;
     }
 

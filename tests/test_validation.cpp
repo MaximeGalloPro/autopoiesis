@@ -28,6 +28,35 @@ class ScriptedValidationInterface final : public IValidationInterface {
  private:
   std::queue<std::string> commands_;
 };
+
+class TrackingEvolutionInterface final : public IValidationInterface {
+ public:
+  TrackingEvolutionInterface() = default;
+  explicit TrackingEvolutionInterface(std::initializer_list<std::string> commands)
+      : commands_(commands) {}
+  std::string request_command(const ValidationPrompt& prompt) override {
+    prompts.push_back(prompt);
+    if(commands_.empty())return "q";
+    const auto command=commands_.front();
+    commands_.pop();
+    return command;
+  }
+  bool present_evolution_progress(const EvolutionProgress& progress) override {
+    updates.push_back(progress);
+    return true;
+  }
+  std::string request_evolution_completion(const EvolutionProgress& progress) override {
+    completion=progress;
+    return "o";
+  }
+
+  std::vector<EvolutionProgress> updates;
+  EvolutionProgress completion;
+  std::vector<ValidationPrompt> prompts;
+
+ private:
+  std::queue<std::string> commands_;
+};
 }
 
 int main() {
@@ -85,8 +114,44 @@ int main() {
   assert(progress.wait_for_evolution("request-2"));
   assert(progress_output.str().find("Dieu") != std::string::npos);
   assert(progress_output.str().find("verified") != std::string::npos);
+
+  std::ofstream activation(directory / "evolution_runs/request-2/activation.json");
+  activation << R"({"status":"activated","commit":"abcdef"})" << '\n';
+  activation.close();
+  TrackingEvolutionInterface tracking_interface;
+  std::istringstream graphical_input("");
+  std::ostringstream graphical_output;
+  HumanValidation graphical_progress(directory.string(), graphical_input, graphical_output,
+                                     &tracking_interface);
+  assert(graphical_progress.wait_for_evolution("request-2"));
+  assert(!tracking_interface.updates.empty());
+  assert(tracking_interface.completion.stage==EvolutionProgressStage::Complete);
+  assert(tracking_interface.completion.successful);
+  assert(tracking_interface.completion.request_id=="request-2");
   unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
   unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory / "evolution_runs/graphical-approved");
+  std::ofstream(directory / "feature_requests.jsonl")
+      << R"({"id":"graphical-approved","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a1","agent_name":"Ada","title":"Évolution graphique","need":"Suivi","obstacle":"Aucun écran","proposed_change":"Afficher la progression","mechanism":{"name":"progress","summary":"Écran de progression","resources":[],"actions":[],"preconditions":[],"deterministic_effects":[]},"acceptance_tests":["La progression est visible"]})"
+      << '\n';
+  const auto graphical_run=directory / "evolution_runs/graphical-approved";
+  std::ofstream(graphical_run / "god-started") << "started\n";
+  std::ofstream(graphical_run / "god-result.txt") << "Implémentation terminée.\n";
+  std::ofstream(graphical_run / "verification.json")
+      << R"({"status":"verified","cmake":"passed","tests":"passed","docker":"passed"})" << '\n';
+  std::ofstream(graphical_run / "activation.json")
+      << R"({"status":"activated","commit":"abcdef"})" << '\n';
+  TrackingEvolutionInterface integrated_tracking({"1","a"});
+  std::istringstream integrated_input;
+  std::ostringstream integrated_output;
+  HumanValidation integrated_validation(directory.string(),integrated_input,integrated_output,
+                                        &integrated_tracking);
+  assert(integrated_validation.review_window(3,720));
+  assert(integrated_tracking.prompts.size()==2);
+  assert(integrated_tracking.prompts[0].stage==ValidationStage::Choose);
+  assert(integrated_tracking.prompts[1].stage==ValidationStage::Confirm);
 
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory / "evolution_runs/queued-request");

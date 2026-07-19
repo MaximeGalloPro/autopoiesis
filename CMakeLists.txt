@@ -45,6 +45,8 @@ if(AUTOPOIESIS_BUILD_GUI)
   target_link_libraries(autopoiesis_validation_cards_preview PRIVATE autopoiesis_raylib_ui)
   add_executable(autopoiesis_activity_preview tests/activity_preview.cpp)
   target_link_libraries(autopoiesis_activity_preview PRIVATE autopoiesis_raylib_ui)
+  add_executable(autopoiesis_evolution_progress_preview tests/evolution_progress_preview.cpp)
+  target_link_libraries(autopoiesis_evolution_progress_preview PRIVATE autopoiesis_raylib_ui)
 endif()
 
 enable_testing()

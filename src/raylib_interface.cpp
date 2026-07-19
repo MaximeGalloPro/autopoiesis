@@ -505,6 +505,96 @@ struct RaylibInterface::Impl {
     EndDrawing();
   }
 
+  void draw_evolution_progress(const EvolutionProgress& progress,bool completion) const {
+    const int screen_width=GetScreenWidth(),screen_height=GetScreenHeight();
+    const float margin=std::clamp(screen_width*0.07F,42.0F,92.0F);
+    const float content_width=screen_width-margin*2.0F;
+    const auto mouse=GetMousePosition();
+    const Rectangle next_button{margin,static_cast<float>(screen_height-118),330.0F,56.0F};
+    const Rectangle stop_button{margin+350.0F,static_cast<float>(screen_height-118),220.0F,56.0F};
+    const bool clickable=completion&&(CheckCollisionPointRec(mouse,next_button)||
+                                      CheckCollisionPointRec(mouse,stop_button));
+    SetMouseCursor(clickable?MOUSE_CURSOR_POINTING_HAND:MOUSE_CURSOR_DEFAULT);
+    BeginDrawing();
+    ClearBackground(background);
+    DrawRectangle(0,0,screen_width,86,{30,33,34,255});
+    DrawText("ÉVOLUTION DU MONDE",static_cast<int>(margin),18,27,primary_text);
+    DrawText(clipped(progress.request_id,static_cast<int>(content_width),14).c_str(),
+             static_cast<int>(margin),53,14,secondary_text);
+
+    if(completion){
+      const bool complete=progress.stage==EvolutionProgressStage::Complete&&progress.successful;
+      const std::string title=complete?"C'est terminé.":
+          progress.stage==EvolutionProgressStage::TimedOut?"Le suivi est interrompu.":
+          "Le traitement est terminé avec une erreur.";
+      DrawText(title.c_str(),static_cast<int>(margin),154,36,complete?accent:Color{218,116,96,255});
+      DrawText("Voulez-vous passer à l'étape suivante ?",static_cast<int>(margin),211,24,primary_text);
+      DrawText(progress.message.c_str(),static_cast<int>(margin),270,18,secondary_text);
+      if(!progress.detail.empty()){
+        int detail_y=310;
+        draw_lines(wrapped_lines(progress.detail,static_cast<int>(content_width),15,5),
+                   static_cast<int>(margin),detail_y,15,22,primary_text);
+      }
+      DrawText(TextFormat("Durée du suivi : %lld s",progress.elapsed_seconds),
+               static_cast<int>(margin),screen_height-168,14,secondary_text);
+      draw_button(next_button,"Passer à l'étape suivante",{50,116,77,255},mouse);
+      draw_button(stop_button,"Arrêter le run",{117,61,58,255},mouse);
+      EndDrawing();
+      return;
+    }
+
+    DrawText("Dieu transforme la proposition approuvée en mécanisme testé et activable.",
+             static_cast<int>(margin),112,16,secondary_text);
+    const std::array<const char*,7> labels{{"File","Préparation","TDD","Compte rendu",
+                                            "Vérification","Activation","Terminé"}};
+    const auto rank=[](EvolutionProgressStage stage){
+      switch(stage){
+        case EvolutionProgressStage::Queued:return 0;
+        case EvolutionProgressStage::Preparing:return 1;
+        case EvolutionProgressStage::Implementing:return 2;
+        case EvolutionProgressStage::Reporting:return 3;
+        case EvolutionProgressStage::Verifying:
+        case EvolutionProgressStage::Correcting:return 4;
+        case EvolutionProgressStage::Activating:return 5;
+        case EvolutionProgressStage::Complete:return 6;
+        case EvolutionProgressStage::Failed:
+        case EvolutionProgressStage::TimedOut:return 5;
+      }
+      return 0;
+    };
+    const int active=rank(progress.stage);
+    const float gap=10.0F;
+    const float width=(content_width-gap*6.0F)/7.0F;
+    const double pulse=(std::sin(GetTime()*4.0)+1.0)*0.5;
+    for(int index=0;index<7;++index){
+      const Rectangle step{margin+index*(width+gap),160.0F,width,10.0F};
+      Color color={58,62,61,255};
+      if(index<active)color={69,147,98,255};
+      if(index==active)color=ColorBrightness(accent,static_cast<float>(pulse*0.16));
+      DrawRectangleRec(step,color);
+      DrawText(clipped(labels[index],static_cast<int>(width),13).c_str(),
+               static_cast<int>(step.x),181,13,index<=active?primary_text:secondary_text);
+    }
+    DrawText(progress.message.c_str(),static_cast<int>(margin),264,28,primary_text);
+    DrawText(TextFormat("Traitement en cours · %lld s",progress.elapsed_seconds),
+             static_cast<int>(margin),310,16,accent);
+    if(!progress.detail.empty()){
+      DrawText("DERNIER RETOUR",static_cast<int>(margin),372,13,secondary_text);
+      DrawRectangle(static_cast<int>(margin),398,static_cast<int>(content_width),1,divider);
+      int detail_y=422;
+      draw_lines(wrapped_lines(progress.detail,static_cast<int>(content_width),15,7),
+                 static_cast<int>(margin),detail_y,15,23,primary_text);
+    }
+    const Rectangle track{margin,static_cast<float>(screen_height-85),content_width,6.0F};
+    DrawRectangleRec(track,{52,56,55,255});
+    const float sweep_width=std::min(180.0F,content_width*0.22F);
+    const float phase=static_cast<float>(std::fmod(GetTime()*0.32,1.0));
+    DrawRectangleRec({track.x+phase*(track.width-sweep_width),track.y,sweep_width,track.height},accent);
+    DrawText("Les logs détaillés restent disponibles dans le terminal.",static_cast<int>(margin),
+             screen_height-55,14,secondary_text);
+    EndDrawing();
+  }
+
   void capture(const std::string& path) {
     if(path.empty())return;
     Image framebuffer=LoadImageFromScreen();
@@ -595,6 +685,33 @@ std::string RaylibInterface::request_command(const ValidationPrompt& prompt) {
     }
 
     impl_->draw_validation(prompt);
+    ++rendered_frames;
+    if(rendered_frames>=2&&!impl_->automation_command.empty()){
+      impl_->capture(impl_->validation_screenshot_path);
+      return impl_->automation_command;
+    }
+  }
+}
+
+bool RaylibInterface::present_evolution_progress(const EvolutionProgress& progress) {
+  if(WindowShouldClose())return false;
+  impl_->draw_evolution_progress(progress,false);
+  return !WindowShouldClose();
+}
+
+std::string RaylibInterface::request_evolution_completion(const EvolutionProgress& progress) {
+  int rendered_frames=0;
+  while(true){
+    if(WindowShouldClose()||IsKeyPressed(KEY_ESCAPE))return "q";
+    const int screen_height=GetScreenHeight();
+    const float margin=std::clamp(GetScreenWidth()*0.07F,42.0F,92.0F);
+    const Rectangle next_button{margin,static_cast<float>(screen_height-118),330.0F,56.0F};
+    const Rectangle stop_button{margin+350.0F,static_cast<float>(screen_height-118),220.0F,56.0F};
+    const auto mouse=GetMousePosition();
+    if(IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_O)||
+       (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&CheckCollisionPointRec(mouse,next_button)))return "o";
+    if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)&&CheckCollisionPointRec(mouse,stop_button))return "q";
+    impl_->draw_evolution_progress(progress,true);
     ++rendered_frames;
     if(rendered_frames>=2&&!impl_->automation_command.empty()){
       impl_->capture(impl_->validation_screenshot_path);

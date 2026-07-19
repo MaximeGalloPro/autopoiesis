@@ -17,10 +17,26 @@ struct ValidationPrompt {
   std::size_t selected_index{};
 };
 
+enum class EvolutionProgressStage {
+  Queued, Preparing, Implementing, Reporting, Verifying, Correcting, Activating,
+  Complete, Failed, TimedOut
+};
+
+struct EvolutionProgress {
+  EvolutionProgressStage stage{EvolutionProgressStage::Queued};
+  std::string request_id;
+  std::string message;
+  std::string detail;
+  long long elapsed_seconds{};
+  bool successful{};
+};
+
 class IValidationInterface {
  public:
   virtual ~IValidationInterface() = default;
   virtual std::string request_command(const ValidationPrompt& prompt) = 0;
+  virtual bool present_evolution_progress(const EvolutionProgress&) { return true; }
+  virtual std::string request_evolution_completion(const EvolutionProgress&) { return "o"; }
 };
 
 class HumanValidation {

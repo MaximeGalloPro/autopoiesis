@@ -15,6 +15,8 @@ class RaylibInterface final : public IUserInterface, public IValidationInterface
   bool idle_for(int milliseconds) override;
   bool present_activity(const UiActivity& activity) override;
   std::string request_command(const ValidationPrompt& prompt) override;
+  bool present_evolution_progress(const EvolutionProgress& progress) override;
+  std::string request_evolution_completion(const EvolutionProgress& progress) override;
 
  private:
   struct Impl;
