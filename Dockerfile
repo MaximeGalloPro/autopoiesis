@@ -21,4 +21,5 @@ COPY --from=build /src/build/autopoiesis_resource_transport_tests /usr/local/bin
 COPY --from=build /src/build/autopoiesis_food_planning_tests /usr/local/bin/autopoiesis_food_planning_tests
 COPY --from=build /src/build/autopoiesis_collective_life_tests /usr/local/bin/autopoiesis_collective_life_tests
 COPY --from=build /src/build/autopoiesis_crafting_tests /usr/local/bin/autopoiesis_crafting_tests
+COPY --from=build /src/build/autopoiesis_tool_chain_tests /usr/local/bin/autopoiesis_tool_chain_tests
 ENTRYPOINT ["/usr/local/bin/autopoiesis"]

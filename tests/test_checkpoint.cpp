@@ -47,8 +47,16 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].known_campfires==right[index].known_campfires);
     assert(left[index].home_camp==right[index].home_camp);
     assert(left[index].camp_rest_position==right[index].camp_rest_position);
+    assert(left[index].wood_inventory==right[index].wood_inventory);
     assert(left[index].branch_inventory==right[index].branch_inventory);
+    assert(left[index].iron_ore_inventory==right[index].iron_ore_inventory);
     assert(left[index].carried_food==right[index].carried_food);
+    assert(left[index].equipped_tool==right[index].equipped_tool);
+    assert(left[index].community_role==right[index].community_role);
+    assert(left[index].last_shared_meal_day==right[index].last_shared_meal_day);
+    assert(left[index].last_vigil_day==right[index].last_vigil_day);
+    assert(left[index].celebration_pending==right[index].celebration_pending);
+    assert(left[index].mourned_agents==right[index].mourned_agents);
     assert(project_json(left[index].project)==project_json(right[index].project));
     assert(relationships_json(left[index].relationships)==relationships_json(right[index].relationships));
   }

@@ -96,6 +96,10 @@ L'adoption du foyer attribue une fois un rôle collectif selon la pulsion domina
 
 Une recette porte une clé stable, des quantités de bois et de branches, une liste d'objets intermédiaires requis, un objet produit et une quantité de sortie. `craft_camp_item` n'est disponible qu'au foyer pour une recette entièrement approvisionnée. Le moteur vérifie toutes les entrées avant de les retirer, puis ajoute la sortie dans la même transition. Le registre initial produit manche en bois, charbon et corde ; ses objets et stocks sont typés, persistants et visibles dans le total de réserve.
 
+### Outil et durabilité
+
+Le minerai de fer apparaît en gisements finis sur des cases praticables et occupe une unité de charge. Deux minerais et un charbon produisent un lingot ; un lingot et un manche produisent une hache. `equip_axe` retire exactement une hache de la réserve. `harvest_wood` exige une hache équipée de durabilité positive, transforme un arbre en une unité de bois et retire un point de durabilité seulement en cas de réussite. Près du foyer, `repair_axe` consomme une unité de bois et restaure dix points sans dépasser le maximum de vingt.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -165,6 +169,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 28. L'âge alimentaire avance une seule fois par journée complète et sans appel API. La cuisson et la consommation sont des actions locales validées ; une ration avariée n'est jamais consommable.
 29. Une activité collective doit exiger la présence réelle de ses participants au même foyer, être bornée par personnage et par journée lorsque répétable, et modifier un état persistant observable.
 30. Une recette ne peut consommer partiellement ses entrées : soit tous les coûts sont retirés et toutes les sorties ajoutées, soit le monde reste strictement identique.
+31. Une action exigeant un outil doit être absente sans cet outil et revérifier son type et sa durabilité à l'exécution. Seule une action réussie peut user l'outil.
 
 ## Patterns
 

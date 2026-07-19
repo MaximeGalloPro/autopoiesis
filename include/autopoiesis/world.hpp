@@ -35,6 +35,8 @@ class World {
   bool harvest_tree(Position p);
   int branches(Position p) const;
   bool take_branch(Position p);
+  int iron_ore(Position p) const;
+  bool take_iron_ore(Position p);
   bool campfire(Position p) const;
   bool adjacent_campfire(Position p) const;
   std::optional<Position> nearby_campfire(Position p) const;
@@ -50,11 +52,14 @@ class World {
   int age_stored_food();
   int stored_wood(Position campfire_position) const;
   int stored_branches(Position campfire_position) const;
-  bool store_materials(Position campfire_position, int wood, int branches);
+  bool store_materials(Position campfire_position, int wood, int branches, int iron_ore = 0);
+  int stored_iron_ore(Position campfire_position) const;
+  bool consume_stored_wood(Position campfire_position, int amount);
   int stored_item(Position campfire_position, CraftItem item) const;
   int stored_crafted_items(Position campfire_position) const;
   std::vector<std::string> craftable_recipes(Position campfire_position) const;
   bool craft(Position campfire_position, const std::string& recipe_key);
+  bool take_stored_item(Position campfire_position, CraftItem item);
   bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
@@ -67,6 +72,7 @@ class World {
   std::vector<Terrain> cells_; Position rabbit_; bool rabbit_alive_{true};
   std::vector<FoodResource> food_resources_;
   std::vector<Animal> animals_;
+  std::map<std::pair<int,int>,int> iron_ore_resources_;
   struct ConstructionCell {
     int wood{};
     int fibers{};
@@ -75,6 +81,7 @@ class World {
     bool campfire{};
     int wood_stockpile{};
     int branch_stockpile{};
+    int iron_ore_stockpile{};
     std::map<CraftItem,int> crafted_stockpile;
     std::vector<FoodItem> food_stockpile;
   };

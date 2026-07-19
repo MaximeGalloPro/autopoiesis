@@ -18,15 +18,18 @@ struct CraftingRecipe {
   std::string key;
   int wood{};
   int branches{};
+  int iron_ore{};
   std::vector<std::pair<CraftItem,int>> items;
   CraftItem output{CraftItem::WoodenHandle};
   int output_count{1};
 };
 inline const std::vector<CraftingRecipe>& crafting_recipes() {
   static const std::vector<CraftingRecipe> recipes{
-      {"wooden_handle",1,0,{},CraftItem::WoodenHandle,1},
-      {"charcoal",2,0,{},CraftItem::Charcoal,1},
-      {"rope",0,3,{},CraftItem::Rope,1}};
+      {"wooden_handle",1,0,0,{},CraftItem::WoodenHandle,1},
+      {"charcoal",2,0,0,{},CraftItem::Charcoal,1},
+      {"rope",0,3,0,{},CraftItem::Rope,1},
+      {"iron_ingot",0,0,2,{{CraftItem::Charcoal,1}},CraftItem::IronIngot,1},
+      {"axe",0,0,0,{{CraftItem::WoodenHandle,1},{CraftItem::IronIngot,1}},CraftItem::Axe,1}};
   return recipes;
 }
 inline std::string craft_item_name(CraftItem item) { switch(item){case CraftItem::WoodenHandle:return "wooden_handle";case CraftItem::Charcoal:return "charcoal";case CraftItem::Rope:return "rope";case CraftItem::IronIngot:return "iron_ingot";case CraftItem::Axe:return "axe";}return "unknown"; }
@@ -78,6 +81,12 @@ struct FoodItem {
   int shelf_life_days{3};
   friend bool operator==(const FoodItem&,const FoodItem&)=default;
 };
+struct Tool {
+  CraftItem type{CraftItem::Axe};
+  int durability{20};
+  int maximum_durability{20};
+  friend bool operator==(const Tool&,const Tool&)=default;
+};
 struct Animal { std::string id; AnimalType type; Position position; bool alive{true}; int danger{}; int nutrition{}; };
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};
@@ -95,7 +104,9 @@ struct Agent {
   std::optional<Position> camp_rest_position;
   int wood_inventory{};
   int branch_inventory{};
+  int iron_ore_inventory{};
   std::optional<FoodItem> carried_food;
+  std::optional<Tool> equipped_tool;
   std::optional<ShelterConstruction> shelter_construction;
   std::string community_role;
   int last_shared_meal_day{};
@@ -105,7 +116,7 @@ struct Agent {
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
 inline int inventory_capacity(const Agent& agent) { return std::clamp(4+agent.attributes.strength/25,4,10); }
-inline int inventory_load(const Agent& agent) { return agent.wood_inventory+agent.branch_inventory+(agent.carried_food?1:0); }
+inline int inventory_load(const Agent& agent) { return agent.wood_inventory+agent.branch_inventory+agent.iron_ore_inventory+(agent.carried_food?1:0); }
 inline bool inventory_full(const Agent& agent) { return inventory_load(agent)>=inventory_capacity(agent); }
 struct Decision {
   DecisionType type{DecisionType::Action}; std::string action{"wait"}; json parameters = json::object();

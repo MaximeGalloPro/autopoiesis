@@ -168,6 +168,8 @@ Le foyer est aussi un lieu social. Les personnages y adoptent un rôle lié à l
 
 La fabrication suit un registre de recettes explicites. Le foyer peut transformer ses matières en manches, charbon et cordes ; une recette indisponible ne consomme rien, tandis qu'une réussite retire exactement ses coûts et stocke son produit.
 
+Abattre un arbre exige désormais une hache. Le groupe doit trouver du minerai, le rapporter, produire charbon, lingot et manche, assembler la hache puis l'équiper. Chaque arbre use l'outil ; une réparation au foyer consomme du bois et sa durabilité est visible dans l'inspecteur.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

@@ -45,6 +45,7 @@ std::string action_label(const std::string& action) {
   if(action=="harvest_wood")return "Prélever du bois";
   if(action=="assemble_shelter"||action=="build_shelter")return "Construire un abri";
   if(action=="collect_branch")return "Ramasser une branche";
+  if(action=="collect_iron_ore")return "Ramasser du fer";
   if(action=="build_campfire")return "Allumer un feu";
   if(action=="rest_by_campfire")return "Rester près du feu";
   if(action=="collect_food")return "Ramasser pour le camp";
@@ -54,6 +55,8 @@ std::string action_label(const std::string& action) {
   if(action=="eat_camp_food")return "Manger à la réserve";
   if(action=="cook_camp_food")return "Cuisiner une ration";
   if(action=="craft_camp_item")return "Fabriquer un objet";
+  if(action=="equip_axe")return "Équiper la hache";
+  if(action=="repair_axe")return "Réparer la hache";
   if(action=="share_camp_meal")return "Partager un repas";
   if(action=="hold_vigil")return "Tenir une veillée";
   if(action=="celebrate")return "Célébrer";
@@ -370,6 +373,9 @@ struct RaylibInterface::Impl {
         DrawLine(x+7,y+static_cast<int>(cell_height)-4,x+static_cast<int>(cell_width*0.58F),
                  y+static_cast<int>(cell_height*0.72F),{194,142,82,255});
       }
+      if(cell.iron_ore>0)DrawCircle(x+static_cast<int>(cell_width*0.28F),
+          y+static_cast<int>(cell_height*0.72F),std::max(2.0F,cell_width*0.11F),
+          {171,177,181,255});
       if(cell.campfire){
         const int center_x=x+static_cast<int>(cell_width/2),center_y=y+static_cast<int>(cell_height/2);
         DrawCircle(center_x,center_y,std::max(4.0F,cell_width*0.22F),{219,78,45,255});
@@ -416,10 +422,10 @@ struct RaylibInterface::Impl {
     }
     if(hovered_cell&&hovered_cell->campfire&&!hovered_agent){
       const std::string label=clipped(
-          TextFormat("Réserve · nourriture %d (%d cuite) · bois %d · branches %d · objets %d",
+          TextFormat("Réserve · nourriture %d (%d cuite) · bois %d · branches %d · fer %d · objets %d",
                      hovered_cell->stored_food,hovered_cell->cooked_food,
                      hovered_cell->stored_wood,hovered_cell->stored_branches,
-                     hovered_cell->crafted_items),
+                     hovered_cell->stored_iron_ore,hovered_cell->crafted_items),
           std::max(80,static_cast<int>(viewport.width)-16),14);
       const int label_width=MeasureText(label.c_str(),14)+18;
       const int center_x=static_cast<int>(viewport.x+(hovered_cell->position.x+0.5F)*cell_width);
@@ -479,10 +485,15 @@ struct RaylibInterface::Impl {
     DrawText(TextFormat("Charge %d/%d · Ration %s",inventory_load(agent),
                         inventory_capacity(agent),agent.carried_food?"oui":"non"),
              x+22,inventory_y,13,secondary_text);
-    DrawText(TextFormat("Bois %d · Branches %d",agent.wood_inventory,agent.branch_inventory),
+    DrawText(TextFormat("Bois %d · Branches %d · Fer %d",agent.wood_inventory,
+                        agent.branch_inventory,agent.iron_ore_inventory),
              x+22,inventory_y+20,13,secondary_text);
-    DrawText(agent.home_camp?TextFormat("Foyer : %d, %d",agent.home_camp->x,agent.home_camp->y):"Foyer : aucun",
-             x+22,inventory_y+40,13,secondary_text);
+    std::string equipment=agent.equipped_tool?
+        "Hache "+std::to_string(agent.equipped_tool->durability)+"/"+
+            std::to_string(agent.equipped_tool->maximum_durability):"Sans outil";
+    if(agent.home_camp)equipment+=" · Foyer "+std::to_string(agent.home_camp->x)+","+
+        std::to_string(agent.home_camp->y);
+    DrawText(clipped(equipment,width-44,13).c_str(),x+22,inventory_y+40,13,secondary_text);
     DrawText(TextFormat("Monotonie : %d",agent.boredom),x+22,inventory_y+60,13,secondary_text);
   }
 

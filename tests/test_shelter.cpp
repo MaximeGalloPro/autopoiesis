@@ -44,6 +44,7 @@ int main() {
   // Une action canonique localement réalisable suffit à reconnaître la
   // capacité de construction déjà active dans le projet bloqué.
   ada.position = {6, 1};
+  ada.equipped_tool = Tool{};
   ada.project.status = ProjectStatus::Blocked;
   ada.project.blocked_reason = "La capacite de construire un abri manque.";
   ada.project.missing_capability = "build_shelter";
@@ -77,12 +78,14 @@ int main() {
   const auto empty_cell = ada.position;
   const int wood_before_failed_harvest = ada.wood_inventory;
   const int project_progress_before_failed_harvest = ada.project.progress;
+  const int durability_before_failed_harvest = ada.equipped_tool->durability;
   assert(!validate_decision(harvest, ada, world, simulation.agents(), error));
   assert(SimulationTestAccess::execute(simulation, ada, harvest) ==
          "aucun arbre vivant a prelever");
   assert(ada.wood_inventory == wood_before_failed_harvest);
   assert(world.living_trees(empty_cell) == 0);
   assert(ada.project.progress == project_progress_before_failed_harvest);
+  assert(ada.equipped_tool->durability == durability_before_failed_harvest);
 
   // Trois assemblages au même emplacement consomment chacun une unité.
   const Position site = ada.position;
