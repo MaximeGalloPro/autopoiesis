@@ -81,10 +81,12 @@ if [[ "$ui_mode" == "gui" ]]; then
   cmake -S "$ROOT" -B "$ROOT/build" -DCMAKE_BUILD_TYPE=Release -DAUTOPOIESIS_BUILD_GUI=ON
   cmake --build "$ROOT/build" --target autopoiesis_gui -j2
   export AUTOPOIESIS_DATA_DIR="$ROOT/data"
-  if [[ "$use_api" == "1" ]]; then
-    simulation_command=("$ROOT/build/autopoiesis_gui" "${simulation_args[@]}")
-  else
-    simulation_command=("$ROOT/build/autopoiesis_gui" --no-api "${simulation_args[@]}")
+  simulation_command=("$ROOT/build/autopoiesis_gui")
+  if [[ "$use_api" == "0" ]]; then
+    simulation_command+=(--no-api)
+  fi
+  if [[ ${#simulation_args[@]} -gt 0 ]]; then
+    simulation_command+=("${simulation_args[@]}")
   fi
   if "${simulation_command[@]}"; then
     simulation_status=0
@@ -93,13 +95,21 @@ if [[ "$ui_mode" == "gui" ]]; then
   fi
 else
   if [[ "$use_api" == "1" ]]; then
-    if docker compose run --rm autopoiesis "${simulation_args[@]}"; then
+    terminal_command=(docker compose run --rm autopoiesis)
+    if [[ ${#simulation_args[@]} -gt 0 ]]; then
+      terminal_command+=("${simulation_args[@]}")
+    fi
+    if "${terminal_command[@]}"; then
       simulation_status=0
     else
       simulation_status=$?
     fi
   else
-    if docker compose run --rm autopoiesis --no-api "${simulation_args[@]}"; then
+    terminal_command=(docker compose run --rm autopoiesis --no-api)
+    if [[ ${#simulation_args[@]} -gt 0 ]]; then
+      terminal_command+=("${simulation_args[@]}")
+    fi
+    if "${terminal_command[@]}"; then
       simulation_status=0
     else
       simulation_status=$?

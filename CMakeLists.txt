@@ -103,6 +103,7 @@ add_test(NAME graphical_ui_model COMMAND autopoiesis_ui_model_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
+add_test(NAME run_launcher_without_arguments COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_run_launcher.py)
 
 foreach(test_target
     autopoiesis_tests
