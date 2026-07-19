@@ -25,6 +25,16 @@ std::string mood_for(const Agent& agent) {
   if(agent.thirst>=75)return "Tension liée à la soif";
   if(agent.hunger>=75)return "Tension liée à la faim";
   if(agent.fatigue>=75)return "Épuisement";
+  if(!agent.emotions.empty()){
+    const auto dominant=std::max_element(agent.emotions.begin(),agent.emotions.end(),
+        [](const Emotion& left,const Emotion& right){return left.intensity<right.intensity;});
+    if(dominant->type==EmotionType::Joy)return "Joie : "+dominant->cause;
+    if(dominant->type==EmotionType::Fear)return "Peur : "+dominant->cause;
+    if(dominant->type==EmotionType::Anger)return "Colère : "+dominant->cause;
+    if(dominant->type==EmotionType::Sadness)return "Tristesse : "+dominant->cause;
+    if(dominant->type==EmotionType::Hope)return "Espoir : "+dominant->cause;
+    return "Stress : "+dominant->cause;
+  }
   if(agent.project.status==ProjectStatus::Blocked)return "Frustration face au projet";
   if(agent.boredom>=70)return "Lassitude";
   if(agent.boredom<=20)return "Engagement";

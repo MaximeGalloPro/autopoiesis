@@ -116,6 +116,10 @@ Chaque journée applique une transition écologique locale avant les actions. Un
 
 Une affection typée conserve un identifiant, une cause, une sévérité, un âge et son état de traitement. Une chasse dangereuse peut créer une blessure ; des champignons crus peuvent provoquer une maladie selon la résistance. Une blessure non traitée de sévérité suffisante crée une infection au troisième jour. Au même foyer, un compagnon peut traiter une affection non soignée et renforcer la confiance réciproque. Une convalescence par jour exige le feu, un abri ou un lit ; récupération et lit réduisent alors la sévérité. Les affections retirent quotidiennement de la santé tant qu'elles persistent.
 
+### Émotions causales
+
+Une émotion nomme toujours un événement déclencheur conservé comme souvenir, une intensité, une durée et un effet décisionnel explicite. Son intensité décroît une fois par journée selon la volonté du personnage et elle disparaît à intensité ou durée nulle. Huit émotions actives au maximum sont conservées ; la moins intense cède la place. Une peur suffisante interdit une chasse dont le danger dépasse la tolérance courante du personnage.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -190,6 +194,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 33. Une désignation de bâtiment réserve toutes ses entrées ou aucune. Le travail exige une proximité réelle et un outil valide ; un bâtiment incomplet ne produit aucun effet final.
 34. Une transition écologique ne crée jamais une population au-dessus de sa capacité ni une ressource au-dessus de son maximum. Une prédation retire une proie réelle et une parcelle épuisée conserve une pénalité de récupération persistante.
 35. Toute affection nomme sa cause et évolue une fois par journée. Un soin exige un patient réel au même foyer ; une convalescence est bornée à une fois par jour et aucune guérison ne peut augmenter la sévérité.
+36. Toute émotion nomme sa cause et son effet. Elle est bornée en nombre, intensité et durée ; son effet ne contourne jamais la validation déterministe d'une action.
 
 ## Patterns
 

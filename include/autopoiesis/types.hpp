@@ -54,6 +54,19 @@ inline std::string craft_item_name(CraftItem item) { switch(item){case CraftItem
 enum class AnimalType { Rabbit, Deer, Boar, Wolf, Fish };
 enum class DecisionType { Action, Blocked };
 enum class HealthConditionType { Injury, Disease, Infection };
+enum class EmotionType { Joy, Fear, Anger, Sadness, Hope, Stress };
+struct Emotion {
+  std::string id;
+  EmotionType type{EmotionType::Joy};
+  int intensity{};
+  std::string cause;
+  std::string effect;
+  std::string memory;
+  int created_day{};
+  int remaining_days{};
+  friend bool operator==(const Emotion&,const Emotion&)=default;
+};
+inline std::string emotion_name(EmotionType type) { switch(type){case EmotionType::Joy:return "joy";case EmotionType::Fear:return "fear";case EmotionType::Anger:return "anger";case EmotionType::Sadness:return "sadness";case EmotionType::Hope:return "hope";case EmotionType::Stress:return "stress";}return "unknown"; }
 struct HealthCondition {
   std::string id;
   HealthConditionType type{HealthConditionType::Injury};
@@ -158,10 +171,22 @@ struct Agent {
   std::vector<HealthCondition> conditions;
   int next_condition_id{1};
   int last_convalescence_day{};
+  std::vector<Emotion> emotions;
+  int next_emotion_id{1};
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
 inline HealthCondition& add_health_condition(Agent& agent,HealthConditionType type,int severity,const std::string& cause) { agent.conditions.push_back({agent.id+"-condition-"+std::to_string(agent.next_condition_id++),type,std::clamp(severity,1,100),0,false,cause});return agent.conditions.back(); }
 inline json health_conditions_json(const Agent& agent) { json result=json::array();for(const auto& condition:agent.conditions)result.push_back({{"id",condition.id},{"type",health_condition_name(condition.type)},{"severity",condition.severity},{"days",condition.days},{"treated",condition.treated},{"cause",condition.cause}});return result; }
+inline Emotion& add_emotion(Agent& agent,EmotionType type,int intensity,const std::string& cause,
+                            const std::string& effect,int duration_days,int day) {
+  const auto found=std::find_if(agent.emotions.begin(),agent.emotions.end(),[&](const Emotion& emotion){return emotion.type==type&&emotion.cause==cause;});
+  if(found!=agent.emotions.end()){found->intensity=std::clamp(std::max(found->intensity,intensity),1,100);found->remaining_days=std::max(found->remaining_days,duration_days);found->effect=effect;found->memory=cause;found->created_day=day;return *found;}
+  if(agent.emotions.size()>=8)agent.emotions.erase(std::min_element(agent.emotions.begin(),agent.emotions.end(),[](const Emotion& left,const Emotion& right){return left.intensity<right.intensity;}));
+  agent.emotions.push_back({agent.id+"-emotion-"+std::to_string(agent.next_emotion_id++),type,std::clamp(intensity,1,100),cause,effect,cause,day,std::max(1,duration_days)});
+  return agent.emotions.back();
+}
+inline int emotion_intensity(const Agent& agent,EmotionType type) { int intensity=0;for(const auto& emotion:agent.emotions)if(emotion.type==type)intensity=std::max(intensity,emotion.intensity);return intensity; }
+inline json emotions_json(const Agent& agent) { json result=json::array();for(const auto& emotion:agent.emotions)result.push_back({{"id",emotion.id},{"type",emotion_name(emotion.type)},{"intensity",emotion.intensity},{"cause",emotion.cause},{"effect",emotion.effect},{"memory",emotion.memory},{"created_day",emotion.created_day},{"remaining_days",emotion.remaining_days}});return result; }
 inline std::string skill_name(Skill skill) { switch(skill){case Skill::Woodcutting:return "woodcutting";case Skill::Mining:return "mining";case Skill::Crafting:return "crafting";case Skill::Building:return "building";case Skill::Foraging:return "foraging";case Skill::Hunting:return "hunting";case Skill::Cooking:return "cooking";case Skill::Social:return "social";}return "unknown"; }
 inline std::optional<Skill> skill_from_name(const std::string& name) { for(const auto skill:{Skill::Woodcutting,Skill::Mining,Skill::Crafting,Skill::Building,Skill::Foraging,Skill::Hunting,Skill::Cooking,Skill::Social})if(skill_name(skill)==name)return skill;return std::nullopt; }
 inline int skill_experience(const Agent& agent,Skill skill) { const auto found=agent.skills.find(skill);return found==agent.skills.end()?0:found->second.experience; }

@@ -482,6 +482,14 @@ struct RaylibInterface::Impl {
       DrawText(clipped(condition,width-44,13).c_str(),x+22,cursor+43,13,{224,142,113,255});
       cursor+=74;
     }else cursor+=56;
+    if(!agent.emotions.empty()){
+      const auto dominant=std::max_element(agent.emotions.begin(),agent.emotions.end(),
+          [](const Emotion& left,const Emotion& right){return left.intensity<right.intensity;});
+      const std::string emotion="Émotion · "+emotion_name(dominant->type)+" "+
+          std::to_string(dominant->intensity)+" · "+dominant->cause;
+      DrawText(clipped(emotion,width-44,13).c_str(),x+22,cursor-22,13,{232,190,91,255});
+      cursor+=18;
+    }
     const int bar_width=width-44;
     draw_stat("Santé",agent.health,x+22,cursor,bar_width,{86,184,111,255});cursor+=38;
     draw_stat("Faim",agent.hunger,x+22,cursor,bar_width,{220,151,64,255});cursor+=38;

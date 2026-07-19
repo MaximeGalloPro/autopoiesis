@@ -152,6 +152,9 @@ add_test(NAME renewable_ecosystem COMMAND autopoiesis_ecosystem_tests)
 add_executable(autopoiesis_health_tests tests/test_health.cpp)
 target_link_libraries(autopoiesis_health_tests PRIVATE autopoiesis_core)
 add_test(NAME detailed_health COMMAND autopoiesis_health_tests)
+add_executable(autopoiesis_emotion_tests tests/test_emotions.cpp)
+target_link_libraries(autopoiesis_emotion_tests PRIVATE autopoiesis_core)
+add_test(NAME causal_emotions COMMAND autopoiesis_emotion_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -191,6 +194,7 @@ foreach(test_target
     autopoiesis_skill_tests
     autopoiesis_spatial_building_tests
     autopoiesis_ecosystem_tests
-    autopoiesis_health_tests)
+    autopoiesis_health_tests
+    autopoiesis_emotion_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

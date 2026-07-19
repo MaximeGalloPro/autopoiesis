@@ -178,6 +178,8 @@ L'écosystème progresse une fois par journée sans appel API. Les plantes repou
 
 La santé conserve désormais les blessures de chasse, maladies et infections avec leur cause, sévérité, âge et état de traitement. Une plaie importante négligée trois jours s'infecte. Au même foyer, un compagnon peut traiter l'affection la plus grave ; le patient peut ensuite convalescer une fois par jour près du feu, dans un abri ou dans un lit. L'affection dominante est visible dans l'inspecteur.
 
+Les émotions sont causales et temporaires : joie, peur, colère, tristesse, espoir et stress conservent leur événement déclencheur, leur intensité, leur durée et leur effet. La peur d'une blessure peut écarter une chasse trop dangereuse ; l'émotion dominante et sa cause apparaissent dans l'inspecteur.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre
