@@ -13,6 +13,23 @@ using json = nlohmann::json;
 struct Position { int x{}; int y{}; friend bool operator==(const Position&, const Position&) = default; };
 enum class Terrain { Ground, Wall, Water, Tree, Bush };
 enum class FoodType { Berries, Roots, Mushrooms, Fish, Venison };
+enum class CraftItem { WoodenHandle, Charcoal, Rope, IronIngot, Axe };
+struct CraftingRecipe {
+  std::string key;
+  int wood{};
+  int branches{};
+  std::vector<std::pair<CraftItem,int>> items;
+  CraftItem output{CraftItem::WoodenHandle};
+  int output_count{1};
+};
+inline const std::vector<CraftingRecipe>& crafting_recipes() {
+  static const std::vector<CraftingRecipe> recipes{
+      {"wooden_handle",1,0,{},CraftItem::WoodenHandle,1},
+      {"charcoal",2,0,{},CraftItem::Charcoal,1},
+      {"rope",0,3,{},CraftItem::Rope,1}};
+  return recipes;
+}
+inline std::string craft_item_name(CraftItem item) { switch(item){case CraftItem::WoodenHandle:return "wooden_handle";case CraftItem::Charcoal:return "charcoal";case CraftItem::Rope:return "rope";case CraftItem::IronIngot:return "iron_ingot";case CraftItem::Axe:return "axe";}return "unknown"; }
 enum class AnimalType { Rabbit, Deer, Boar, Wolf, Fish };
 enum class DecisionType { Action, Blocked };
 struct Personality { int curiosity{}; int prudence{}; int sociability{}; int patience{}; int empathy{}; };

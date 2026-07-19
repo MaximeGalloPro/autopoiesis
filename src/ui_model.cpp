@@ -52,7 +52,7 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                               world.shelter_level(position),world.branches(position),
                               world.campfire(position),world.stored_food(position),
                               world.stored_wood(position),world.stored_branches(position),
-                              world.cooked_stored_food(position)});
+                              world.cooked_stored_food(position),world.stored_crafted_items(position)});
   }
   snapshot.agents.reserve(agents.size());
   for(const auto& agent:agents)

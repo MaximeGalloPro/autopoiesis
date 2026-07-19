@@ -18,6 +18,7 @@ struct UiCell {
   int stored_wood{};
   int stored_branches{};
   int cooked_food{};
+  int crafted_items{};
 };
 
 struct UiAgent {

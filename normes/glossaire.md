@@ -92,6 +92,10 @@ Une ration conserve son type, sa nutrition, son état cru ou cuit, son âge et s
 
 L'adoption du foyer attribue une fois un rôle collectif selon la pulsion dominante : bâtisseur, intendant, éclaireur ou médiateur. Deux membres présents près du même feu peuvent partager un repas de deux rations, tenir une veillée uniquement la nuit, célébrer l'achèvement d'un projet ou honorer un mort. Repas et veillée marquent les deux participants pour la journée afin de rester bornés. Chaque activité produit des souvenirs et des effets déterministes sur faim, fatigue, monotonie ou relations ; rôles, dates d'activité, célébration en attente et deuils accomplis sont persistés.
 
+### Recette de fabrication
+
+Une recette porte une clé stable, des quantités de bois et de branches, une liste d'objets intermédiaires requis, un objet produit et une quantité de sortie. `craft_camp_item` n'est disponible qu'au foyer pour une recette entièrement approvisionnée. Le moteur vérifie toutes les entrées avant de les retirer, puis ajoute la sortie dans la même transition. Le registre initial produit manche en bois, charbon et corde ; ses objets et stocks sont typés, persistants et visibles dans le total de réserve.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -160,6 +164,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 27. Un dépôt est conservatif et atomique : la quantité ajoutée à la réserve est exactement celle retirée de l'inventaire, ou aucun état ne change.
 28. L'âge alimentaire avance une seule fois par journée complète et sans appel API. La cuisson et la consommation sont des actions locales validées ; une ration avariée n'est jamais consommable.
 29. Une activité collective doit exiger la présence réelle de ses participants au même foyer, être bornée par personnage et par journée lorsque répétable, et modifier un état persistant observable.
+30. Une recette ne peut consommer partiellement ses entrées : soit tous les coûts sont retirés et toutes les sorties ajoutées, soit le monde reste strictement identique.
 
 ## Patterns
 

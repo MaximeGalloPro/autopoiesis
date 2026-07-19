@@ -24,7 +24,7 @@ charges, rôles et réserves.
 
 ### Phase 2 - Transformer le monde
 
-- [ ] **G05 - Chaînes de fabrication** : transformer des ressources par recettes explicites sans création implicite de matière.
+- [x] **G05 - Chaînes de fabrication** : registre de recettes explicites, coûts vérifiés et transformation atomique du bois ou des branches en manches, charbon et cordes persistants.
 - [ ] **G06 - Outils nécessaires** : fabriquer, équiper, user et réparer les premiers outils.
 - [ ] **G07 - Compétences progressives** : apprendre par la pratique, se spécialiser et transmettre.
 - [ ] **G08 - Construction spatiale** : désigner puis bâtir murs, portes, lits, réserves et ateliers sur la carte.

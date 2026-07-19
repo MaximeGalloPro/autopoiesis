@@ -166,6 +166,8 @@ Les rations vieillissent chaque jour. Près du feu, un personnage affamé peut c
 
 Le foyer est aussi un lieu social. Les personnages y adoptent un rôle lié à leurs aptitudes, partagent des repas, veillent ensemble la nuit et marquent les réussites ou les morts. Ces activités sont limitées, persistantes et changent leurs relations plutôt que de produire un simple texte d'ambiance.
 
+La fabrication suit un registre de recettes explicites. Le foyer peut transformer ses matières en manches, charbon et cordes ; une recette indisponible ne consomme rien, tandis qu'une réussite retire exactement ses coûts et stocke son produit.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

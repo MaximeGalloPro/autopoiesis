@@ -55,6 +55,10 @@ int World::age_stored_food() { int spoiled=0;for(auto&[_,cell]:construction_cell
 int World::stored_wood(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.wood_stockpile; }
 int World::stored_branches(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.branch_stockpile; }
 bool World::store_materials(Position p,int wood_amount,int branch_amount) { p=wrap(p);if(!campfire(p)||wood_amount<0||branch_amount<0||wood_amount+branch_amount==0)return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile+=wood_amount;cell.branch_stockpile+=branch_amount;return true; }
+int World::stored_item(Position p,CraftItem item) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;const auto stored=found->second.crafted_stockpile.find(item);return stored==found->second.crafted_stockpile.end()?0:stored->second; }
+int World::stored_crafted_items(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;int total=0;for(const auto&[_,amount]:found->second.crafted_stockpile)total+=amount;return total; }
+std::vector<std::string> World::craftable_recipes(Position p) const { p=wrap(p);std::vector<std::string> available;if(!campfire(p))return available;const auto& cell=construction_cells_.at({p.x,p.y});for(const auto& recipe:crafting_recipes()){bool possible=cell.wood_stockpile>=recipe.wood&&cell.branch_stockpile>=recipe.branches;for(const auto&[item,amount]:recipe.items)possible=possible&&stored_item(p,item)>=amount;if(possible)available.push_back(recipe.key);}return available; }
+bool World::craft(Position p,const std::string& recipe_key) { p=wrap(p);if(!campfire(p))return false;const auto recipe=std::find_if(crafting_recipes().begin(),crafting_recipes().end(),[&](const CraftingRecipe& candidate){return candidate.key==recipe_key;});if(recipe==crafting_recipes().end())return false;const auto available=craftable_recipes(p);if(std::find(available.begin(),available.end(),recipe_key)==available.end())return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile-=recipe->wood;cell.branch_stockpile-=recipe->branches;for(const auto&[item,amount]:recipe->items)cell.crafted_stockpile[item]-=amount;cell.crafted_stockpile[recipe->output]+=recipe->output_count;return true; }
 bool World::create_shelter(Position p) { p=wrap(p);if(!passable(p)||shelter_level(p)>0)return false;construction_cells_[{p.x,p.y}].shelter_level=1;return true; }
 void World::add_materials(Position p,int wood_amount,int fiber_amount) { p=wrap(p);auto& cell=construction_cells_[{p.x,p.y}];cell.wood+=std::max(0,wood_amount);cell.fibers+=std::max(0,fiber_amount); }
 bool World::build_shelter(Position p) { p=wrap(p);if(!passable(p))return false;auto& cell=construction_cells_[{p.x,p.y}];if(cell.wood<3||cell.fibers<2)return false;cell.wood-=3;cell.fibers-=2;++cell.shelter_level;return true; }
@@ -114,10 +118,12 @@ json World::checkpoint() const {
   json construction=json::array();
   for(const auto&[position,cell]:construction_cells_){
     json stored=json::array();for(const auto& food:cell.food_stockpile)stored.push_back({{"type",static_cast<int>(food.type)},{"nutrition",food.nutrition},{"cooked",food.cooked},{"age_days",food.age_days},{"shelf_life_days",food.shelf_life_days}});
+    json crafted=json::array();for(const auto&[item,amount]:cell.crafted_stockpile)if(amount>0)crafted.push_back({{"item",static_cast<int>(item)},{"amount",amount}});
     construction.push_back({{"x",position.first},{"y",position.second},{"wood",cell.wood},
       {"fibers",cell.fibers},{"shelter_level",cell.shelter_level},
       {"loose_branches",cell.loose_branches},{"campfire",cell.campfire},
       {"stored_wood",cell.wood_stockpile},{"stored_branches",cell.branch_stockpile},
+      {"crafted_stockpile",std::move(crafted)},
       {"stored_food",std::move(stored)}});
   }
   return {{"width",width},{"height",height},{"cells",std::move(cells)},
@@ -154,7 +160,10 @@ void World::restore_checkpoint(const json& state) {
     ConstructionCell cell{value.at("wood").get<int>(),value.at("fibers").get<int>(),
         value.at("shelter_level").get<int>(),value.value("loose_branches",0),
         value.value("campfire",false),value.value("stored_wood",0),
-        value.value("stored_branches",0),{}};
+        value.value("stored_branches",0),{}, {}};
+    for(const auto& crafted:value.value("crafted_stockpile",json::array()))
+      cell.crafted_stockpile[static_cast<CraftItem>(crafted.at("item").get<int>())]=
+          crafted.at("amount").get<int>();
     for(const auto& food:value.value("stored_food",json::array()))cell.food_stockpile.push_back({
         static_cast<FoodType>(food.at("type").get<int>()),food.at("nutrition").get<int>(),
         food.value("cooked",false),food.value("age_days",0),

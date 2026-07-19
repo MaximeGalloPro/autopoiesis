@@ -51,6 +51,10 @@ class World {
   int stored_wood(Position campfire_position) const;
   int stored_branches(Position campfire_position) const;
   bool store_materials(Position campfire_position, int wood, int branches);
+  int stored_item(Position campfire_position, CraftItem item) const;
+  int stored_crafted_items(Position campfire_position) const;
+  std::vector<std::string> craftable_recipes(Position campfire_position) const;
+  bool craft(Position campfire_position, const std::string& recipe_key);
   bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
@@ -71,6 +75,7 @@ class World {
     bool campfire{};
     int wood_stockpile{};
     int branch_stockpile{};
+    std::map<CraftItem,int> crafted_stockpile;
     std::vector<FoodItem> food_stockpile;
   };
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
