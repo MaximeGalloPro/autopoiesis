@@ -232,6 +232,26 @@ int main() {
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory);
   std::ofstream(directory / "feature_requests.jsonl") << devil_request << '\n';
+  ScriptedValidationInterface web_devil({"r","o"});
+  std::istringstream web_devil_input;
+  std::ostringstream web_devil_output;
+  HumanValidation web_devil_validation(directory.string(),web_devil_input,web_devil_output,
+                                       &web_devil);
+  assert(web_devil_validation.review_window(3,720));
+  assert(web_devil.prompts.size()==2);
+  assert(web_devil.prompts.front().kind==ValidationPromptKind::Devil);
+  assert(web_devil.prompts.front().stage==ValidationStage::Confirm);
+  assert(web_devil.prompts.front().requests.size()==1);
+  assert(web_devil.prompts.back().kind==ValidationPromptKind::Feature);
+  assert(web_devil.prompts.back().stage==ValidationStage::Empty);
+  std::ifstream web_devil_rejected(directory / "rejected_feature_requests.jsonl");
+  const std::string web_devil_rejected_content(
+      std::istreambuf_iterator<char>(web_devil_rejected),{});
+  assert(web_devil_rejected_content.find("devil-1")!=std::string::npos);
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory);
+  std::ofstream(directory / "feature_requests.jsonl") << devil_request << '\n';
   setenv("DEVIL_AUTO_APPROVE", "1", 1);
   setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
   std::istringstream automatic_input("o\n");

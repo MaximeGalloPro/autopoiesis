@@ -438,7 +438,10 @@ bool HumanValidation::review_devil(int day,int simulation_cycle) {
   while(true){
     output_ << "[a] accepter  [r] refuser  [d] détail  [q/exit] arrêter.\n> " << std::flush;
     std::string line;
-    if(!std::getline(input_,line))return false;
+    if(interface_)
+      line=interface_->request_command({ValidationStage::Confirm,day,simulation_cycle,
+                                        {request},1,ValidationPromptKind::Devil});
+    else if(!std::getline(input_,line))return false;
     if(line=="a"||line=="A")return decide(true,"human");
     if(line=="r"||line=="R")return decide(false,"human");
     if(line=="d"||line=="D"){output_<<request.dump(2)<<'\n';continue;}

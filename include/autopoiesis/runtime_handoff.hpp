@@ -11,6 +11,9 @@ std::vector<std::string> restart_arguments(const std::vector<std::string>& origi
 int recompile_gui(const std::filesystem::path& project_root,
                   const std::filesystem::path& data_directory,
                   IUserInterface& interface);
+int recompile_backend(const std::filesystem::path& project_root,
+                      const std::filesystem::path& data_directory,
+                      IUserInterface& interface);
 [[noreturn]] void replace_process(const std::filesystem::path& executable,
                                   const std::vector<std::string>& arguments);
 }

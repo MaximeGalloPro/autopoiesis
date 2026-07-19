@@ -14,13 +14,18 @@ find_package(Threads REQUIRED)
 add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
     src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
-    src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp)
+    src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp
+    src/web_interface.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(autopoiesis src/main.cpp)
 target_link_libraries(autopoiesis PRIVATE autopoiesis_core)
+
+add_executable(autopoiesis_backend src/web_main.cpp)
+target_link_libraries(autopoiesis_backend PRIVATE autopoiesis_core)
+target_compile_options(autopoiesis_backend PRIVATE -Wall -Wextra -Wpedantic)
 
 if(AUTOPOIESIS_BUILD_GUI)
   find_package(raylib 6.0 QUIET)
@@ -119,6 +124,9 @@ add_test(NAME campfire_night_routine COMMAND autopoiesis_campfire_tests)
 add_executable(autopoiesis_camp_stockpile_tests tests/test_camp_stockpile.cpp)
 target_link_libraries(autopoiesis_camp_stockpile_tests PRIVATE autopoiesis_core)
 add_test(NAME shared_camp_stockpile COMMAND autopoiesis_camp_stockpile_tests)
+add_executable(autopoiesis_web_interface_tests tests/test_web_interface.cpp)
+target_link_libraries(autopoiesis_web_interface_tests PRIVATE autopoiesis_core)
+add_test(NAME web_stdio_protocol COMMAND autopoiesis_web_interface_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -147,6 +155,7 @@ foreach(test_target
     autopoiesis_ui_model_tests
     autopoiesis_checkpoint_tests
     autopoiesis_campfire_tests
-    autopoiesis_camp_stockpile_tests)
+    autopoiesis_camp_stockpile_tests
+    autopoiesis_web_interface_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()
