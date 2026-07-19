@@ -83,6 +83,7 @@ action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 - Les jours de gel augmentent faim et fatigue ; un abri réduit fortement cette exposition. Une pluie importante fatigue légèrement les personnages non abrités.
 - Des branches apparaissent sur les cases praticables au pied des arbres et se renouvellent progressivement. Un personnage peut en ramasser trois pour allumer un feu de camp persistant.
 - En fin de journée et pendant la nuit, un personnage rejoint par pathfinding un feu qu'il a déjà observé, puis reste sur une case adjacente pour s'y reposer. Les urgences de faim et de soif restent prioritaires.
+- Le premier feu devient le foyer collectif. Sa fumée en indique la direction sans révéler les cases intermédiaires ; chaque personnage doit trouver son chemin sur sa carte connue et dispose d'une place nocturne distincte autour du feu.
 - Un personnage connaissant un feu peut porter une nourriture à la fois, la rapporter et la déposer dans sa réserve. Cette nourriture quitte réellement sa case d'origine et devient consommable par tout personnage présent près du même feu.
 - La survie suit santé, faim, soif et fatigue. L'eau est recherchée puis consommée avec l'action locale `drink`.
 - Les aliments sont les baies, racines, champignons, poissons et venaison.

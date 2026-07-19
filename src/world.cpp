@@ -44,7 +44,7 @@ bool World::take_branch(Position p) { p=wrap(p);auto found=construction_cells_.f
 bool World::campfire(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found!=construction_cells_.end()&&found->second.campfire; }
 bool World::adjacent_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return true;return false; }
 std::optional<Position> World::nearby_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return neighbor;return std::nullopt; }
-bool World::place_campfire(Position p) { p=wrap(p);if(!passable(p)||campfire(p))return false;construction_cells_[{p.x,p.y}].campfire=true;return true; }
+bool World::place_campfire(Position p) { p=wrap(p);if(!passable(p)||campfire(p)||primary_campfire_)return false;construction_cells_[{p.x,p.y}].campfire=true;primary_campfire_=p;return true; }
 int World::stored_food(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:static_cast<int>(found->second.food_stockpile.size()); }
 bool World::store_food(Position p,const FoodItem& food) { p=wrap(p);if(!campfire(p)||food.nutrition<=0)return false;construction_cells_[{p.x,p.y}].food_stockpile.push_back(food);return true; }
 bool World::take_stored_food(Position p,FoodItem* food) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire||found->second.food_stockpile.empty())return false;if(food)*food=found->second.food_stockpile.front();found->second.food_stockpile.erase(found->second.food_stockpile.begin());return true; }
@@ -115,7 +115,8 @@ json World::checkpoint() const {
   return {{"width",width},{"height",height},{"cells",std::move(cells)},
           {"rabbit",{{"x",rabbit_.x},{"y",rabbit_.y},{"alive",rabbit_alive_}}},
           {"food_resources",std::move(foods)},{"animals",std::move(animals)},
-          {"construction",std::move(construction)}};
+          {"construction",std::move(construction)},
+          {"primary_campfire",primary_campfire_?json{{"x",primary_campfire_->x},{"y",primary_campfire_->y}}:json(nullptr)}};
 }
 
 void World::restore_checkpoint(const json& state) {
@@ -154,6 +155,10 @@ void World::restore_checkpoint(const json& state) {
   food_resources_=std::move(restored_foods);
   animals_=std::move(restored_animals);
   construction_cells_=std::move(restored_construction);
+  primary_campfire_.reset();
+  const auto primary=state.value("primary_campfire",json(nullptr));
+  if(!primary.is_null())primary_campfire_=wrap({primary.at("x").get<int>(),primary.at("y").get<int>()});
+  if(!primary_campfire_)for(const auto&[coordinates,cell]:construction_cells_)if(cell.campfire){primary_campfire_=Position{coordinates.first,coordinates.second};break;}
   rabbit_={rabbit.at("x").get<int>(),rabbit.at("y").get<int>()};
   rabbit_alive_=rabbit.at("alive").get<bool>();
   if(!has_branch_state){replenish_branches();replenish_branches();}

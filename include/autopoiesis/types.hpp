@@ -71,6 +71,8 @@ struct Agent {
   std::map<std::string, Relationship> relationships;
   std::set<std::string> observed_animals;
   std::set<std::pair<int,int>> known_campfires;
+  std::optional<Position> home_camp;
+  std::optional<Position> camp_rest_position;
   int wood_inventory{};
   int branch_inventory{};
   std::optional<FoodItem> carried_food;

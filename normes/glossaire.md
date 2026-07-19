@@ -70,6 +70,8 @@ La phase diurne occupe les trois quarts d'une journée et la phase nocturne le q
 
 Les cases praticables voisines d'un arbre produisent progressivement des branches. Un personnage peut ramasser une branche locale ; trois branches permettent d'allumer un feu de camp persistant sur sa case. Un feu n'entre dans sa mémoire spatiale qu'après avoir été perçu. Pendant le dernier sixième de la phase diurne et durant la nuit, il rejoint par la carte connue une case adjacente à un feu mémorisé et s'y repose, sauf urgence vitale prioritaire.
 
+Le premier feu construit devient le foyer principal et empêche la création de foyers concurrents. Sa fumée transmet seulement ses coordonnées aux personnages : elle ne révèle aucun terrain ni chemin. Chaque membre adopte ce foyer, réserve la première case adjacente praticable encore libre et doit la rejoindre par sa propre carte connue avant de se reposer.
+
 ### Réserve commune
 
 Chaque feu possède une réserve alimentaire persistante. Un personnage ne transporte initialement qu'un aliment à la fois, avec son type et sa nutrition. `collect_food` retire atomiquement cet aliment du monde, `deposit_food` exige un feu adjacent connu et transfère l'objet vers sa réserve, puis `eat_camp_food` permet à n'importe quel personnage adjacent de le consommer. Aucun aliment ne peut être dupliqué ou devenir commun sans ces transitions validées.

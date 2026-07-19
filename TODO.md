@@ -11,7 +11,7 @@ suivante.
 ### Phase 1 - Faire société autour du camp
 
 - [x] **G01 - Boucle de survie collective** : relier collecte, transport, dépôt, consommation et pénurie dans un même scénario automatisé. Premier flux livré : une nourriture portée vers la réserve du feu puis consommable par un autre personnage.
-- [ ] **G02 - Foyer collectif** : identifier un camp partagé avec feu, emplacements de repos et activités communes.
+- [x] **G02 - Foyer collectif** : le premier feu devient le foyer partagé, sa fumée le signale et chaque personnage possède une place nocturne distincte persistante.
 - [ ] **G03 - Inventaires complets** : porter des aliments, matériaux et objets avec une capacité bornée.
 - [ ] **G04 - Transport des ressources** : choisir une ressource connue, la ramasser, rejoindre une destination et la déposer.
 - [ ] **G09 - Alimentation planifiée** : repas, nutrition, préférences, réserves, cuisson et conservation progressive.

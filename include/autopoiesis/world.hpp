@@ -38,6 +38,7 @@ class World {
   bool campfire(Position p) const;
   bool adjacent_campfire(Position p) const;
   std::optional<Position> nearby_campfire(Position p) const;
+  std::optional<Position> primary_campfire() const { return primary_campfire_; }
   bool place_campfire(Position p);
   int stored_food(Position campfire_position) const;
   bool store_food(Position campfire_position, const FoodItem& food);
@@ -63,6 +64,7 @@ class World {
     std::vector<FoodItem> food_stockpile;
   };
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
+  std::optional<Position> primary_campfire_;
   void replenish_branches();
   int index(Position p) const { const auto canonical=wrap(p); return canonical.y * width + canonical.x; }
 };

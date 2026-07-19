@@ -12,7 +12,7 @@ std::vector<std::string> available_actions(const Agent& a, const World& w, const
   if(a.alive&&w.passable(a.position)&&occupies_current_cell&&w.wood(a.position)>=3&&w.fibers(a.position)>=2) r.push_back("build_shelter");
   if(a.alive&&occupies_current_cell&&w.living_trees(a.position)>0) r.push_back("harvest_wood");
   if(a.alive&&occupies_current_cell&&w.branches(a.position)>0) r.push_back("collect_branch");
-  if(a.alive&&occupies_current_cell&&a.branch_inventory>=3&&w.passable(a.position)&&!w.campfire(a.position)) r.push_back("build_campfire");
+  if(a.alive&&occupies_current_cell&&a.branch_inventory>=3&&w.passable(a.position)&&!w.campfire(a.position)&&!w.primary_campfire()) r.push_back("build_campfire");
   if(a.alive&&occupies_current_cell&&w.adjacent_campfire(a.position)) r.push_back("rest_by_campfire");
   if(a.alive&&occupies_current_cell&&!a.carried_food&&w.food(a.position)>0&&w.passable(a.position)) r.push_back("collect_food");
   if(a.alive&&occupies_current_cell&&a.carried_food&&w.nearby_campfire(a.position)) r.push_back("deposit_food");
