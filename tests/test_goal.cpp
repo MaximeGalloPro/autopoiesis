@@ -52,4 +52,30 @@ int main() {
   const Decision persistent_second = decider.decide(water_route(40, 60, "persistent"));
   assert(persistent_first.parameters["direction"] == "west");
   assert(persistent_second.parameters["direction"] == "west");
+
+  auto blocked_shelter_project = [](const std::vector<std::string>& actions,
+                                    int wood_inventory) {
+    return Perception{json{
+        {"self", {{"id", "ada-construction"}, {"x", 6}, {"y", 1},
+                  {"hunger", 20}, {"thirst", 20}, {"fatigue", 20},
+                  {"wood_inventory", wood_inventory},
+                  {"personality", {{"curiosity", 90}}},
+                  {"attributes", {{"focus", 70}, {"willpower", 60},
+                                  {"endurance", 50}, {"spatial_sense", 80}}},
+                  {"behavior", {{"construction_drive", 95},
+                                {"exploration_drive", 55}}},
+                  {"project", {{"key", "build_shelter"},
+                               {"status", "blocked"},
+                               {"missing_capability", "build_shelter"}}}}},
+        {"available_actions", actions},
+        {"cells", json::array()},
+        {"known_map", json::array()}}};
+  };
+
+  assert(decider.decide(blocked_shelter_project(
+             {"observe", "wait", "move", "harvest_wood"}, 0)).action ==
+         "harvest_wood");
+  assert(decider.decide(blocked_shelter_project(
+             {"observe", "wait", "move", "harvest_wood", "assemble_shelter"},
+             1)).action == "assemble_shelter");
 }

@@ -77,7 +77,11 @@ Decision LocalDecider::decide(const Perception& p) {
       {"eat",hunger>=40?hunger*(1.30-willpower/1200.0):0.0},
       {"rest",fatigue>=45?fatigue*(1.15-attributes.value("endurance",50)/1000.0):0.0},
       {"explore",30.0+personality.value("curiosity",50)/5.0}};
-  if(project.value("status","")=="active"){
+  const bool blocked_shelter_project=
+      project.value("status","")=="blocked"&&
+      project.value("key","")=="build_shelter"&&
+      project.value("missing_capability","")=="build_shelter";
+  if(project.value("status","")=="active"||blocked_shelter_project){
     int drive=behavior.value("exploration_drive",50);
     if(project.value("key","")=="build_shelter")drive=behavior.value("construction_drive",50);
     if(project.value("key","")=="secure_food")drive=behavior.value("provision_drive",50);
@@ -106,6 +110,14 @@ Decision LocalDecider::decide(const Perception& p) {
     return {DecisionType::Action,"eat_food",json::object(),"Je mange la ressource disponible.","food","","be fed"};
   if(best_goal=="eat"&&has_action("eat_berries"))
     return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
+  if(best_goal=="project"&&project.value("key","")=="build_shelter"){
+    if(has_action("assemble_shelter"))
+      return {DecisionType::Action,"assemble_shelter",json::object(),"J'assemble mon abri.","projet","","construire un abri"};
+    if(has_action("build_shelter"))
+      return {DecisionType::Action,"build_shelter",json::object(),"Je construis mon abri.","projet","","construire un abri"};
+    if(has_action("harvest_wood"))
+      return {DecisionType::Action,"harvest_wood",json::object(),"Je prélève du bois pour mon abri.","projet","","construire un abri"};
+  }
   if(best_goal=="social"){
     for(const auto& other:p.value.value("visible_agents",json::array()))if(other.value("adjacent",false))
       return {DecisionType::Action,"talk",{{"target_agent_id",other.value("id","")},{"message","Partageons ce que nous avons appris."}},"Je renforce notre coopération.","relation","","mieux coopérer"};
