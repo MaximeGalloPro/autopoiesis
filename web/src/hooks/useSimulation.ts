@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BackendEvent, ClientMessage, ConnectionState, EngineCommand, PublicState } from "../protocol";
+import { browserTransportUrl } from "../transport";
 
 const emptyState: PublicState = {
   state: null,
@@ -120,7 +121,7 @@ export function useSimulation() {
       socket.addEventListener("error", () => socket?.close());
     };
 
-    void fetch("/api/state")
+    void fetch(browserTransportUrl("state"))
       .then(async (response) => response.json() as Promise<PublicState>)
       .then((snapshot) => { if (!disposed) setData(snapshot); })
       .catch(() => { if (!disposed) setConnection("error"); });
@@ -137,7 +138,7 @@ export function useSimulation() {
   const sendCommand = useCallback(async (command: EngineCommand): Promise<boolean> => {
     setCommandError(null);
     try {
-      const response = await fetch("/api/commands", {
+      const response = await fetch(browserTransportUrl("commands"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(command),
