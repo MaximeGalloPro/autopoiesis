@@ -153,6 +153,22 @@ Ce contexte sert au raisonnement de l'IA demandeuse, pas à un filtre sémantiqu
 
 Le décideur local compare les urgences de faim, soif et fatigue avec le projet, l'exploration et la coopération, maintient brièvement l'objectif retenu grâce à une hystérésis, puis cherche une route déterministe sur la carte connue. Il ne consulte jamais la carte complète. À état, mémoire et graine identiques, le choix reste identique.
 
+Un cycle élémentaire est une opportunité de décision, pas l'obligation de se
+déplacer. La décision locale suit la hiérarchie `besoin → objectif durable →
+destination → chemin → exécution`. Manger, boire ou se reposer sur place est
+prioritaire lorsque le besoin correspondant l'exige. Une ressource, un
+personnage ou un projet connu fournit une destination précise. Explorer
+signifie choisir une case frontière accessible de la carte mémorisée, voisine
+d'une zone encore inconnue.
+
+La destination d'exploration persiste entre les cycles et le chemin est calculé
+sur la seule carte connue. Le personnage ne change de destination que si elle
+est atteinte, devient inaccessible ou si un objectif plus urgent s'impose. Le
+chemin peut être recalculé pour réagir à un obstacle sans abandonner
+l'intention. Après douze déplacements consécutifs sans autre activité, le
+personnage observe et réévalue son trajet. Un choix de case voisine sans cible
+n'est autorisé qu'en fallback lorsque la mémoire ne permet aucun chemin.
+
 ### Évolution contrôlée
 
 Une demande suit le flux `pending → approved → implementation → tests → verification → nouvelle version`. Aucune transition ne doit être implicite. `approved` autorise Dieu à travailler sur la demande ; il n'autorise pas à ignorer les tests ni à activer un résultat non vérifié.

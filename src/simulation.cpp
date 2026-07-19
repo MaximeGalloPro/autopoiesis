@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -198,14 +199,18 @@ Decision LocalDecider::decide(const Perception& p) {
   std::string best_goal="explore";
   for(const auto&[goal,score]:utilities)if(score>utilities[best_goal])best_goal=goal;
   const std::string agent_id=me.value("id","");
+  GoalState* goal_state=nullptr;
   if(!agent_id.empty()){
     auto& state=goals_[agent_id];
     const double hysteresis=5.0+focus/5.0;
     if(state.remaining>0&&utilities[state.name]>0&&utilities[state.name]+hysteresis>=utilities[best_goal]){
       best_goal=state.name;--state.remaining;
     }else{
-      state={best_goal,2+focus/20};
+      if(state.name!=best_goal)state.exploration_target.reset();
+      state.name=best_goal;
+      state.remaining=2+focus/20;
     }
+    goal_state=&state;
   }
 
   if(best_goal=="hydrate"&&has_action("drink"))
@@ -237,6 +242,18 @@ Decision LocalDecider::decide(const Perception& p) {
   if(best_goal=="eat"&&hunger>=75&&has_action("hunt_rabbit")) return {DecisionType::Action,"hunt_rabbit",json::object(),"I need food","food","","be fed"};
 
   const auto history=p.value.value("action_history",json::array());
+  int movement_streak=0;
+  if(history.is_array()){
+    for(auto it=history.rbegin();it!=history.rend();++it){
+      if(it->value("action","")!="move"||it->value("outcome","")!="success")break;
+      ++movement_streak;
+    }
+  }
+  if(movement_streak>=12&&has_action("observe"))
+    return {DecisionType::Action,"observe",json::object(),
+            "Je fais une pause pour observer et réévaluer mon trajet.",
+            "orientation","","choisir la suite de mon trajet"};
+
   std::set<std::pair<int,int>> repeated_positions;
   bool repetition=history.is_array()&&history.size()>=20;
   if(repetition){
@@ -345,9 +362,68 @@ Decision LocalDecider::decide(const Perception& p) {
     if(!direction.empty())return {DecisionType::Action,"move",{{"direction",direction}},"Je piste une proie pour les réserves.","projet","","sécuriser la nourriture"};
   }
 
+  if(goal_state){
+    const auto known_position=[&](Position position){
+      return known_cells.contains({position.x,position.y});
+    };
+    std::vector<Position> frontiers;
+    for(const auto& coordinates:traversable){
+      Position candidate{coordinates.first,coordinates.second};
+      if(candidate==self)continue;
+      const bool borders_unknown=std::any_of(directions.begin(),directions.end(),[&](const std::string& direction){
+        return !known_position(step(candidate,direction));
+      });
+      if(borders_unknown)frontiers.push_back(candidate);
+    }
+
+    auto route_to_position=[&](Position target){
+      return route_to({{target.x,target.y}});
+    };
+    if(goal_state->exploration_target){
+      const auto target=*goal_state->exploration_target;
+      if(target==self||!traversable.contains({target.x,target.y})||route_to_position(target).empty())
+        goal_state->exploration_target.reset();
+    }
+    if(!goal_state->exploration_target){
+      std::uint32_t best_rank=0;
+      bool found=false;
+      for(const auto& candidate:frontiers){
+        if(route_to_position(candidate).empty())continue;
+        std::uint32_t rank=2166136261u;
+        for(const unsigned char character:agent_id){rank^=character;rank*=16777619u;}
+        rank^=static_cast<std::uint32_t>(candidate.x+1);rank*=16777619u;
+        rank^=static_cast<std::uint32_t>(candidate.y+1);rank*=16777619u;
+        if(!found||rank>best_rank){best_rank=rank;goal_state->exploration_target=candidate;found=true;}
+      }
+    }
+    if(goal_state->exploration_target){
+      const auto target=*goal_state->exploration_target;
+      const auto direction=route_to_position(target);
+      if(!direction.empty()){
+        const std::string destination="("+std::to_string(target.x)+", "+std::to_string(target.y)+")";
+        return {DecisionType::Action,"move",{{"direction",direction}},
+                "Je suis mon itinéraire d'exploration vers "+destination+".",
+                "exploration","","atteindre une zone non cartographiée"};
+      }
+    }
+  }
+
   int lowest_visits=std::numeric_limits<int>::max();
   std::string selected;
   const int spatial_sense=attributes.value("spatial_sense",50);
+  std::string repeated_direction;
+  int direction_streak=0;
+  if(history.is_array()){
+    for(auto it=history.rbegin();it!=history.rend();++it){
+      if(it->value("action","")!="move"||it->value("outcome","")!="success")break;
+      const auto parameters=it->value("parameters",json::object());
+      const auto direction=parameters.value("direction","");
+      if(direction.empty())break;
+      if(repeated_direction.empty())repeated_direction=direction;
+      if(direction!=repeated_direction)break;
+      ++direction_streak;
+    }
+  }
   for(const auto& direction:directions){
     Position adjacent=step(self,direction);
     int visits=0;
@@ -361,7 +437,9 @@ Decision LocalDecider::decide(const Perception& p) {
       visits=cell.value("visit_count",0);
       break;
     }
-    const int weighted_visits=visits*(1+spatial_sense/25)+(known_direction?spatial_sense/10:0);
+    const int straight_line_penalty=direction==repeated_direction?direction_streak*10:0;
+    const int weighted_visits=visits*(1+spatial_sense/25)+
+        (known_direction?spatial_sense/10:0)+straight_line_penalty;
     if(!excluded&&weighted_visits<lowest_visits){lowest_visits=weighted_visits;selected=direction;}
   }
   if(selected.empty()) return {DecisionType::Action,"wait",json::object(),"No eligible exploration direction","exploration","","discover the world"};
@@ -374,15 +452,23 @@ Decision LocalDecider::decide(const Perception& p) {
 
 json LocalDecider::checkpoint() const {
   json goals=json::array();
-  for(const auto&[agent,state]:goals_)goals.push_back({
-      {"agent_id",agent},{"name",state.name},{"remaining",state.remaining}});
+  for(const auto&[agent,state]:goals_){
+    json target=nullptr;
+    if(state.exploration_target)target={{"x",state.exploration_target->x},{"y",state.exploration_target->y}};
+    goals.push_back({{"agent_id",agent},{"name",state.name},{"remaining",state.remaining},
+                     {"exploration_target",std::move(target)}});
+  }
   return {{"type","local"},{"goals",std::move(goals)}};
 }
 
 void LocalDecider::restore_checkpoint(const json& state) {
   goals_.clear();
-  for(const auto& goal:state.value("goals",json::array()))goals_[goal.at("agent_id").get<std::string>()]={
-      goal.at("name").get<std::string>(),goal.at("remaining").get<int>()};
+  for(const auto& goal:state.value("goals",json::array())){
+    GoalState restored{goal.at("name").get<std::string>(),goal.at("remaining").get<int>(),std::nullopt};
+    const auto target=goal.value("exploration_target",json(nullptr));
+    if(target.is_object())restored.exploration_target=Position{target.at("x").get<int>(),target.at("y").get<int>()};
+    goals_[goal.at("agent_id").get<std::string>()]=std::move(restored);
+  }
 }
 
 static bool action_succeeded(const Decision& decision, const std::string& result) {
@@ -495,7 +581,10 @@ void Simulation::apply_climate_effects(Agent& agent,const CalendarDate& date,con
 
 std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.type==DecisionType::Blocked){a.remember("I reported a blockage: "+d.obstacle);return "signale un blocage : "+d.obstacle;}
-  if(d.action=="wait"||d.action=="observe"){a.remember(d.action=="wait"?"J'ai attendu.":"J'ai observe mon environnement.");return "attend";}
+  if(d.action=="wait"||d.action=="observe"){
+    a.remember(d.action=="wait"?"J'ai attendu.":"J'ai observe mon environnement.");
+    return d.action=="observe"?"observe son environnement":"attend";
+  }
   if(d.action=="rest"){if(!a.alive||a.fatigue<=0||!world_.passable(a.position))return "attend";a.fatigue=clamp_stat(a.fatigue-(15+a.attributes.recuperation/10));return "rested";}
   if(d.action=="sleep"){a.sleeping_days=2;a.fatigue=clamp_stat(a.fatigue-(15+a.attributes.recuperation/10));a.remember("Je commence a dormir.");return "commence a dormir";}
   if(d.action=="drink"){if(!world_.drinkable(a.position))return "ne trouve pas d'eau";a.thirst=clamp_stat(a.thirst-(40+a.attributes.recuperation/10));return "boit de l'eau";}
@@ -597,7 +686,7 @@ bool Simulation::run_day(IUserInterface* interface){
       const bool succeeded=action_succeeded(decision,result);
       update_behavior_after_action(agent,before,decision,result,succeeded);
       auto& planning=planning_history_[agent.id];
-      planning.push_back({{"action",decision.type==DecisionType::Blocked?"blocked":decision.action},{"outcome",succeeded?"success":"failure"},{"reason",decision.reason},{"x",agent.position.x},{"y",agent.position.y},{"project",agent.project.key},{"project_status",project_status_name(agent.project.status)},{"boredom",agent.boredom}});
+      planning.push_back({{"action",decision.type==DecisionType::Blocked?"blocked":decision.action},{"outcome",succeeded?"success":"failure"},{"reason",decision.reason},{"parameters",decision.parameters},{"x",agent.position.x},{"y",agent.position.y},{"project",agent.project.key},{"project_status",project_status_name(agent.project.status)},{"boredom",agent.boredom}});
       while(planning.size()>20) planning.erase(planning.begin());
       auto& history=action_history_[agent.id];
       std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+" action="+(decision.type==DecisionType::Blocked?"blocked":decision.action)+" outcome="+(succeeded?"success":"failure")+" result="+result;

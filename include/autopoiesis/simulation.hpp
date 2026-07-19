@@ -50,7 +50,11 @@ class LocalDecider final : public IDecider {
   json checkpoint() const override;
   void restore_checkpoint(const json& state) override;
  private:
-  struct GoalState { std::string name; int remaining{}; };
+  struct GoalState {
+    std::string name;
+    int remaining{};
+    std::optional<Position> exploration_target;
+  };
   std::mt19937& rng_;
   std::map<std::string,GoalState> goals_;
 };

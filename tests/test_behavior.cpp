@@ -66,6 +66,10 @@ int main() {
   assert(project["status"] == "active");
 
   Agent& ada = const_cast<Agent&>(simulation.agents().front());
+  const Decision observe{DecisionType::Action, "observe", json::object(),
+                         "Je réévalue mon environnement."};
+  assert(SimulationTestAccess::execute(simulation, ada, observe) ==
+         "observe son environnement");
   ada.remember_map({5, 5}, Terrain::Tree);
   ada.remember_map({6, 5}, Terrain::Tree);
   const Agent before_project = ada;

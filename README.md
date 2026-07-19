@@ -79,7 +79,7 @@ action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 - Les aliments sont les baies, racines, champignons, poissons et venaison.
 - La faune comprend lapins, cerfs, sangliers, loups et poissons, avec danger, nutrition et habitat distincts.
 - Chaque personnage possède force, agilité, endurance, robustesse, récupération, résistance aux maladies, concentration, volonté, mémoire et sens spatial.
-- L'IA locale sélectionne un objectif par utilité, le conserve brièvement pour éviter les oscillations et utilise un BFS déterministe sur les seules cases connues.
+- L'IA locale sélectionne un objectif par utilité, lui associe une destination persistante et utilise un BFS déterministe sur les seules cases connues. Explorer signifie rejoindre une frontière non cartographiée ; un déplacement sans cible n'est qu'un fallback.
 
 ## Personnages et projets
 

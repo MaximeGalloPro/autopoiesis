@@ -23,6 +23,15 @@ static json repeated_moves() {
   return history;
 }
 
+static json straight_moves(int count, const std::string& direction = "north") {
+  json history = json::array();
+  for (int index = 0; index < count; ++index)
+    history.push_back({{"action", "move"}, {"outcome", "success"},
+                       {"parameters", {{"direction", direction}}},
+                       {"x", 5}, {"y", 5 - index}});
+  return history;
+}
+
 static Perception loop_perception(int hunger, const json& known_map,
                                   const json& history = repeated_moves()) {
   json cells = json::array();
@@ -35,6 +44,24 @@ static Perception loop_perception(int hunger, const json& known_map,
       {"known_map", known_map},
       {"action_history", history},
       {"available_actions", json::array({"move", "wait"})}}};
+}
+
+static Perception mapped_region(Position self, const std::string& agent_id) {
+  json known = json::array();
+  for (int y = 2; y <= 8; ++y)
+    for (int x = 2; x <= 8; ++x)
+      known.push_back({{"x", x}, {"y", y}, {"status", "traversable"},
+                       {"terrain", static_cast<int>(Terrain::Ground)},
+                       {"visit_count", 0}, {"food", 0}});
+  return Perception{json{
+      {"world_width", 40}, {"world_height", 24},
+      {"self", {{"id", agent_id}, {"x", self.x}, {"y", self.y},
+                {"hunger", 20}, {"thirst", 20}, {"fatigue", 20},
+                {"personality", {{"curiosity", 70}}},
+                {"attributes", {{"focus", 60}, {"willpower", 50},
+                                {"endurance", 50}, {"spatial_sense", 70}}}}},
+      {"cells", json::array()}, {"known_map", known},
+      {"available_actions", json::array({"observe", "move", "wait"})}}};
 }
 
 struct FixedMove final : IDecider {
@@ -106,6 +133,40 @@ int main() {
   const Decision deterministic_second = decider.decide(loop_perception(70, food_map));
   assert(deterministic_first.parameters == deterministic_second.parameters);
   assert(deterministic_first.reason == deterministic_second.reason);
+
+  Perception long_walk = exploration_perception(json::array());
+  long_walk.value["available_actions"] = json::array({"observe", "move", "wait"});
+  long_walk.value["action_history"] = straight_moves(12);
+  LocalDecider rhythm_decider(rng);
+  const Decision observation = rhythm_decider.decide(long_walk);
+  assert(observation.action == "observe");
+  assert(observation.reason == "Je fais une pause pour observer et réévaluer mon trajet.");
+
+  json equal_neighbors = json::array({
+      {{"x", 5}, {"y", 4}, {"status", "traversable"}, {"visit_count", 0}},
+      {{"x", 6}, {"y", 5}, {"status", "traversable"}, {"visit_count", 0}},
+      {{"x", 5}, {"y", 6}, {"status", "traversable"}, {"visit_count", 0}},
+      {{"x", 4}, {"y", 5}, {"status", "traversable"}, {"visit_count", 0}}});
+  Perception straight_line = exploration_perception(equal_neighbors);
+  straight_line.value["action_history"] = straight_moves(4);
+  LocalDecider turning_decider(rng);
+  const Decision turn = turning_decider.decide(straight_line);
+  assert(turn.action == "move");
+  assert(turn.parameters["direction"] != "north");
+
+  LocalDecider frontier_decider(rng);
+  const Decision first_route_step = frontier_decider.decide(mapped_region({5, 5}, "frontier"));
+  assert(first_route_step.action == "move");
+  assert(first_route_step.reason.starts_with("Je suis mon itinéraire d'exploration vers "));
+  Position next{5, 5};
+  const std::string first_direction = first_route_step.parameters["direction"];
+  if (first_direction == "north") --next.y;
+  if (first_direction == "south") ++next.y;
+  if (first_direction == "east") ++next.x;
+  if (first_direction == "west") --next.x;
+  const Decision second_route_step = frontier_decider.decide(mapped_region(next, "frontier"));
+  assert(second_route_step.action == "move");
+  assert(second_route_step.reason == first_route_step.reason);
 
   setenv("CYCLES_PER_DAY", "1", 1);
   Logger logger("/tmp/autopoiesis-exploration-tests");
