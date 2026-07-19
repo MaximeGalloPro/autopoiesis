@@ -286,25 +286,23 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 Étape intégrée au processus de simulation lorsqu'une fenêtre IA est terminée. `HumanValidation` lit les demandes de cette fenêtre, tolère les lignes JSONL historiques invalides, demande d'abord de sélectionner une proposition ou `aucune`, permet ensuite de traiter au plus une demande et écrit les transitions humaines `approved` ou `rejected`. Elle reste l'unique autorité de cette transition.
 
-En mode graphique, raylib présente les trois demandes les plus récentes sous forme de cartes à jouer. Le premier clic sélectionne une carte ; un second écran demande explicitement d'approuver, refuser ou revenir. La fenêtre ne modifie aucun journal elle-même : elle renvoie seulement les mêmes commandes structurées que l'interface terminal. En mode `--terminal`, le protocole historique reste disponible.
+Dans l'interface web, React présente les trois demandes les plus récentes sous forme de cartes à jouer. Le premier clic sélectionne une carte ; un second écran demande explicitement d'approuver, refuser ou revenir. Le navigateur ne modifie aucun journal lui-même : il transmet une commande structurée à Elysia, puis au moteur C++, qui la revalide et la remet à `HumanValidation`. En mode `--terminal`, le protocole historique reste disponible.
 
-Après une approbation, raylib observe les mêmes artefacts que le suivi terminal et affiche les phases `file d'attente → préparation → TDD → compte rendu → vérification → activation`. Il montre la durée et le dernier retour utile sans interpréter ni modifier le résultat. Une activation réussie se termine par une confirmation explicite avant la reprise de la simulation ; cette confirmation remplace l'ancien second écran générique « Reprendre ».
+Après une approbation, l'interface web observe les mêmes artefacts que le suivi terminal et affiche les phases `file d'attente → préparation → TDD → compte rendu → vérification → activation`. Elle montre la durée et le dernier retour utile sans interpréter ni modifier le résultat. Une activation réussie se termine par une confirmation explicite avant la reprise de la simulation ; cette confirmation remplace l'ancien second écran générique « Reprendre ».
 
 Tout écran graphique de reprise expose le délai entre journées sous forme de slider borné de `0` à `10000 ms`. La valeur initiale vient de `SIMULATION_DELAY_MS`, puis le choix local s'applique aux journées suivantes du run sans modifier `.env`, le nombre de cycles ou le calendrier.
 
 Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. L'attente est divisée en deux délais indépendants : `GOD_QUEUE_TIMEOUT_SECONDS` (900 secondes par défaut) avant le démarrage effectif, puis `GOD_WAIT_TIMEOUT_SECONDS` (900 secondes par défaut) pour le workflow de Dieu. L'interface affiche régulièrement la phase et la durée écoulée. En cas de dépassement ou d'erreur, elle montre les dernières lignes des journaux utiles et indique le dossier d'artefacts complet ; un timeout laisse le daemon continuer en arrière-plan.
 
-### Interface graphique
+### Interface web
 
-Fenêtre native raylib superposée au run. Le moteur lui transmet un `UiSnapshot` copié et en lecture seule contenant la carte, le calendrier, le climat, les personnages, les animaux et les événements récents. Un clic sélectionne un personnage uniquement dans l'état local de l'interface ; il ne produit aucune décision et ne modifie jamais le monde. Lors d'une validation, elle devient une source de commande pour `HumanValidation`, jamais une source de statut parallèle.
+L'interface normale est une application React et Three.js servie par Elysia. Elysia est une passerelle de transport sans état du monde faisant autorité : elle lance le backend C++, relaie ses événements versionnés et lui transmet des commandes bornées. Le moteur transmet un `UiSnapshot` copié et en lecture seule contenant la carte, le calendrier, le climat, les personnages, les animaux et les événements récents. Une sélection dans la scène 3D reste un état local du navigateur ; elle ne produit aucune décision et ne modifie jamais le monde. Lors d'une validation, le navigateur devient seulement une source de commande pour `HumanValidation`, jamais une source de statut parallèle.
 
-Pendant un appel IA, le client réseau travaille hors du fil de rendu afin que la fenêtre continue à traiter ses images. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Les éléments cliquables signalent leur disponibilité au survol sans déplacer ni redimensionner la mise en page.
+Pendant un appel IA, le client réseau C++ travaille hors de la boucle de présentation afin que l'interface continue à recevoir les états de progression. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Une reconnexion reçoit le dernier état publié sans rejouer de cycle ni de commande.
 
-Le mode graphique est le lancement normal sur le Mac. Le terminal reste attaché au même processus pour les appels IA, les validations et le suivi de Dieu, et `--terminal` conserve le rendu historique. Fermer la fenêtre constitue une demande d'arrêt propre détectée par le moteur.
+Le mode web est le lancement normal. Le backend C++ reste utilisable en `--terminal` pour le diagnostic et les tests. Fermer un onglet ne change pas le monde ; une commande d'arrêt explicite est revalidée par le backend et termine proprement le run. Les endpoints web n'exposent ni secrets, ni journaux bruts, ni écriture directe dans `data/`.
 
-Sur macOS, la fenêtre est créée avec `FLAG_WINDOW_UNFOCUSED` par défaut afin de ne pas imposer un changement d'espace de travail. `AUTOPOIESIS_FOCUS_WINDOW=1` constitue l'opt-in explicite au focus immédiat ; ce réglage ne change aucun état de simulation.
-
-Pendant une journée, l'interface expose les vitesses `0,25×`, `0,5×`, `1×`, `2×` et `4×`, ainsi qu'une pause. À `2×` et `4×`, le moteur exécute toujours tous les cycles mais l'interface affiche respectivement un instantané sur deux ou sur quatre. Ce contrôle en cours de journée est distinct du slider qui règle le délai entre deux journées.
+Pendant une journée, l'interface expose les vitesses `0,25×`, `0,5×`, `1×`, `2×` et `4×`, ainsi qu'une pause. À `2×` et `4×`, le moteur exécute toujours tous les cycles mais le transport peut publier respectivement un instantané sur deux ou sur quatre. Ce contrôle en cours de journée est distinct du slider qui règle le délai entre deux journées.
 
 ### Transfert de version
 
@@ -317,12 +315,12 @@ checkpoint.
 
 Après une activation réussie, l'interface affiche explicitement la phase
 « Recompilation ». La compilation s'exécute dans un processus enfant et publie
-ses détails dans `data/recompilation.log`, tandis que le fil graphique reste
-réactif. Une compilation réussie conduit à un remplacement du processus par
-`exec` : le même `run.sh`, le daemon, l'identifiant de budget API et les
-descripteurs utiles restent en place, tandis que la nouvelle image du moteur
-recharge le checkpoint. La géométrie de la fenêtre, le délai choisi et le
-nombre de journées restantes sont transmis explicitement.
+ses détails dans `data/recompilation.log`, tandis qu'Elysia et le navigateur
+restent réactifs. Une compilation réussie conduit à un remplacement du backend
+C++ par la version construite : le même `run.sh`, le daemon, la passerelle
+Elysia et l'identifiant de budget API restent en place, tandis que la nouvelle
+image du moteur recharge le checkpoint. Le délai choisi et le nombre de
+journées restantes sont transmis explicitement.
 
 Le transfert reprend au premier cycle élémentaire de la journée suivante ; il
 ne rejoue ni la fenêtre IA ni la validation déjà terminée. Un checkpoint
