@@ -53,6 +53,10 @@ std::string action_label(const std::string& action) {
   if(action=="eat_carried_food")return "Manger la ration portée";
   if(action=="eat_camp_food")return "Manger à la réserve";
   if(action=="cook_camp_food")return "Cuisiner une ration";
+  if(action=="share_camp_meal")return "Partager un repas";
+  if(action=="hold_vigil")return "Tenir une veillée";
+  if(action=="celebrate")return "Célébrer";
+  if(action=="mourn")return "Faire mémoire";
   return action;
 }
 
@@ -435,7 +439,10 @@ struct RaylibInterface::Impl {
     int cursor=y+18;
     DrawText(agent.name.c_str(),x+22,cursor,26,primary_text);
     DrawText(clipped(agent.behavior.archetype,width-44,15).c_str(),x+22,cursor+32,15,accent);
-    cursor+=66;
+    if(!agent.community_role.empty())
+      DrawText(clipped("Rôle au foyer : "+agent.community_role,width-44,13).c_str(),
+               x+22,cursor+52,13,secondary_text);
+    cursor+=agent.community_role.empty()?66:84;
     DrawText("HUMEUR",x+22,cursor,13,secondary_text);
     DrawText(clipped(selected->mood,width-44,17).c_str(),x+22,cursor+20,17,primary_text);
     cursor+=56;

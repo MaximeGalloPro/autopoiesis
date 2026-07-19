@@ -2,6 +2,7 @@
 #include "autopoiesis/feature_request.hpp"
 #include "autopoiesis/renderer.hpp"
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -68,6 +69,7 @@ json agent_checkpoint(const Agent& agent) {
   json foods=json::array();
   for(const auto food:agent.behavior.preferred_foods)foods.push_back(static_cast<int>(food));
   json observed=json::array();for(const auto& animal:agent.observed_animals)observed.push_back(animal);
+  json mourned=json::array();for(const auto& id:agent.mourned_agents)mourned.push_back(id);
   json campfires=json::array();for(const auto& position:agent.known_campfires)campfires.push_back({{"x",position.first},{"y",position.second}});
   json home=nullptr;if(agent.home_camp)home={{"x",agent.home_camp->x},{"y",agent.home_camp->y}};
   json rest_position=nullptr;if(agent.camp_rest_position)rest_position={{"x",agent.camp_rest_position->x},{"y",agent.camp_rest_position->y}};
@@ -101,7 +103,12 @@ json agent_checkpoint(const Agent& agent) {
           {"wood_inventory",agent.wood_inventory},
           {"branch_inventory",agent.branch_inventory},
           {"carried_food",std::move(carried)},
-          {"shelter_construction",std::move(shelter)}};
+          {"shelter_construction",std::move(shelter)},
+          {"community_role",agent.community_role},
+          {"last_shared_meal_day",agent.last_shared_meal_day},
+          {"last_vigil_day",agent.last_vigil_day},
+          {"celebration_pending",agent.celebration_pending},
+          {"mourned_agents",std::move(mourned)}};
 }
 
 Agent restore_agent(const json& state) {
@@ -166,7 +173,22 @@ Agent restore_agent(const json& state) {
     agent.shelter_construction=ShelterConstruction{
         {shelter.at("x").get<int>(),shelter.at("y").get<int>()},shelter.at("progress").get<int>()};
   }
+  agent.community_role=state.value("community_role","");
+  agent.last_shared_meal_day=state.value("last_shared_meal_day",0);
+  agent.last_vigil_day=state.value("last_vigil_day",0);
+  agent.celebration_pending=state.value("celebration_pending",false);
+  for(const auto& id:state.value("mourned_agents",json::array()))
+    agent.mourned_agents.insert(id.get<std::string>());
   return agent;
+}
+
+std::string collective_role(const BehaviorProfile& behavior) {
+  const std::array<std::pair<int,const char*>,4> roles{{
+      {behavior.construction_drive,"bâtisseur"},{behavior.provision_drive,"intendant"},
+      {behavior.exploration_drive,"éclaireur"},{behavior.social_drive,"médiateur"}}};
+  return std::max_element(roles.begin(),roles.end(),[](const auto& left,const auto& right){
+    return left.first<right.first;
+  })->second;
 }
 }
 
@@ -251,6 +273,8 @@ Decision LocalDecider::decide(const Perception& p) {
     return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
   if(best_goal=="eat"&&has_action("eat_carried_food"))
     return {DecisionType::Action,"eat_carried_food",json::object(),"Je mange la nourriture que je transporte.","food","","be fed"};
+  if(best_goal=="eat"&&has_action("share_camp_meal"))
+    return {DecisionType::Action,"share_camp_meal",json::object(),"Je propose un repas commun.","relation","","partager le repas"};
   if(best_goal=="eat"&&hunger<75&&has_action("cook_camp_food"))
     return {DecisionType::Action,"cook_camp_food",json::object(),"Je prépare une ration avant le repas.","food","","préparer un repas"};
   if(best_goal=="eat"&&has_action("eat_camp_food"))
@@ -264,6 +288,12 @@ Decision LocalDecider::decide(const Perception& p) {
   if(carrying_materials&&has_action("deposit_materials"))
     return {DecisionType::Action,"deposit_materials",json::object(),
             "Je dépose mes matériaux dans la réserve commune.","réserve","","approvisionner le camp"};
+  if(camp_time&&!vital_emergency&&has_action("celebrate"))
+    return {DecisionType::Action,"celebrate",json::object(),"Je rassemble le groupe pour célébrer.","relation","","marquer notre réussite"};
+  if(camp_time&&!vital_emergency&&has_action("mourn"))
+    return {DecisionType::Action,"mourn",json::object(),"Je prends le temps d'honorer notre mort.","relation","","faire mémoire"};
+  if(is_night&&!vital_emergency&&has_action("hold_vigil"))
+    return {DecisionType::Action,"hold_vigil",json::object(),"Je veille avec un compagnon près du feu.","relation","","partager la veillée"};
   if(camp_time&&!vital_emergency&&at_reserved_rest&&has_action("rest_by_campfire"))
     return {DecisionType::Action,"rest_by_campfire",json::object(),
             "Je passe la nuit près du feu de camp.","repos nocturne","","rester au camp"};
@@ -602,6 +632,10 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "eat_carried_food") return result == "mange sa nourriture transportee";
   if (decision.action == "eat_camp_food") return result == "mange une reserve du camp";
   if (decision.action == "cook_camp_food") return result == "cuit une ration au camp";
+  if (decision.action == "share_camp_meal") return result.starts_with("partage un repas avec ");
+  if (decision.action == "hold_vigil") return result.starts_with("veille avec ");
+  if (decision.action == "celebrate") return result == "celebre avec le groupe";
+  if (decision.action == "mourn") return result.starts_with("honore la memoire de ");
   return true;
 }
 
@@ -698,7 +732,12 @@ Perception Simulation::perceive(Agent& a) {
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
-  const auto actions=available_actions(a,world_,agents_);
+  const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
+  if(a.home_camp&&a.community_role.empty()){
+    a.community_role=collective_role(a.behavior);
+    a.remember("J'assume le rôle de "+a.community_role+" au foyer.");
+  }
+  const auto actions=available_actions(a,world_,agents_,day_,phase);
   const bool shelter_action_available=std::any_of(actions.begin(),actions.end(),[](const std::string& action){
     return action=="harvest_wood"||action=="assemble_shelter"||action=="build_shelter";
   });
@@ -710,11 +749,10 @@ Perception Simulation::perceive(Agent& a) {
     a.remember("La capacite de construction de l'abri est disponible.");
   }
   json construction=nullptr;if(a.shelter_construction)construction={{"x",a.shelter_construction->position.x},{"y",a.shelter_construction->position.y},{"progress",a.shelter_construction->progress}};
-  const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
   json carried=nullptr;if(a.carried_food)carried={{"type",food_type_name(a.carried_food->type)},{"nutrition",a.carried_food->nutrition},{"cooked",a.carried_food->cooked},{"age_days",a.carried_food->age_days},{"shelf_life_days",a.carried_food->shelf_life_days}};
   json home=nullptr;if(a.home_camp)home={{"x",a.home_camp->x},{"y",a.home_camp->y}};
   json rest_position=nullptr;if(a.camp_rest_position)rest_position={{"x",a.camp_rest_position->x},{"y",a.camp_rest_position->y}};
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"carried_food",carried},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions}}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"carried_food",carried},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -755,6 +793,76 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="eat_carried_food"){if(!a.alive||!a.carried_food)return "aucune nourriture transportee";const auto food=*a.carried_food;a.carried_food.reset();a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange sa nourriture transportee";}
   if(d.action=="eat_camp_food"){const auto fire=world_.nearby_campfire(a.position);FoodItem food;if(!a.alive||!fire||!world_.take_stored_food(*fire,&food,a.behavior.preferred_foods))return "aucune reserve au camp";a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));a.remember("J'ai mangé une ration "+food_type_name(food.type)+(food.cooked?" cuite.":"."));return "mange une reserve du camp";}
   if(d.action=="cook_camp_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.cook_stored_food(*fire))return "aucune ration crue au camp";a.remember("J'ai cuit une ration pour le groupe.");return "cuit une ration au camp";}
+  if(d.action=="share_camp_meal"){
+    const auto fire=world_.nearby_campfire(a.position);
+    Agent* companion=nullptr;
+    if(fire&&a.last_shared_meal_day!=day_)for(auto& other:agents_)if(
+        other.alive&&other.id!=a.id&&other.last_shared_meal_day!=day_&&
+        world_.nearby_campfire(other.position)==fire&&(!companion||other.id<companion->id))companion=&other;
+    if(!a.alive||!fire||!companion||world_.stored_food(*fire)<2)return "repas commun impossible";
+    FoodItem first,second;
+    if(!world_.take_stored_food(*fire,&first,a.behavior.preferred_foods))return "repas commun impossible";
+    if(!world_.take_stored_food(*fire,&second,companion->behavior.preferred_foods)){
+      world_.store_food(*fire,first);return "repas commun impossible";
+    }
+    a.hunger=clamp_stat(a.hunger-first.nutrition);
+    companion->hunger=clamp_stat(companion->hunger-second.nutrition);
+    a.last_shared_meal_day=day_;companion->last_shared_meal_day=day_;
+    auto& outgoing=a.relationships[companion->id];++outgoing.interactions;
+    outgoing.trust=clamp_stat(outgoing.trust+2);outgoing.affinity=clamp_stat(outgoing.affinity+3);
+    auto& incoming=companion->relationships[a.id];++incoming.interactions;
+    incoming.trust=clamp_stat(incoming.trust+2);incoming.affinity=clamp_stat(incoming.affinity+3);
+    a.remember("J'ai partagé un repas avec "+companion->name+".");
+    companion->remember("J'ai partagé un repas avec "+a.name+".");
+    return "partage un repas avec "+companion->name;
+  }
+  if(d.action=="hold_vigil"){
+    const auto fire=world_.nearby_campfire(a.position);
+    Agent* companion=nullptr;
+    if(fire&&day_phase_for(cycle_in_day_,cycles_per_day_)==DayPhase::Night&&a.last_vigil_day!=day_)
+      for(auto& other:agents_)if(other.alive&&other.id!=a.id&&other.last_vigil_day!=day_&&
+          world_.nearby_campfire(other.position)==fire&&(!companion||other.id<companion->id))companion=&other;
+    if(!a.alive||!companion)return "veille impossible";
+    a.last_vigil_day=day_;companion->last_vigil_day=day_;
+    a.fatigue=clamp_stat(a.fatigue+1);companion->fatigue=clamp_stat(companion->fatigue+1);
+    a.boredom=clamp_stat(a.boredom-12);companion->boredom=clamp_stat(companion->boredom-12);
+    auto& outgoing=a.relationships[companion->id];++outgoing.interactions;
+    outgoing.trust=clamp_stat(outgoing.trust+3);outgoing.affinity=clamp_stat(outgoing.affinity+2);
+    auto& incoming=companion->relationships[a.id];++incoming.interactions;
+    incoming.trust=clamp_stat(incoming.trust+3);incoming.affinity=clamp_stat(incoming.affinity+2);
+    a.remember("J'ai veillé près du feu avec "+companion->name+".");
+    companion->remember("J'ai veillé près du feu avec "+a.name+".");
+    return "veille avec "+companion->name;
+  }
+  if(d.action=="celebrate"){
+    const auto fire=world_.nearby_campfire(a.position);
+    if(!a.alive||!fire||!a.celebration_pending)return "celebration impossible";
+    const int participants=static_cast<int>(std::count_if(agents_.begin(),agents_.end(),[&](const Agent& other){
+      return other.alive&&world_.nearby_campfire(other.position)==fire;
+    }));
+    if(participants<2)return "celebration impossible";
+    for(auto& other:agents_)if(other.alive&&world_.nearby_campfire(other.position)==fire){
+      other.boredom=clamp_stat(other.boredom-15);
+      other.remember("Le groupe a célébré la réussite de "+a.name+".");
+      if(other.id!=a.id){auto& relation=a.relationships[other.id];++relation.interactions;relation.affinity=clamp_stat(relation.affinity+3);}
+    }
+    a.celebration_pending=false;
+    return "celebre avec le groupe";
+  }
+  if(d.action=="mourn"){
+    const auto fire=world_.nearby_campfire(a.position);
+    const Agent* deceased=nullptr;
+    bool has_companion=false;
+    if(fire)for(const auto& other:agents_){
+      if(other.alive&&other.id!=a.id&&world_.nearby_campfire(other.position)==fire)has_companion=true;
+      if(!other.alive&&other.id!=a.id&&!a.mourned_agents.contains(other.id)&&
+         (!deceased||other.id<deceased->id))deceased=&other;
+    }
+    if(!a.alive||!fire||!has_companion||!deceased)return "deuil impossible";
+    a.mourned_agents.insert(deceased->id);a.boredom=clamp_stat(a.boredom-5);
+    a.remember("J'ai honoré la mémoire de "+deceased->name+" avec le groupe.");
+    return "honore la memoire de "+deceased->name;
+  }
   if(d.action=="assemble_shelter"){
     if(!a.alive||a.wood_inventory<1||!world_.passable(a.position)||world_.shelter_level(a.position)>0||(a.shelter_construction&&a.shelter_construction->position!=a.position))return "assemblage impossible";
     if(!a.shelter_construction)a.shelter_construction=ShelterConstruction{a.position,0};
@@ -776,7 +884,9 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
     const auto previous=before.map_visit_counts.find({agent.position.x,agent.position.y});
     const int previous_visits=previous==before.map_visit_counts.end()?0:previous->second;
     boredom_delta=previous_visits==0?-2:1+std::max(0,previous_visits-2)/2;
-  }else if(decision.action=="talk"||decision.action=="hunt_animal"||decision.action=="hunt_rabbit")boredom_delta=-12;
+  }else if(decision.action=="talk"||decision.action=="hunt_animal"||decision.action=="hunt_rabbit"||
+           decision.action=="share_camp_meal"||decision.action=="hold_vigil"||
+           decision.action=="celebrate"||decision.action=="mourn")boredom_delta=-12;
   else if(decision.action=="eat_food"||decision.action=="eat_berries"||decision.action=="eat_carried_food"||decision.action=="eat_camp_food"||decision.action=="drink")boredom_delta=-5;
   agent.boredom=clamp_stat(agent.boredom+boredom_delta);
 
@@ -801,6 +911,7 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
 
   if(agent.project.key=="secure_food"){
     agent.project.status=ProjectStatus::Completed;
+    agent.celebration_pending=true;
     agent.project.blocked_reason.clear();agent.project.missing_capability.clear();
     agent.remember("La première réserve commune de nourriture est constituée.");
     return;
@@ -852,7 +963,8 @@ bool Simulation::run_day(IUserInterface* interface){
       Agent before=agent;
       Decision decision=decider_.decide(perceive(agent));
       std::string error;
-      if(!validate_decision(decision,agent,world_,agents_,error)){
+      if(!validate_decision(decision,agent,world_,agents_,error,day_,
+                            day_phase_for(cycle_in_day_,cycles_per_day_))){
         decision=Decision{};
         decision.reason="invalid decision";
         logger_.message("Jour "+std::to_string(day_)+" / cycle elementaire "+std::to_string(simulation_cycle_)+" — "+agent.name+" decision invalide : "+error);
@@ -933,7 +1045,8 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;
           const EvolutionContext evolution_context{active_world_mechanisms(),
-              logger_.evolution_memory(24),available_actions(agent,world_,agents_)};
+              logger_.evolution_memory(24),available_actions(agent,world_,agents_,day_,
+                  day_phase_for(cycle_in_day_,cycles_per_day_))};
           auto request_result=run_with_activity(interface,
               {UiActivityKind::EvolutionRequest,date_,simulation_cycle_,agent.id,agent.name,
                call_number,total_calls,0},

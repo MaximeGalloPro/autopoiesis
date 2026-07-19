@@ -56,7 +56,8 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
   }
   snapshot.agents.reserve(agents.size());
   for(const auto& agent:agents)
-    snapshot.agents.push_back({agent,mood_for(agent),available_actions(agent,world,agents)});
+    snapshot.agents.push_back({agent,mood_for(agent),
+        available_actions(agent,world,agents,date.absolute_day,snapshot.phase)});
   snapshot.animals=world.animals();
   snapshot.recent_events=recent_events;
   return snapshot;

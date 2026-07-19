@@ -15,11 +15,12 @@ suivante.
 - [x] **G03 - Inventaires complets** : bois, branches et ration partagent une charge bornée dérivée de la force ; le décideur et le moteur empêchent tout dépassement et l'interface expose la capacité.
 - [x] **G04 - Transport des ressources** : cibler des branches connues, les ramasser, rejoindre le foyer par BFS et transférer atomiquement bois et branches dans sa réserve persistante.
 - [x] **G09 - Alimentation planifiée** : préférences persistantes, sélection anti-gaspillage, ration crue ou cuite, nutrition améliorée et péremption quotidienne des stocks comme du transport.
-- [ ] **G14 - Vie collective** : repas partagés, veillées, rôles spontanés, célébrations et deuils.
+- [x] **G14 - Vie collective** : rôles spontanés selon les aptitudes, repas partagés, veillées nocturnes, célébrations et deuils bornés qui modifient relations et souvenirs.
 
-Critère de sortie : un personnage collecte une nourriture, la rapporte au camp
-et un autre personnage peut la consommer ; les journaux expliquent chaque
-intention et l'interface montre la réserve.
+Critère de sortie atteint : un personnage collecte une nourriture, la rapporte
+au camp et un autre peut la consommer ; les matériaux suivent le même trajet,
+les repas et activités sociales sont observables, et l'interface montre les
+charges, rôles et réserves.
 
 ### Phase 2 - Transformer le monde
 

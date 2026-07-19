@@ -80,6 +80,11 @@ struct Agent {
   int branch_inventory{};
   std::optional<FoodItem> carried_food;
   std::optional<ShelterConstruction> shelter_construction;
+  std::string community_role;
+  int last_shared_meal_day{};
+  int last_vigil_day{};
+  bool celebration_pending{};
+  std::set<std::string> mourned_agents;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
 inline int inventory_capacity(const Agent& agent) { return std::clamp(4+agent.attributes.strength/25,4,10); }
