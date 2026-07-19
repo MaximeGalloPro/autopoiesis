@@ -4,9 +4,31 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <queue>
 #include <sstream>
 
 using namespace apo;
+
+namespace {
+class ScriptedValidationInterface final : public IValidationInterface {
+ public:
+  explicit ScriptedValidationInterface(std::initializer_list<std::string> commands)
+      : commands_(commands) {}
+
+  std::string request_command(const ValidationPrompt& prompt) override {
+    prompts.push_back(prompt);
+    assert(!commands_.empty());
+    const auto command=commands_.front();
+    commands_.pop();
+    return command;
+  }
+
+  std::vector<ValidationPrompt> prompts;
+
+ private:
+  std::queue<std::string> commands_;
+};
+}
 
 int main() {
   const std::filesystem::path directory = "/tmp/autopoiesis-validation-tests";
@@ -158,5 +180,34 @@ int main() {
   assert(devil_approved_content.find("devil_automatic") != std::string::npos);
   unsetenv("DEVIL_AUTO_APPROVE");
   unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory);
+  std::ofstream card_requests(directory / "feature_requests.jsonl");
+  for(int index=1;index<=3;++index){
+    card_requests << R"({"id":"card-)" << index
+                  << R"(","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a)" << index
+                  << R"(","agent_name":"Personnage )" << index
+                  << R"(","title":"Proposition )" << index
+                  << R"(","need":"Besoin )" << index
+                  << R"(","obstacle":"Obstacle","proposed_change":"Changement","mechanism":{"name":"test","summary":"Résumé du mécanisme","resources":["bois"],"actions":["construire"],"preconditions":["matériaux"],"deterministic_effects":["abri"]},"acceptance_tests":["Le mécanisme fonctionne"]})"
+                  << '\n';
+  }
+  card_requests.close();
+  ScriptedValidationInterface cards({"2","r","o"});
+  std::istringstream unused_input;
+  std::ostringstream card_output;
+  HumanValidation card_validation(directory.string(),unused_input,card_output,&cards);
+  assert(card_validation.review_window(3,720));
+  assert(cards.prompts.size()==3);
+  assert(cards.prompts[0].stage==ValidationStage::Choose);
+  assert(cards.prompts[0].requests.size()==3);
+  assert(cards.prompts[1].stage==ValidationStage::Confirm);
+  assert(cards.prompts[1].selected_index==2);
+  assert(cards.prompts[2].stage==ValidationStage::Complete);
+  std::ifstream card_rejected(directory / "rejected_feature_requests.jsonl");
+  const std::string card_rejected_content(std::istreambuf_iterator<char>(card_rejected),{});
+  assert(card_rejected_content.find("card-2")!=std::string::npos);
+  assert(card_rejected_content.find("card-1")==std::string::npos);
   std::filesystem::remove_all(directory);
 }

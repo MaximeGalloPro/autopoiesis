@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <sstream>
 
 namespace apo {
 namespace {
@@ -98,6 +99,92 @@ MapViewport calculate_map_viewport(int screen_width, int screen_height) {
                                                     available_height/World::height)));
   return {left,top,cell*World::width,cell*World::height};
 }
+
+std::vector<std::string> wrapped_lines(const std::string& text, int maximum_width,
+                                       int font_size, std::size_t maximum_lines) {
+  std::vector<std::string> lines;
+  std::istringstream words(text);
+  std::string word;
+  bool truncated=false;
+  while(words>>word){
+    const auto candidate=lines.empty()||lines.back().empty()?word:lines.back()+" "+word;
+    if(lines.empty()||MeasureText(candidate.c_str(),font_size)>maximum_width){
+      if(lines.size()==maximum_lines){truncated=true;break;}
+      lines.push_back(clipped(word,maximum_width,font_size));
+    }else lines.back()=candidate;
+  }
+  if(truncated&&!lines.empty())lines.back()=clipped(lines.back()+"...",maximum_width,font_size);
+  return lines;
+}
+
+void draw_lines(const std::vector<std::string>& lines, int x, int& y, int font_size,
+                int spacing, Color color) {
+  for(const auto& line:lines){DrawText(line.c_str(),x,y,font_size,color);y+=spacing;}
+}
+
+std::vector<Rectangle> validation_card_rectangles(std::size_t count, int screen_width,
+                                                  int screen_height) {
+  std::vector<Rectangle> rectangles;
+  if(count==0)return rectangles;
+  constexpr float margin=36.0F,gap=18.0F,top=142.0F;
+  const float width=(screen_width-margin*2-gap*(count-1))/count;
+  const float height=std::max(330.0F,screen_height-top-104.0F);
+  for(std::size_t index=0;index<count;++index)
+    rectangles.push_back({margin+index*(width+gap),top,width,height});
+  return rectangles;
+}
+
+Rectangle validation_bottom_button(int index, int screen_width, int screen_height) {
+  constexpr float width=190.0F,height=44.0F,gap=14.0F;
+  const float total=width*2+gap;
+  return {(screen_width-total)/2+index*(width+gap),screen_height-58.0F,width,height};
+}
+
+void draw_button(Rectangle rectangle, const std::string& label, Color fill, Vector2 mouse) {
+  if(CheckCollisionPointRec(mouse,rectangle))fill=ColorBrightness(fill,0.12F);
+  DrawRectangleRec(rectangle,fill);
+  DrawRectangleLinesEx(rectangle,1,ColorBrightness(fill,0.25F));
+  const int font_size=16;
+  DrawText(label.c_str(),static_cast<int>(rectangle.x+(rectangle.width-MeasureText(label.c_str(),font_size))/2),
+           static_cast<int>(rectangle.y+(rectangle.height-font_size)/2),font_size,primary_text);
+}
+
+Color request_color(const json& request) {
+  return agent_color(request.value("agent_id",""));
+}
+
+void draw_request_card(const json& request, Rectangle rectangle, bool expanded) {
+  const auto card_color=request_color(request);
+  DrawRectangleRec(rectangle,{42,45,44,255});
+  DrawRectangleLinesEx(rectangle,2,card_color);
+  DrawRectangle(static_cast<int>(rectangle.x),static_cast<int>(rectangle.y),
+                static_cast<int>(rectangle.width),7,card_color);
+  const int x=static_cast<int>(rectangle.x+20),maximum_width=static_cast<int>(rectangle.width-40);
+  int y=static_cast<int>(rectangle.y+23);
+  DrawText(request.value("agent_name","Personnage").c_str(),x,y,15,card_color);y+=30;
+  draw_lines(wrapped_lines(request.value("title","Proposition sans titre"),maximum_width,22,3),
+             x,y,22,27,primary_text);
+  y+=18;
+  DrawText("BESOIN",x,y,12,secondary_text);y+=19;
+  draw_lines(wrapped_lines(request.value("need","Non précisé"),maximum_width,15,expanded?4:3),
+             x,y,15,20,primary_text);
+  y+=16;
+  DrawText("CHANGEMENT PROPOSÉ",x,y,12,secondary_text);y+=19;
+  draw_lines(wrapped_lines(request.value("proposed_change","Non précisé"),maximum_width,15,
+                           expanded?6:4),x,y,15,20,primary_text);
+  if(expanded){
+    y+=16;
+    DrawText("MÉCANISME",x,y,12,secondary_text);y+=19;
+    const auto mechanism=request.value("mechanism",json::object());
+    draw_lines(wrapped_lines(mechanism.value("summary","Non précisé"),maximum_width,15,4),
+               x,y,15,20,primary_text);
+  }else{
+    DrawLine(x,static_cast<int>(rectangle.y+rectangle.height-42),
+             static_cast<int>(rectangle.x+rectangle.width-20),
+             static_cast<int>(rectangle.y+rectangle.height-42),divider);
+    DrawText("Cliquer pour choisir",x,static_cast<int>(rectangle.y+rectangle.height-29),14,secondary_text);
+  }
+}
 }
 
 struct RaylibInterface::Impl {
@@ -106,6 +193,8 @@ struct RaylibInterface::Impl {
   std::string selected_agent_id;
   std::string screenshot_path;
   bool screenshot_taken{};
+  std::string validation_screenshot_path;
+  std::string automation_command;
 
   Impl() {
     SetTraceLogLevel(LOG_WARNING);
@@ -114,6 +203,10 @@ struct RaylibInterface::Impl {
     SetWindowMinSize(1040,680);
     SetTargetFPS(60);
     if(const char* configured=std::getenv("AUTOPOIESIS_GUI_SCREENSHOT"))screenshot_path=configured;
+    if(const char* configured=std::getenv("AUTOPOIESIS_GUI_VALIDATION_SCREENSHOT"))
+      validation_screenshot_path=configured;
+    if(const char* configured=std::getenv("AUTOPOIESIS_GUI_AUTOMATION_COMMAND"))
+      automation_command=configured;
   }
 
   const UiAgent* selected_agent() const {
@@ -254,11 +347,64 @@ struct RaylibInterface::Impl {
     EndDrawing();
   }
 
+  void draw_validation(const ValidationPrompt& prompt) const {
+    const int screen_width=GetScreenWidth(),screen_height=GetScreenHeight();
+    const auto mouse=GetMousePosition();
+    BeginDrawing();
+    ClearBackground(background);
+    DrawRectangle(0,0,screen_width,86,{30,33,34,255});
+    DrawText("CHOIX D'ÉVOLUTION",36,18,27,primary_text);
+    DrawText(TextFormat("Jour %d · cycle %d",prompt.day,prompt.simulation_cycle),36,52,14,secondary_text);
+
+    if(prompt.stage==ValidationStage::Choose){
+      DrawText("Choisissez une carte. Une seule évolution pourra être autorisée pendant cette fenêtre.",
+               36,102,16,secondary_text);
+      const auto rectangles=validation_card_rectangles(prompt.requests.size(),screen_width,screen_height);
+      for(std::size_t index=0;index<rectangles.size();++index)
+        draw_request_card(prompt.requests[index],rectangles[index],false);
+      draw_button(validation_bottom_button(0,screen_width,screen_height),"Aucune évolution",
+                  {71,76,74,255},mouse);
+      draw_button(validation_bottom_button(1,screen_width,screen_height),"Arrêter le run",
+                  {117,61,58,255},mouse);
+    }else if(prompt.stage==ValidationStage::Confirm&&prompt.selected_index>0&&
+             prompt.selected_index<=prompt.requests.size()){
+      DrawText("Confirmez cette autorisation avant de transmettre la demande à Dieu.",
+               36,102,16,secondary_text);
+      const float card_width=std::min(720.0F,screen_width*0.64F);
+      const Rectangle card{36.0F,138.0F,card_width,screen_height-174.0F};
+      draw_request_card(prompt.requests[prompt.selected_index-1],card,true);
+      const float action_x=card.x+card.width+30.0F;
+      const float action_width=screen_width-action_x-36.0F;
+      DrawText("VOTRE DÉCISION",static_cast<int>(action_x),166,13,secondary_text);
+      draw_button({action_x,200.0F,action_width,54.0F},"Approuver",{50,116,77,255},mouse);
+      draw_button({action_x,270.0F,action_width,54.0F},"Refuser",{129,61,57,255},mouse);
+      draw_button({action_x,340.0F,action_width,48.0F},"Revenir aux cartes",{71,76,74,255},mouse);
+      draw_button({action_x,screen_height-90.0F,action_width,44.0F},"Arrêter le run",{71,76,74,255},mouse);
+    }else{
+      const bool empty=prompt.stage==ValidationStage::Empty;
+      DrawText(empty?"Aucune évolution disponible":"Choix enregistré",
+               36,150,28,primary_text);
+      DrawText(empty?"La simulation peut reprendre sans modifier le monde.":
+                     "Les autres propositions restent en attente pour l'historique.",
+               36,194,17,secondary_text);
+      const Rectangle resume{36.0F,246.0F,250.0F,54.0F};
+      const Rectangle stop{304.0F,246.0F,210.0F,54.0F};
+      draw_button(resume,"Reprendre",{50,116,77,255},mouse);
+      draw_button(stop,"Arrêter le run",{117,61,58,255},mouse);
+    }
+    EndDrawing();
+  }
+
+  void capture(const std::string& path) {
+    if(path.empty())return;
+    Image framebuffer=LoadImageFromScreen();
+    ExportImage(framebuffer,path.c_str());
+    UnloadImage(framebuffer);
+  }
+
   void capture_if_requested() {
     if(screenshot_taken||screenshot_path.empty())return;
-    Image framebuffer=LoadImageFromScreen();
-    ExportImage(framebuffer,screenshot_path.c_str());
-    UnloadImage(framebuffer);
+    capture(screenshot_path);
     screenshot_taken=true;
   }
 };
@@ -287,5 +433,51 @@ bool RaylibInterface::idle_for(int milliseconds) {
     impl_->capture_if_requested();
   }while(GetTime()<deadline);
   return !WindowShouldClose();
+}
+
+std::string RaylibInterface::request_command(const ValidationPrompt& prompt) {
+  int rendered_frames=0;
+  while(true){
+    if(WindowShouldClose()||IsKeyPressed(KEY_ESCAPE))return "q";
+    const int screen_width=GetScreenWidth(),screen_height=GetScreenHeight();
+    const auto mouse=GetMousePosition();
+    const bool clicked=IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+    if(prompt.stage==ValidationStage::Choose){
+      const auto rectangles=validation_card_rectangles(prompt.requests.size(),screen_width,screen_height);
+      for(std::size_t index=0;index<rectangles.size();++index){
+        const int key=KEY_ONE+static_cast<int>(index);
+        if(IsKeyPressed(key)||(clicked&&CheckCollisionPointRec(mouse,rectangles[index])))
+          return std::to_string(index+1);
+      }
+      if(IsKeyPressed(KEY_N)||(clicked&&CheckCollisionPointRec(
+          mouse,validation_bottom_button(0,screen_width,screen_height))))return "n";
+      if(clicked&&CheckCollisionPointRec(mouse,validation_bottom_button(1,screen_width,screen_height)))
+        return "q";
+    }else if(prompt.stage==ValidationStage::Confirm){
+      const float card_width=std::min(720.0F,screen_width*0.64F);
+      const float action_x=36.0F+card_width+30.0F;
+      const float action_width=screen_width-action_x-36.0F;
+      if(IsKeyPressed(KEY_A)||(clicked&&CheckCollisionPointRec(
+          mouse,{action_x,200.0F,action_width,54.0F})))return "a";
+      if(IsKeyPressed(KEY_R)||(clicked&&CheckCollisionPointRec(
+          mouse,{action_x,270.0F,action_width,54.0F})))return "r";
+      if(IsKeyPressed(KEY_B)||(clicked&&CheckCollisionPointRec(
+          mouse,{action_x,340.0F,action_width,48.0F})))return "b";
+      if(clicked&&CheckCollisionPointRec(
+          mouse,{action_x,screen_height-90.0F,action_width,44.0F}))return "q";
+    }else{
+      if(IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_O)||(clicked&&CheckCollisionPointRec(
+          mouse,{36.0F,246.0F,250.0F,54.0F})))return "o";
+      if(clicked&&CheckCollisionPointRec(mouse,{304.0F,246.0F,210.0F,54.0F}))return "q";
+    }
+
+    impl_->draw_validation(prompt);
+    ++rendered_frames;
+    if(rendered_frames>=2&&!impl_->automation_command.empty()){
+      impl_->capture(impl_->validation_screenshot_path);
+      return impl_->automation_command;
+    }
+  }
 }
 }

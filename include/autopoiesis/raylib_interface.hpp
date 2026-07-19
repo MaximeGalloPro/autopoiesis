@@ -1,10 +1,11 @@
 #pragma once
 
 #include "ui_model.hpp"
+#include "validation.hpp"
 #include <memory>
 
 namespace apo {
-class RaylibInterface final : public IUserInterface {
+class RaylibInterface final : public IUserInterface, public IValidationInterface {
  public:
   RaylibInterface();
   ~RaylibInterface() override;
@@ -12,6 +13,7 @@ class RaylibInterface final : public IUserInterface {
   RaylibInterface& operator=(const RaylibInterface&) = delete;
   bool present(const UiSnapshot& snapshot) override;
   bool idle_for(int milliseconds) override;
+  std::string request_command(const ValidationPrompt& prompt) override;
 
  private:
   struct Impl;

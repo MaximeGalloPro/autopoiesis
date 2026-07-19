@@ -188,8 +188,9 @@ std::vector<json> select_window_requests(const std::vector<json>& available,
 }
 
 HumanValidation::HumanValidation(std::string data_directory, std::istream& input,
-                                 std::ostream& output)
-    : data_directory_(std::move(data_directory)), input_(input), output_(output) {}
+                                 std::ostream& output, IValidationInterface* interface)
+    : data_directory_(std::move(data_directory)), input_(input), output_(output),
+      interface_(interface) {}
 
 bool HumanValidation::wait_for_evolution(const std::string& request_id) {
   const path data_directory(data_directory_);
@@ -425,8 +426,14 @@ bool HumanValidation::review_window(int day, int simulation_cycle) {
                << "Tapez o pour reprendre, d N détail, q ou exit pour arrêter.\n> " << std::flush;
     }
 
+    ValidationStage stage=ValidationStage::Complete;
+    if(requests.empty())stage=ValidationStage::Empty;
+    else if(selected_index==0&&!decision_made)stage=ValidationStage::Choose;
+    else if(selected_index>0&&!decision_made)stage=ValidationStage::Confirm;
     std::string line;
-    if (!std::getline(input_, line)) return false;
+    if(interface_)line=interface_->request_command(
+        {stage,day,simulation_cycle,requests,selected_index});
+    else if(!std::getline(input_,line))return false;
     std::istringstream command(line);
     std::string action;
     command >> action;

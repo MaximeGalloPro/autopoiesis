@@ -9,6 +9,12 @@ carte, le calendrier et le climat ; un clic sur un personnage ouvre son état,
 son humeur, son projet, ses actions disponibles et ses attributs. Cette vue ne
 modifie jamais directement la simulation.
 
+À la fin d'une fenêtre IA, les trois propositions les plus récentes prennent la
+forme de cartes à jouer dans cette même fenêtre. Un clic ouvre la confirmation :
+approuver transmet la demande à Dieu, refuser la clôt, revenir conserve les
+trois cartes et « aucune évolution » reprend sans décision. Une seule carte
+peut toujours être traitée par fenêtre.
+
 ```text
 actions locales → 3 journées → bilan IA → demande IA à Dieu
                                   (2 appels par personnage)
@@ -81,8 +87,9 @@ Le lancement normal lit `.env` et utilise l'API :
 ```
 
 Sur macOS, `./run.sh` compile puis ouvre l'interface graphique native. Le
-terminal qui a lancé le jeu reste utilisé pour les appels IA, la validation et
-le suivi de Dieu. Le rendu terminal historique reste disponible :
+terminal qui a lancé le jeu reste utilisé pour les appels IA et le suivi de
+Dieu ; le choix des propositions se fait dans la fenêtre. Le rendu et la
+validation terminal historiques restent disponibles :
 
 ```bash
 ./run.sh --terminal
