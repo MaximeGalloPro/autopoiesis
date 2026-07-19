@@ -73,6 +73,7 @@ target_link_libraries(autopoiesis_devil_tests PRIVATE autopoiesis_core)
 add_test(NAME devil_constraints COMMAND autopoiesis_devil_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
+add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
 
 foreach(test_target
     autopoiesis_tests

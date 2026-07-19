@@ -75,7 +75,20 @@ int main() {
   assert(queued.wait_for_evolution("queued-request"));
   assert(queue_output.str().find("file d'attente") != std::string::npos);
   assert(queue_output.str().find("GOD_QUEUE_TIMEOUT_SECONDS") != std::string::npos);
+  assert(std::filesystem::exists(directory / "evolution_runs/queued-request/ui-queue-timeout"));
   unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory / "evolution_runs/slow-request");
+  std::ofstream(directory / "evolution_runs/slow-request/god-started") << "started\n";
+  setenv("GOD_WAIT_TIMEOUT_SECONDS", "1", 1);
+  std::istringstream slow_input("");
+  std::ostringstream slow_output;
+  HumanValidation slow(directory.string(), slow_input, slow_output);
+  assert(slow.wait_for_evolution("slow-request"));
+  assert(slow_output.str().find("GOD_WAIT_TIMEOUT_SECONDS") != std::string::npos);
+  assert(std::filesystem::exists(directory / "evolution_runs/slow-request/ui-work-timeout"));
+  unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
 
   std::filesystem::remove_all(directory);
   const auto failed_run = directory / "evolution_runs/failed-request";

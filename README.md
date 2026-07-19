@@ -133,6 +133,11 @@ Chaque évolution est journalisée dans `data/evolution_runs/<id>/` et
 `data/god-changelog.md`.
 
 `EVOLUTION_AUTOSTART=1` active ce lancement intégré (valeur par défaut).
+Sur macOS, `MACOS_NOTIFICATIONS=1` affiche une notification native lorsque
+l'évolution est activée, échoue ou dépasse le délai d'attente. Le daemon hôte
+reste responsable de cet affichage, y compris si Dieu continue après le timeout
+de l'interface. `MACOS_NOTIFICATIONS=0` le désactive. macOS peut demander une
+autorisation lors de la première notification.
 `GOD_QUEUE_TIMEOUT_SECONDS=900` borne l'attente avant le démarrage de Dieu.
 Une fois Dieu lancé, `GOD_WAIT_TIMEOUT_SECONDS=900` borne son workflow complet.
 L'interface affiche un suivi toutes les 15 secondes et, en cas de dépassement ou

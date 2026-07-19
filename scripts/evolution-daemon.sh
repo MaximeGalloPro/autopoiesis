@@ -58,6 +58,8 @@ if [[ ! -f "$SESSION_OFFSET_FILE" && -f "$DATA_DIR/evolution-session-started" ]]
   log "File historique ignoree | lignes=$request_offset"
 fi
 
+"$ROOT/scripts/notify-evolution-events.sh" "$DATA_DIR"
+
 python3 "$ROOT/scripts/reformulate-feature.py" "$DATA_DIR" "$VALIDATOR_MAX_REFORMULATIONS" "$SESSION_OFFSET_FILE"
 
 # Une approbation humaine est prioritaire sur les demandes encore pending.
@@ -182,6 +184,30 @@ if [[ -n "$correction_id" ]]; then
   run_stage "Correction de Dieu" "$correction_id" "$ROOT/scripts/god-correction-agent.sh" "$correction_id"
   exit 0
 fi
+
+python3 - "$DATA_DIR/evolution_runs" "$GOD_MAX_CORRECTIONS" "$DATA_DIR/evolution-session-started" <<'PY'
+import json
+import pathlib
+import sys
+
+runs_dir = pathlib.Path(sys.argv[1])
+maximum = int(sys.argv[2])
+session_path = pathlib.Path(sys.argv[3])
+session_started = session_path.stat().st_mtime if session_path.exists() else 0
+if runs_dir.exists():
+    for run_dir in runs_dir.iterdir():
+        verification_path = run_dir / "verification.json"
+        count_path = run_dir / "correction-count"
+        if not verification_path.exists() or not count_path.exists():
+            continue
+        try:
+            verification = json.loads(verification_path.read_text(encoding="utf-8"))
+            count = int(count_path.read_text(encoding="utf-8").strip())
+        except (ValueError, json.JSONDecodeError):
+            continue
+        if verification_path.stat().st_mtime >= session_started and verification.get("status") == "rejected" and count >= maximum:
+            (run_dir / "corrections-exhausted").touch()
+PY
 
 approved_id="$(python3 - "$DATA_DIR/approved_feature_requests.jsonl" "$DATA_DIR/evolution_runs" "$DATA_DIR/evolution-session-started" <<'PY'
 import json

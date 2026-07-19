@@ -21,6 +21,7 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [x] Ajouter eau, soif, cinq aliments, cinq espèces animales et dix attributs actifs.
 - [x] Remplacer la décision locale purement réactive par utilité, persistance d'objectif et BFS sur mémoire limitée.
 - [x] Ajouter le Diable : tirage local une fois par fenêtre, contraintes rationnelles, validation séparée et approbation automatique optionnelle.
+- [x] Notifier macOS à la fin du workflow de Dieu ou lorsqu'il dépasse le délai d'attente.
 - [ ] Étendre progressivement le catalogue du Diable lorsque de nouvelles capacités rendent des contraintes réelles jouables.
 - [ ] Ajouter reproduction et renouvellement déterministe des populations et ressources.
 - [ ] Ajouter inventaires, conservation des aliments et partage entre personnages.

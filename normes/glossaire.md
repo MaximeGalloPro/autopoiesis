@@ -142,6 +142,10 @@ Après une première implémentation, le vérificateur peut renvoyer un diagnost
 
 La socket Docker de macOS se trouve hors du worktree et reste volontairement inaccessible à l'instance Dieu sandboxée. Dieu exécute la compilation et les tests locaux, puis indique que Docker est délégué. Le vérificateur externe `scripts/verify-evolution.sh` possède seul la responsabilité du build Docker obligatoire. Aucun commit, push ou activation ne peut avoir lieu si cette vérification échoue.
 
+### Notification de fin
+
+Sur macOS, le daemon hôte observe les artefacts terminaux du workflow et utilise `osascript` lorsque `MACOS_NOTIFICATIONS=1`. Il envoie au plus une notification par demande et par type pour une activation réussie, un échec terminal ou un timeout de l'interface. La notification est informative : elle ne modifie aucun statut et ne remplace ni les journaux ni la vérification.
+
 ### Changelog de Dieu
 
 Journal généré pour chaque exécution de Dieu. Il décrit la demande approuvée, le mécanisme visé, les fichiers modifiés et le résultat de la vérification. Il est conservé dans les artefacts d'exécution et ne constitue ni un commit ni une autorisation d'activation.

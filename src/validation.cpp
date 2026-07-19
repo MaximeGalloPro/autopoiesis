@@ -320,6 +320,7 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
     }
 
     if (!work_started && now >= queue_deadline) {
+      std::ofstream(run_directory / "ui-queue-timeout") << timestamp() << '\n';
       output_ << "[Orchestrateur] Delai de file d'attente depasse "
               << "(GOD_QUEUE_TIMEOUT_SECONDS). Dieu n'a pas encore demarre ; "
               << "le daemon peut poursuivre en arriere-plan.\n";
@@ -328,6 +329,7 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
       return true;
     }
     if (work_started && now >= work_deadline) {
+      std::ofstream(run_directory / "ui-work-timeout") << timestamp() << '\n';
       output_ << "[Dieu] Delai de travail depasse (GOD_WAIT_TIMEOUT_SECONDS). "
               << "L'instance a bien demarre et peut poursuivre dans le daemon.\n";
       print_evolution_diagnostics(output_, data_directory, run_directory);
