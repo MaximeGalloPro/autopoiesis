@@ -59,6 +59,8 @@ std::string action_label(const std::string& action) {
   if(action=="repair_axe")return "Réparer la hache";
   if(action=="designate_building")return "Désigner un bâtiment";
   if(action=="work_on_building")return "Travailler au chantier";
+  if(action=="convalesce")return "Récupérer";
+  if(action=="treat_condition")return "Soigner un compagnon";
   if(action=="share_camp_meal")return "Partager un repas";
   if(action=="hold_vigil")return "Tenir une veillée";
   if(action=="celebrate")return "Célébrer";
@@ -472,7 +474,14 @@ struct RaylibInterface::Impl {
     cursor+=agent.community_role.empty()?66:84;
     DrawText("HUMEUR",x+22,cursor,13,secondary_text);
     DrawText(clipped(selected->mood,width-44,17).c_str(),x+22,cursor+20,17,primary_text);
-    cursor+=56;
+    if(!agent.conditions.empty()){
+      const auto most_severe=std::max_element(agent.conditions.begin(),agent.conditions.end(),
+          [](const HealthCondition& left,const HealthCondition& right){return left.severity<right.severity;});
+      const std::string condition="Affection · "+health_condition_name(most_severe->type)+" "+
+          std::to_string(most_severe->severity)+(most_severe->treated?" · soignée":" · sans soin");
+      DrawText(clipped(condition,width-44,13).c_str(),x+22,cursor+43,13,{224,142,113,255});
+      cursor+=74;
+    }else cursor+=56;
     const int bar_width=width-44;
     draw_stat("Santé",agent.health,x+22,cursor,bar_width,{86,184,111,255});cursor+=38;
     draw_stat("Faim",agent.hunger,x+22,cursor,bar_width,{220,151,64,255});cursor+=38;

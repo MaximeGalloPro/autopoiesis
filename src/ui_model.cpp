@@ -21,6 +21,7 @@ std::string mood_for(const Agent& agent) {
   if(!agent.alive)return "Sans vie";
   if(agent.sleeping_days>0)return "Repos profond";
   if(agent.health<=30)return "Inquiétude pour sa santé";
+  if(!agent.conditions.empty())return "Fragilisé par une affection";
   if(agent.thirst>=75)return "Tension liée à la soif";
   if(agent.hunger>=75)return "Tension liée à la faim";
   if(agent.fatigue>=75)return "Épuisement";

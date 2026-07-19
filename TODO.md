@@ -35,7 +35,7 @@ travail → bâtiment, avec coût, durée et compétence observables.
 
 ### Phase 3 - Produire des histoires humaines
 
-- [ ] **G11 - Santé détaillée** : blessures, maladies, infections, soins et convalescence.
+- [x] **G11 - Santé détaillée** : blessures et maladies causales, infection des plaies négligées, soin par un compagnon et convalescence quotidienne accélérée par abri ou lit.
 - [ ] **G12 - Émotions causales** : relier chaque émotion à un souvenir et à un effet décisionnel borné.
 - [ ] **G13 - Relations actives** : entraide, conflit, avertissement, accompagnement et réconciliation.
 - [ ] **G15 - Population évolutive** : arrivées, départs, vieillissement, naissance et mort.

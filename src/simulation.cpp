@@ -70,6 +70,9 @@ json agent_checkpoint(const Agent& agent) {
   for(const auto food:agent.behavior.preferred_foods)foods.push_back(static_cast<int>(food));
   json observed=json::array();for(const auto& animal:agent.observed_animals)observed.push_back(animal);
   json mourned=json::array();for(const auto& id:agent.mourned_agents)mourned.push_back(id);
+  json conditions=json::array();for(const auto& condition:agent.conditions)conditions.push_back({
+      {"id",condition.id},{"type",static_cast<int>(condition.type)},{"severity",condition.severity},
+      {"days",condition.days},{"treated",condition.treated},{"cause",condition.cause}});
   json campfires=json::array();for(const auto& position:agent.known_campfires)campfires.push_back({{"x",position.first},{"y",position.second}});
   json home=nullptr;if(agent.home_camp)home={{"x",agent.home_camp->x},{"y",agent.home_camp->y}};
   json rest_position=nullptr;if(agent.camp_rest_position)rest_position={{"x",agent.camp_rest_position->x},{"y",agent.camp_rest_position->y}};
@@ -116,7 +119,10 @@ json agent_checkpoint(const Agent& agent) {
           {"mourned_agents",std::move(mourned)},
           {"skills",skills_json(agent)},
           {"last_taught_day",agent.last_taught_day},
-          {"last_lesson_day",agent.last_lesson_day}};
+          {"last_lesson_day",agent.last_lesson_day},
+          {"conditions",std::move(conditions)},
+          {"next_condition_id",agent.next_condition_id},
+          {"last_convalescence_day",agent.last_convalescence_day}};
 }
 
 Agent restore_agent(const json& state) {
@@ -196,6 +202,12 @@ Agent restore_agent(const json& state) {
     agent.skills[*skill]={value.value("experience",0),value.value("level",0)};
   agent.last_taught_day=state.value("last_taught_day",0);
   agent.last_lesson_day=state.value("last_lesson_day",0);
+  for(const auto& condition:state.value("conditions",json::array()))agent.conditions.push_back({
+      condition.at("id").get<std::string>(),static_cast<HealthConditionType>(condition.at("type").get<int>()),
+      condition.value("severity",1),condition.value("days",0),condition.value("treated",false),
+      condition.value("cause","")});
+  agent.next_condition_id=state.value("next_condition_id",1);
+  agent.last_convalescence_day=state.value("last_convalescence_day",0);
   return agent;
 }
 
@@ -297,6 +309,15 @@ Decision LocalDecider::decide(const Perception& p) {
   if(best_goal=="eat"&&has_action("eat_camp_food"))
     return {DecisionType::Action,"eat_camp_food",json::object(),"Je prends un repas dans la réserve commune.","food","","be fed"};
   const bool vital_emergency=hunger>=75||thirst>=75;
+  if(!vital_emergency&&has_action("treat_condition")){
+    const auto care=p.value.value("care_opportunities",json::array());
+    if(!care.empty())return {DecisionType::Action,"treat_condition",
+        {{"target_id",care.front().value("target_id","")},{"condition_id",care.front().value("condition_id","")}},
+        "Je soigne l'affection la plus grave du foyer.","santé","","stabiliser un compagnon"};
+  }
+  if(!vital_emergency&&has_action("convalesce"))
+    return {DecisionType::Action,"convalesce",json::object(),
+            "Je consacre cette journée à ma guérison.","santé","","récupérer"};
   const bool carrying_food=!me.value("carried_food",json(nullptr)).is_null();
   const bool carrying_materials=me.value("wood_inventory",0)>0||me.value("branch_inventory",0)>0||
                                 me.value("iron_ore_inventory",0)>0;
@@ -717,6 +738,8 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "hold_vigil") return result.starts_with("veille avec ");
   if (decision.action == "celebrate") return result == "celebre avec le groupe";
   if (decision.action == "mourn") return result.starts_with("honore la memoire de ");
+  if (decision.action == "convalesce") return result == "recupere en convalescence";
+  if (decision.action == "treat_condition") return result.starts_with("soigne ");
   return true;
 }
 
@@ -810,7 +833,7 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=world_.passable(p);const bool known_fire=a.known_campfires.contains(position);json building=nullptr;if(const auto structure=world_.building(p))building={{"type",building_type_name(structure->type)},{"complete",structure->complete}};known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",known_fire},{"building",building},{"stored_food",known_fire?world_.stored_food(p):0},{"stored_wood",known_fire?world_.stored_wood(p):0},{"stored_branches",known_fire?world_.stored_branches(p):0},{"stored_iron_ore",known_fire?world_.stored_iron_ore(p):0},{"crafted_items",known_fire?world_.stored_crafted_items(p):0}});}
-  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
+  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"conditions",health_conditions_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
   const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
@@ -839,6 +862,7 @@ Perception Simulation::perceive(Agent& a) {
   json craftable=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& recipe:world_.craftable_recipes(*fire))craftable.push_back(recipe);
   json camp_inventory=json::object();if(const auto fire=world_.nearby_campfire(a.position))camp_inventory={{"wood",world_.stored_wood(*fire)},{"branches",world_.stored_branches(*fire)},{"iron_ore",world_.stored_iron_ore(*fire)},{"wooden_handles",world_.stored_item(*fire,CraftItem::WoodenHandle)},{"charcoal",world_.stored_item(*fire,CraftItem::Charcoal)},{"ropes",world_.stored_item(*fire,CraftItem::Rope)},{"iron_ingots",world_.stored_item(*fire,CraftItem::IronIngot)},{"axes",world_.stored_item(*fire,CraftItem::Axe)}};
   json lessons=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& learner:agents_)if(learner.alive&&learner.id!=a.id&&world_.nearby_campfire(learner.position)==fire)if(const auto skill=teachable_skill(a,learner))lessons.push_back({{"target_id",learner.id},{"target_name",learner.name},{"skill",skill_name(*skill)}});
+  json care=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& patient:agents_)if(patient.alive&&patient.id!=a.id&&world_.nearby_campfire(patient.position)==fire){const HealthCondition* selected=nullptr;for(const auto& condition:patient.conditions)if(!condition.treated&&(!selected||condition.severity>selected->severity))selected=&condition;if(selected)care.push_back({{"target_id",patient.id},{"target_name",patient.name},{"condition_id",selected->id},{"type",health_condition_name(selected->type)},{"severity",selected->severity}});}
   json buildings=json::array();for(const auto&[site,building]:world_.buildings())if(a.map_memory.contains({site.x,site.y})||world_.toroidal_distance(a.position,site)<=3)buildings.push_back({{"x",site.x},{"y",site.y},{"type",building_type_name(building.type)},{"progress",building.progress},{"required_work",building.required_work},{"complete",building.complete},{"adjacent",world_.adjacent(a.position,site)}});
   json designations=json::array();if(const auto fire=world_.nearby_campfire(a.position)){
     const std::array<std::pair<BuildingType,Position>,5> preferred{{
@@ -850,11 +874,32 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   const auto ecology=world_.ecology();
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
 void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_days;if(a.critical_hunger_days>3)a.health=clamp_stat(a.health-std::max(1,7-a.attributes.willpower/20));}else a.critical_hunger_days=0;if(a.thirst>=90){++a.critical_thirst_days;if(a.critical_thirst_days>1)a.health=clamp_stat(a.health-std::max(2,10-a.attributes.willpower/15));}else a.critical_thirst_days=0;if(a.health==0)a.alive=false;}
+
+void Simulation::update_health_conditions(Agent& agent) {
+  if(!agent.alive)return;
+  bool infection_risk=false;
+  for(auto& condition:agent.conditions){
+    ++condition.days;
+    if(condition.treated)condition.severity=std::max(0,condition.severity-3);
+    else if(condition.type==HealthConditionType::Injury)condition.severity=std::min(100,condition.severity+2);
+    else if(condition.type==HealthConditionType::Disease)condition.severity=std::min(100,condition.severity+1);
+    else condition.severity=std::min(100,condition.severity+3);
+    if(condition.type==HealthConditionType::Injury&&!condition.treated&&condition.days>=3&&condition.severity>=20)
+      infection_risk=true;
+    if(condition.severity>0)agent.health=clamp_stat(agent.health-std::max(1,condition.severity/25));
+  }
+  const bool infected=std::any_of(agent.conditions.begin(),agent.conditions.end(),[](const HealthCondition& condition){
+    return condition.type==HealthConditionType::Infection;
+  });
+  if(infection_risk&&!infected){add_health_condition(agent,HealthConditionType::Infection,20,"blessure non soignée");agent.remember("Ma blessure s'est infectée.");}
+  std::erase_if(agent.conditions,[](const HealthCondition& condition){return condition.severity<=0;});
+  if(agent.health==0)agent.alive=false;
+}
 
 void Simulation::apply_climate_effects(Agent& agent,const CalendarDate& date,const ClimateState& climate) {
   if(!agent.alive)return;
@@ -876,10 +921,10 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="rest"){if(!a.alive||a.fatigue<=0||!world_.passable(a.position))return "attend";a.fatigue=clamp_stat(a.fatigue-(15+a.attributes.recuperation/10+world_.rest_bonus(a.position)));return "rested";}
   if(d.action=="sleep"){a.sleeping_days=2;a.fatigue=clamp_stat(a.fatigue-(15+a.attributes.recuperation/10));a.remember("Je commence a dormir.");return "commence a dormir";}
   if(d.action=="drink"){if(!world_.drinkable(a.position))return "ne trouve pas d'eau";a.thirst=clamp_stat(a.thirst-(40+a.attributes.recuperation/10));return "boit de l'eau";}
-  if(d.action=="eat_food"){FoodType type{};int nutrition=0;if(world_.consume_food(a.position,&type,&nutrition)){a.hunger=clamp_stat(a.hunger-nutrition);if(type==FoodType::Mushrooms)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange "+food_type_name(type);}return "ne peut pas manger ici";}
+  if(d.action=="eat_food"){FoodType type{};int nutrition=0;if(world_.consume_food(a.position,&type,&nutrition)){a.hunger=clamp_stat(a.hunger-nutrition);if(type==FoodType::Mushrooms){const int impact=std::max(0,5-a.attributes.disease_resistance/20);a.health=clamp_stat(a.health-impact);if(impact>0&&std::none_of(a.conditions.begin(),a.conditions.end(),[](const HealthCondition& condition){return condition.type==HealthConditionType::Disease;}))add_health_condition(a,HealthConditionType::Disease,10+impact*2,"champignons crus");}return "mange "+food_type_name(type);}return "ne peut pas manger ici";}
   if(d.action=="eat_berries"){if(world_.eat_berries(a.position)){a.hunger=clamp_stat(a.hunger-35);return "mange des baies";}return "ne peut pas manger ici";}
   if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);add_skill_experience(a,Skill::Hunting);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
-  if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);add_skill_experience(a,Skill::Hunting);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
+  if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);if(injury>0)add_health_condition(a,HealthConditionType::Injury,std::max(5,injury*3),"chasse "+animal_type_name(hunted.type));add_skill_experience(a,Skill::Hunting);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
   if(d.action=="build_shelter"){const bool existing=world_.shelter_level(a.position)>0;if(!a.alive||!world_.build_shelter(a.position))return "materiaux insuffisants pour construire";add_skill_experience(a,Skill::Building);a.remember(existing?"J'ai ameliore l'abri.":"J'ai construit un abri.");return existing?"ameliore un abri":"construit un abri";}
   if(d.action=="harvest_wood"){if(!a.equipped_tool||a.equipped_tool->type!=CraftItem::Axe||a.equipped_tool->durability<=0)return "hache requise";if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.harvest_tree(a.position))return "aucun arbre vivant a prelever";--a.equipped_tool->durability;++a.wood_inventory;add_skill_experience(a,Skill::Woodcutting);a.remember("J'ai abattu un arbre avec ma hache.");return "preleve du bois";}
   if(d.action=="collect_branch"){if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.take_branch(a.position))return "aucune branche a ramasser";++a.branch_inventory;add_skill_experience(a,Skill::Foraging);a.remember("J'ai ramasse une branche pour le camp.");return "ramasse une branche";}
@@ -889,8 +934,8 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="collect_food"){if(inventory_full(a))return "inventaire plein";FoodItem food;if(!a.alive||a.carried_food||!world_.consume_food(a.position,&food.type,&food.nutrition))return "aucune nourriture a ramasser";food.shelf_life_days=food_shelf_life(food.type);a.carried_food=food;add_skill_experience(a,Skill::Foraging);a.remember("J'ai pris une nourriture pour la réserve commune.");return "ramasse de la nourriture";}
   if(d.action=="deposit_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!a.carried_food||!fire||!world_.store_food(*fire,*a.carried_food))return "ne peut pas deposer de nourriture";a.carried_food.reset();a.remember("J'ai approvisionne la réserve commune.");return "depose de la nourriture au camp";}
   if(d.action=="deposit_materials"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.store_materials(*fire,a.wood_inventory,a.branch_inventory,a.iron_ore_inventory))return "ne peut pas deposer de materiaux";a.wood_inventory=0;a.branch_inventory=0;a.iron_ore_inventory=0;a.remember("J'ai rapporté des matériaux au foyer.");return "depose des materiaux au camp";}
-  if(d.action=="eat_carried_food"){if(!a.alive||!a.carried_food)return "aucune nourriture transportee";const auto food=*a.carried_food;a.carried_food.reset();a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange sa nourriture transportee";}
-  if(d.action=="eat_camp_food"){const auto fire=world_.nearby_campfire(a.position);FoodItem food;if(!a.alive||!fire||!world_.take_stored_food(*fire,&food,a.behavior.preferred_foods))return "aucune reserve au camp";a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));a.remember("J'ai mangé une ration "+food_type_name(food.type)+(food.cooked?" cuite.":"."));return "mange une reserve du camp";}
+  if(d.action=="eat_carried_food"){if(!a.alive||!a.carried_food)return "aucune nourriture transportee";const auto food=*a.carried_food;a.carried_food.reset();a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked){const int impact=std::max(0,5-a.attributes.disease_resistance/20);a.health=clamp_stat(a.health-impact);if(impact>0&&std::none_of(a.conditions.begin(),a.conditions.end(),[](const HealthCondition& condition){return condition.type==HealthConditionType::Disease;}))add_health_condition(a,HealthConditionType::Disease,10+impact*2,"champignons crus");}return "mange sa nourriture transportee";}
+  if(d.action=="eat_camp_food"){const auto fire=world_.nearby_campfire(a.position);FoodItem food;if(!a.alive||!fire||!world_.take_stored_food(*fire,&food,a.behavior.preferred_foods))return "aucune reserve au camp";a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked){const int impact=std::max(0,5-a.attributes.disease_resistance/20);a.health=clamp_stat(a.health-impact);if(impact>0&&std::none_of(a.conditions.begin(),a.conditions.end(),[](const HealthCondition& condition){return condition.type==HealthConditionType::Disease;}))add_health_condition(a,HealthConditionType::Disease,10+impact*2,"champignons crus");}a.remember("J'ai mangé une ration "+food_type_name(food.type)+(food.cooked?" cuite.":"."));return "mange une reserve du camp";}
   if(d.action=="cook_camp_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.cook_stored_food(*fire))return "aucune ration crue au camp";add_skill_experience(a,Skill::Cooking);a.remember("J'ai cuit une ration pour le groupe.");return "cuit une ration au camp";}
   if(d.action=="craft_camp_item"){const auto fire=world_.nearby_campfire(a.position);const auto recipe=d.parameters.value("recipe","");if(!a.alive||!fire||!world_.craft(*fire,recipe))return "recette indisponible";add_skill_experience(a,Skill::Crafting);a.remember("J'ai fabriqué "+recipe+" au foyer.");return "fabrique "+recipe;}
   if(d.action=="equip_axe"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||a.equipped_tool||!fire||!world_.take_stored_item(*fire,CraftItem::Axe))return "aucune hache disponible";a.equipped_tool=Tool{};a.remember("J'ai équipé une hache.");return "equipe une hache";}
@@ -914,6 +959,28 @@ std::string Simulation::execute(Agent&a,const Decision&d){
     a.remember(after->complete?"J'ai achevé le chantier "+building_type_name(after->type)+".":
                                "J'ai avancé le chantier "+building_type_name(after->type)+".");
     return "travaille sur "+building_type_name(after->type)+(after->complete?" et termine":"");
+  }
+  if(d.action=="convalesce"){
+    if(!a.alive||a.conditions.empty()||a.last_convalescence_day==day_||
+       (world_.shelter_level(a.position)==0&&world_.rest_bonus(a.position)==0&&!world_.adjacent_campfire(a.position)))return "convalescence indisponible";
+    const int recovery=6+a.attributes.recuperation/10+world_.rest_bonus(a.position);
+    for(auto& condition:a.conditions)condition.severity=std::max(0,condition.severity-recovery);
+    std::erase_if(a.conditions,[](const HealthCondition& condition){return condition.severity<=0;});
+    a.fatigue=clamp_stat(a.fatigue-10);a.last_convalescence_day=day_;
+    a.remember("Je me suis reposé pour récupérer de mes affections.");
+    return "recupere en convalescence";
+  }
+  if(d.action=="treat_condition"){
+    const auto fire=world_.nearby_campfire(a.position);Agent* patient=nullptr;HealthCondition* condition=nullptr;
+    if(fire)for(auto& candidate:agents_)if(candidate.alive&&candidate.id!=a.id&&candidate.id==d.parameters.value("target_id","")&&
+       world_.nearby_campfire(candidate.position)==fire)for(auto& candidate_condition:candidate.conditions)if(
+         candidate_condition.id==d.parameters.value("condition_id","")&&!candidate_condition.treated){patient=&candidate;condition=&candidate_condition;}
+    if(!a.alive||!patient||!condition)return "soin indisponible";
+    condition->treated=true;condition->severity=std::max(1,condition->severity-(8+a.personality.empathy/10));
+    auto& relation=a.relationships[patient->id];++relation.interactions;relation.trust=clamp_stat(relation.trust+4);
+    auto& reciprocal=patient->relationships[a.id];++reciprocal.interactions;reciprocal.trust=clamp_stat(reciprocal.trust+3);
+    add_skill_experience(a,Skill::Social);a.remember("J'ai soigné "+patient->name+".");patient->remember(a.name+" a soigné mon affection.");
+    return "soigne "+patient->name;
   }
   if(d.action=="teach_skill"){
     const auto fire=world_.nearby_campfire(a.position);
@@ -1146,7 +1213,7 @@ bool Simulation::run_day(IUserInterface* interface){
       }
     }
   }
-  for(auto& agent:agents_) if(agent.alive){update_needs(agent);apply_climate_effects(agent,date_,climate_);}
+  for(auto& agent:agents_) if(agent.alive){update_needs(agent);update_health_conditions(agent);apply_climate_effects(agent,date_,climate_);}
   return true;
 }
 

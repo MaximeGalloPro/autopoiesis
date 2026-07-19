@@ -176,6 +176,8 @@ Le foyer peut désormais réserver les matériaux d'un chantier puis placer sur 
 
 L'écosystème progresse une fois par journée sans appel API. Les plantes repoussent jusqu'à leur capacité, mais une parcelle totalement vidée exige six jours avant sa première repousse. Lapins, cerfs, sangliers, loups et poissons se reproduisent à des rythmes distincts sans dépasser leur capacité ; un loup peut tuer un herbivore adjacent. Naissances, prédations, repousses et zones épuisées apparaissent dans les événements et l'en-tête graphique.
 
+La santé conserve désormais les blessures de chasse, maladies et infections avec leur cause, sévérité, âge et état de traitement. Une plaie importante négligée trois jours s'infecte. Au même foyer, un compagnon peut traiter l'affection la plus grave ; le patient peut ensuite convalescer une fois par jour près du feu, dans un abri ou dans un lit. L'affection dominante est visible dans l'inspecteur.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

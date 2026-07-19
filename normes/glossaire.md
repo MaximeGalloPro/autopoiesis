@@ -112,6 +112,10 @@ Une désignation associe une case et un type parmi mur, porte, lit, réserve et 
 
 Chaque journée applique une transition écologique locale avant les actions. Une parcelle végétale partiellement consommée regagne au plus une unité tous les deux jours jusqu'à sa capacité ; une parcelle vidée reste stérile cinq jours et recommence à pousser au sixième. Chaque espèce possède une cadence de reproduction et une capacité : aucune naissance ne peut la dépasser. Un loup prélève au plus un lapin, cerf ou sanglier vivant sur une case adjacente avant les déplacements. Jour écologique, naissances, prédations, repousses, épuisements et cumuls sont déterministes, persistants et observables.
 
+### Santé détaillée
+
+Une affection typée conserve un identifiant, une cause, une sévérité, un âge et son état de traitement. Une chasse dangereuse peut créer une blessure ; des champignons crus peuvent provoquer une maladie selon la résistance. Une blessure non traitée de sévérité suffisante crée une infection au troisième jour. Au même foyer, un compagnon peut traiter une affection non soignée et renforcer la confiance réciproque. Une convalescence par jour exige le feu, un abri ou un lit ; récupération et lit réduisent alors la sévérité. Les affections retirent quotidiennement de la santé tant qu'elles persistent.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -185,6 +189,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 32. Une compétence ne progresse que sur une réussite validée. Une leçon exige la présence au même foyer, un écart de niveau suffisant et les limites quotidiennes du mentor comme de l'élève.
 33. Une désignation de bâtiment réserve toutes ses entrées ou aucune. Le travail exige une proximité réelle et un outil valide ; un bâtiment incomplet ne produit aucun effet final.
 34. Une transition écologique ne crée jamais une population au-dessus de sa capacité ni une ressource au-dessus de son maximum. Une prédation retire une proie réelle et une parcelle épuisée conserve une pénalité de récupération persistante.
+35. Toute affection nomme sa cause et évolue une fois par journée. Un soin exige un patient réel au même foyer ; une convalescence est bornée à une fois par jour et aucune guérison ne peut augmenter la sévérité.
 
 ## Patterns
 

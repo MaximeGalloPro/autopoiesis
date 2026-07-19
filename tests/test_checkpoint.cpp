@@ -60,6 +60,9 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].skills==right[index].skills);
     assert(left[index].last_taught_day==right[index].last_taught_day);
     assert(left[index].last_lesson_day==right[index].last_lesson_day);
+    assert(left[index].conditions==right[index].conditions);
+    assert(left[index].next_condition_id==right[index].next_condition_id);
+    assert(left[index].last_convalescence_day==right[index].last_convalescence_day);
     assert(project_json(left[index].project)==project_json(right[index].project));
     assert(relationships_json(left[index].relationships)==relationships_json(right[index].relationships));
   }

@@ -53,6 +53,17 @@ inline const std::vector<CraftingRecipe>& crafting_recipes() {
 inline std::string craft_item_name(CraftItem item) { switch(item){case CraftItem::WoodenHandle:return "wooden_handle";case CraftItem::Charcoal:return "charcoal";case CraftItem::Rope:return "rope";case CraftItem::IronIngot:return "iron_ingot";case CraftItem::Axe:return "axe";}return "unknown"; }
 enum class AnimalType { Rabbit, Deer, Boar, Wolf, Fish };
 enum class DecisionType { Action, Blocked };
+enum class HealthConditionType { Injury, Disease, Infection };
+struct HealthCondition {
+  std::string id;
+  HealthConditionType type{HealthConditionType::Injury};
+  int severity{};
+  int days{};
+  bool treated{};
+  std::string cause;
+  friend bool operator==(const HealthCondition&,const HealthCondition&)=default;
+};
+inline std::string health_condition_name(HealthConditionType type) { switch(type){case HealthConditionType::Injury:return "injury";case HealthConditionType::Disease:return "disease";case HealthConditionType::Infection:return "infection";}return "unknown"; }
 struct Personality { int curiosity{}; int prudence{}; int sociability{}; int patience{}; int empathy{}; };
 struct Attributes {
   int strength{50};
@@ -144,8 +155,13 @@ struct Agent {
   std::map<Skill,SkillProgress> skills;
   int last_taught_day{};
   int last_lesson_day{};
+  std::vector<HealthCondition> conditions;
+  int next_condition_id{1};
+  int last_convalescence_day{};
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
+inline HealthCondition& add_health_condition(Agent& agent,HealthConditionType type,int severity,const std::string& cause) { agent.conditions.push_back({agent.id+"-condition-"+std::to_string(agent.next_condition_id++),type,std::clamp(severity,1,100),0,false,cause});return agent.conditions.back(); }
+inline json health_conditions_json(const Agent& agent) { json result=json::array();for(const auto& condition:agent.conditions)result.push_back({{"id",condition.id},{"type",health_condition_name(condition.type)},{"severity",condition.severity},{"days",condition.days},{"treated",condition.treated},{"cause",condition.cause}});return result; }
 inline std::string skill_name(Skill skill) { switch(skill){case Skill::Woodcutting:return "woodcutting";case Skill::Mining:return "mining";case Skill::Crafting:return "crafting";case Skill::Building:return "building";case Skill::Foraging:return "foraging";case Skill::Hunting:return "hunting";case Skill::Cooking:return "cooking";case Skill::Social:return "social";}return "unknown"; }
 inline std::optional<Skill> skill_from_name(const std::string& name) { for(const auto skill:{Skill::Woodcutting,Skill::Mining,Skill::Crafting,Skill::Building,Skill::Foraging,Skill::Hunting,Skill::Cooking,Skill::Social})if(skill_name(skill)==name)return skill;return std::nullopt; }
 inline int skill_experience(const Agent& agent,Skill skill) { const auto found=agent.skills.find(skill);return found==agent.skills.end()?0:found->second.experience; }

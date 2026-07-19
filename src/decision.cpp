@@ -38,6 +38,13 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
         possible=w.can_designate_building({fire->x+dx,fire->y+dy},*fire,type);
     if(possible)r.push_back("designate_building");
   }}
+  if(a.alive&&current_day>0&&!a.conditions.empty()&&a.last_convalescence_day!=current_day&&
+     (w.shelter_level(a.position)>0||w.rest_bonus(a.position)>0||w.adjacent_campfire(a.position)))
+    r.push_back("convalesce");
+  if(a.alive&&current_day>0){if(const auto fire=w.nearby_campfire(a.position))if(std::any_of(
+      agents.begin(),agents.end(),[&](const Agent& patient){return patient.alive&&patient.id!=a.id&&
+        w.nearby_campfire(patient.position)==fire&&std::any_of(patient.conditions.begin(),patient.conditions.end(),
+          [](const HealthCondition& condition){return !condition.treated;});}))r.push_back("treat_condition");}
   if(a.alive&&current_day>0){
     const auto fire=w.nearby_campfire(a.position);
     const bool has_companion=fire&&std::any_of(agents.begin(),agents.end(),[&](const Agent& other){
@@ -74,7 +81,7 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
 }
 bool validate_decision(const Decision& d,const Agent& a,const World& w,const std::vector<Agent>& agents,std::string& e,int current_day,DayPhase phase) {
   if (d.type==DecisionType::Blocked) return (!d.need.empty() && !d.obstacle.empty() && !d.desired_result.empty()) || (e="blocked fields missing",false);
-  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","collect_iron_ore","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food","craft_camp_item","equip_axe","repair_axe","designate_building","work_on_building","share_camp_meal","hold_vigil","celebrate","mourn","teach_skill"}; if (!names.contains(d.action)) {e="unknown action";return false;}
+  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","collect_iron_ore","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food","craft_camp_item","equip_axe","repair_axe","designate_building","work_on_building","convalesce","treat_condition","share_camp_meal","hold_vigil","celebrate","mourn","teach_skill"}; if (!names.contains(d.action)) {e="unknown action";return false;}
   auto avail=available_actions(a,w,agents,current_day,phase); if (std::find(avail.begin(),avail.end(),d.action)==avail.end()) {e="action unavailable";return false;}
   if (d.action=="move") { if (!d.parameters.is_object() || !d.parameters.contains("direction") || !d.parameters["direction"].is_string()) {e="direction required";return false;} auto dir=d.parameters["direction"].get<std::string>(); if (!std::set<std::string>{"north","south","east","west"}.contains(dir)){e="invalid direction";return false;} }
   if (d.action=="hunt_animal") { if(!d.parameters.is_object()||!d.parameters.contains("animal_id")||!d.parameters["animal_id"].is_string()){e="animal_id required";return false;}const auto* target=w.animal(d.parameters["animal_id"].get<std::string>());if(!target||!target->alive||!w.adjacent(a.position,target->position)){e="hunt target not adjacent";return false;} }
@@ -92,6 +99,15 @@ bool validate_decision(const Decision& d,const Agent& a,const World& w,const std
     const Position site{d.parameters["x"].get<int>(),d.parameters["y"].get<int>()};
     const auto building=w.building(site);
     if(!building||building->complete||!w.adjacent(a.position,site)){e="building site unavailable";return false;}
+  }
+  if(d.action=="treat_condition"){
+    if(!d.parameters.is_object()||!d.parameters.contains("target_id")||!d.parameters["target_id"].is_string()||
+       !d.parameters.contains("condition_id")||!d.parameters["condition_id"].is_string()){e="care fields required";return false;}
+    const auto fire=w.nearby_campfire(a.position);bool valid=false;
+    if(fire)for(const auto& patient:agents)if(patient.alive&&patient.id!=a.id&&patient.id==d.parameters["target_id"].get<std::string>()&&
+       w.nearby_campfire(patient.position)==fire)valid=std::any_of(patient.conditions.begin(),patient.conditions.end(),
+         [&](const HealthCondition& condition){return condition.id==d.parameters["condition_id"].get<std::string>()&&!condition.treated;});
+    if(!valid){e="care target unavailable";return false;}
   }
   if(d.action=="teach_skill"){
     if(!d.parameters.is_object()||!d.parameters.contains("target_id")||!d.parameters["target_id"].is_string()||

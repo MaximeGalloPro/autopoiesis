@@ -91,6 +91,7 @@ class Simulation {
   bool run_day(IUserInterface* interface);
   void load_checkpoint();
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
+  void update_health_conditions(Agent&);
   void apply_climate_effects(Agent&, const CalendarDate&, const ClimateState&);
   void update_behavior_after_action(Agent&, const Agent& before, const Decision&,
                                     const std::string& result, bool succeeded);
