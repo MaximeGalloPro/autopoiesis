@@ -230,6 +230,8 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "hunt_animal") return result.starts_with("chasse ");
   if (decision.action == "hunt_rabbit") return result == "chasse le lapin";
   if (decision.action == "build_shelter") return result == "construit un abri" || result == "ameliore un abri";
+  if (decision.action == "harvest_wood") return result == "preleve du bois";
+  if (decision.action == "assemble_shelter") return result == "assemble l'abri" || result == "construit un abri";
   return true;
 }
 
@@ -264,7 +266,8 @@ Perception Simulation::perceive(Agent& a) {
   json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"adjacent",world_.adjacent(a.position,o.position)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
+  json construction=nullptr;if(a.shelter_construction)construction={{"x",a.shelter_construction->position.x},{"y",a.shelter_construction->position.y},{"progress",a.shelter_construction->progress}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -281,6 +284,15 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="hunt_rabbit"){if(world_.hunt_rabbit(a.position)){a.hunger=clamp_stat(a.hunger-35);a.remember("J'ai chasse le lapin.");return "chasse le lapin";}return "ne peut pas chasser ici";}
   if(d.action=="hunt_animal"){Animal hunted;if(world_.hunt_animal(a.position,d.parameters.value("animal_id",""),&hunted)){const int injury=std::max(0,hunted.danger-(a.attributes.strength+a.attributes.toughness)/2)/5;a.health=clamp_stat(a.health-injury);a.hunger=clamp_stat(a.hunger-hunted.nutrition);a.remember("J'ai chasse "+animal_type_name(hunted.type)+".");return "chasse "+animal_type_name(hunted.type);}return "ne peut pas chasser ici";}
   if(d.action=="build_shelter"){const bool existing=world_.shelter_level(a.position)>0;if(!a.alive||!world_.build_shelter(a.position))return "materiaux insuffisants pour construire";a.remember(existing?"J'ai ameliore l'abri.":"J'ai construit un abri.");return existing?"ameliore un abri":"construit un abri";}
+  if(d.action=="harvest_wood"){if(!a.alive||!world_.harvest_tree(a.position))return "aucun arbre vivant a prelever";++a.wood_inventory;a.remember("J'ai preleve une unite de bois.");return "preleve du bois";}
+  if(d.action=="assemble_shelter"){
+    if(!a.alive||a.wood_inventory<1||!world_.passable(a.position)||world_.shelter_level(a.position)>0||(a.shelter_construction&&a.shelter_construction->position!=a.position))return "assemblage impossible";
+    if(!a.shelter_construction)a.shelter_construction=ShelterConstruction{a.position,0};
+    --a.wood_inventory;++a.shelter_construction->progress;
+    if(a.shelter_construction->progress<3){a.remember("J'ai ajoute une unite de bois a l'abri.");return "assemble l'abri";}
+    if(!world_.create_shelter(a.position)){--a.shelter_construction->progress;++a.wood_inventory;return "assemblage impossible";}
+    a.shelter_construction.reset();a.remember("J'ai construit un abri en bois.");return "construit un abri";
+  }
   if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=world_.step(a.position,dir);if(world_.passable(p)){a.position=p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
   if(d.action=="talk"){auto id=d.parameters["target_agent_id"].get<std::string>();for(auto&o:agents_)if(o.id==id){std::string msg=d.parameters.value("message","Bonjour.");a.remember("J'ai parle a "+o.name+" : "+msg);o.remember(a.name+" m'a parle : "+msg);auto& outgoing=a.relationships[o.id];++outgoing.interactions;outgoing.trust=clamp_stat(outgoing.trust+1+std::max(0,a.personality.empathy-50)/25);outgoing.affinity=clamp_stat(outgoing.affinity+1);auto& incoming=o.relationships[a.id];++incoming.interactions;incoming.trust=clamp_stat(incoming.trust+1+std::max(0,o.personality.empathy-50)/25);incoming.affinity=clamp_stat(incoming.affinity+1);return "parle a "+o.name;}}
   return "attend";
@@ -298,7 +310,7 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
   else if(decision.action=="eat_food"||decision.action=="eat_berries"||decision.action=="drink")boredom_delta=-5;
   agent.boredom=clamp_stat(agent.boredom+boredom_delta);
 
-  if(succeeded&&decision.action=="build_shelter"&&agent.project.status==ProjectStatus::Blocked&&agent.project.missing_capability=="build_shelter"){
+  if(succeeded&&(decision.action=="build_shelter"||(decision.action=="assemble_shelter"&&result=="construit un abri"))&&agent.project.status==ProjectStatus::Blocked&&agent.project.missing_capability=="build_shelter"){
     agent.project.status=ProjectStatus::Active;
     agent.project.blocked_reason.clear();
     agent.project.missing_capability.clear();

@@ -30,6 +30,9 @@ class World {
   int wood(Position p) const;
   int fibers(Position p) const;
   int shelter_level(Position p) const;
+  int living_trees(Position p) const;
+  bool harvest_tree(Position p);
+  bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
   void advance_nature(std::mt19937& rng);

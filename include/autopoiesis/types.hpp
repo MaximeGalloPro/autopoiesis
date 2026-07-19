@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <deque>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -50,6 +51,7 @@ struct Project {
   int last_progress_cycle{};
 };
 struct Relationship { int trust{}; int affinity{}; int interactions{}; };
+struct ShelterConstruction { Position position; int progress{}; };
 struct FoodResource { FoodType type; Position position; int amount; int nutrition; };
 struct Animal { std::string id; AnimalType type; Position position; bool alive{true}; int danger{}; int nutrition{}; };
 struct Agent {
@@ -63,6 +65,8 @@ struct Agent {
   int boredom{};
   std::map<std::string, Relationship> relationships;
   std::set<std::string> observed_animals;
+  int wood_inventory{};
+  std::optional<ShelterConstruction> shelter_construction;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
 struct Decision {
