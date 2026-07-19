@@ -76,6 +76,10 @@ Le premier feu construit devient le foyer principal et empêche la création de 
 
 Chaque feu possède une réserve alimentaire persistante. Un personnage ne transporte initialement qu'un aliment à la fois, avec son type et sa nutrition. `collect_food` retire atomiquement cet aliment du monde, `deposit_food` exige un feu adjacent connu et transfère l'objet vers sa réserve, puis `eat_camp_food` permet à n'importe quel personnage adjacent de le consommer. Aucun aliment ne peut être dupliqué ou devenir commun sans ces transitions validées.
 
+### Inventaire borné
+
+La charge d'un personnage est la somme de son bois, de ses branches et de sa ration transportée, à raison d'une unité par élément. Sa capacité vaut `clamp(4 + force / 25, 4, 10)` et se déduit de sa force persistée. Le décideur masque les collectes impossibles et le moteur les refuse à nouveau avec `inventaire plein` : aucun appel IA ni décision invalide ne peut contourner cette borne.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -140,6 +144,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 23. Toute évolution qui modifie un état persistant doit conserver la lecture de la version précédente du checkpoint ou fournir une migration déterministe couverte par un test.
 24. Pause et vitesse graphique ne changent ni l'ordre ni le nombre des cycles élémentaires. L'accélération peut réduire les rendus intermédiaires, jamais les décisions ou validations du moteur.
 25. Une ressource transportée appartient à exactement un emplacement : monde, inventaire d'un personnage ou réserve. Chaque transfert est une action locale validée et persistante.
+26. Une collecte ne peut jamais porter la charge au-delà de la capacité bornée du personnage. La disponibilité de l'action et son exécution appliquent toutes deux cette règle.
 
 ## Patterns
 

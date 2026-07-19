@@ -440,13 +440,15 @@ struct RaylibInterface::Impl {
                column_x,cursor+row*21,13,index%2==0?primary_text:secondary_text);
     }
     cursor+=112;
-    const int inventory_y=std::min(cursor,height-68);
-    DrawText(TextFormat("Bois : %d   Branches : %d   Ration : %s",agent.wood_inventory,
-                        agent.branch_inventory,agent.carried_food?"oui":"non"),
+    const int inventory_y=std::min(cursor,height-88);
+    DrawText(TextFormat("Charge %d/%d · Ration %s",inventory_load(agent),
+                        inventory_capacity(agent),agent.carried_food?"oui":"non"),
              x+22,inventory_y,13,secondary_text);
-    DrawText(agent.home_camp?TextFormat("Foyer : %d, %d",agent.home_camp->x,agent.home_camp->y):"Foyer : aucun",
+    DrawText(TextFormat("Bois %d · Branches %d",agent.wood_inventory,agent.branch_inventory),
              x+22,inventory_y+20,13,secondary_text);
-    DrawText(TextFormat("Monotonie : %d",agent.boredom),x+22,inventory_y+40,13,secondary_text);
+    DrawText(agent.home_camp?TextFormat("Foyer : %d, %d",agent.home_camp->x,agent.home_camp->y):"Foyer : aucun",
+             x+22,inventory_y+40,13,secondary_text);
+    DrawText(TextFormat("Monotonie : %d",agent.boredom),x+22,inventory_y+60,13,secondary_text);
   }
 
   void draw() const {

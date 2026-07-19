@@ -10,11 +10,11 @@ std::vector<std::string> available_actions(const Agent& a, const World& w, const
   const bool occupies_current_cell=std::any_of(agents.begin(),agents.end(),[&](const Agent& occupant){return occupant.id==a.id&&occupant.position==a.position;});
   if(a.alive&&a.fatigue>0&&w.passable(a.position)&&occupies_current_cell) r.push_back("rest");
   if(a.alive&&w.passable(a.position)&&occupies_current_cell&&w.wood(a.position)>=3&&w.fibers(a.position)>=2) r.push_back("build_shelter");
-  if(a.alive&&occupies_current_cell&&w.living_trees(a.position)>0) r.push_back("harvest_wood");
-  if(a.alive&&occupies_current_cell&&w.branches(a.position)>0) r.push_back("collect_branch");
+  if(a.alive&&occupies_current_cell&&!inventory_full(a)&&w.living_trees(a.position)>0) r.push_back("harvest_wood");
+  if(a.alive&&occupies_current_cell&&!inventory_full(a)&&w.branches(a.position)>0) r.push_back("collect_branch");
   if(a.alive&&occupies_current_cell&&a.branch_inventory>=3&&w.passable(a.position)&&!w.campfire(a.position)&&!w.primary_campfire()) r.push_back("build_campfire");
   if(a.alive&&occupies_current_cell&&w.adjacent_campfire(a.position)) r.push_back("rest_by_campfire");
-  if(a.alive&&occupies_current_cell&&!a.carried_food&&w.food(a.position)>0&&w.passable(a.position)) r.push_back("collect_food");
+  if(a.alive&&occupies_current_cell&&!inventory_full(a)&&!a.carried_food&&w.food(a.position)>0&&w.passable(a.position)) r.push_back("collect_food");
   if(a.alive&&occupies_current_cell&&a.carried_food&&w.nearby_campfire(a.position)) r.push_back("deposit_food");
   if(a.alive&&occupies_current_cell&&a.carried_food) r.push_back("eat_carried_food");
   if(a.alive&&occupies_current_cell){const auto fire=w.nearby_campfire(a.position);if(fire&&w.stored_food(*fire)>0)r.push_back("eat_camp_food");}

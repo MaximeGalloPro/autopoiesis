@@ -12,7 +12,7 @@ suivante.
 
 - [x] **G01 - Boucle de survie collective** : relier collecte, transport, dépôt, consommation et pénurie dans un même scénario automatisé. Premier flux livré : une nourriture portée vers la réserve du feu puis consommable par un autre personnage.
 - [x] **G02 - Foyer collectif** : le premier feu devient le foyer partagé, sa fumée le signale et chaque personnage possède une place nocturne distincte persistante.
-- [ ] **G03 - Inventaires complets** : porter des aliments, matériaux et objets avec une capacité bornée.
+- [x] **G03 - Inventaires complets** : bois, branches et ration partagent une charge bornée dérivée de la force ; le décideur et le moteur empêchent tout dépassement et l'interface expose la capacité.
 - [ ] **G04 - Transport des ressources** : choisir une ressource connue, la ramasser, rejoindre une destination et la déposer.
 - [ ] **G09 - Alimentation planifiée** : repas, nutrition, préférences, réserves, cuisson et conservation progressive.
 - [ ] **G14 - Vie collective** : repas partagés, veillées, rôles spontanés, célébrations et deuils.

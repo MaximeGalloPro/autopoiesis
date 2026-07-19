@@ -79,6 +79,9 @@ struct Agent {
   std::optional<ShelterConstruction> shelter_construction;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
+inline int inventory_capacity(const Agent& agent) { return std::clamp(4+agent.attributes.strength/25,4,10); }
+inline int inventory_load(const Agent& agent) { return agent.wood_inventory+agent.branch_inventory+(agent.carried_food?1:0); }
+inline bool inventory_full(const Agent& agent) { return inventory_load(agent)>=inventory_capacity(agent); }
 struct Decision {
   DecisionType type{DecisionType::Action}; std::string action{"wait"}; json parameters = json::object();
   std::string reason, need, obstacle, desired_result;
