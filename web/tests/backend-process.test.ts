@@ -21,7 +21,39 @@ describe("processus backend", () => {
     const manager = new BackendProcessManager({ autoRestart: false, spawn: () => child });
     expect(await manager.start()).toBe(true);
     expect(manager.send({ type: "control.speed", multiplier: 2 })).toBe(true);
-    expect(writes).toEqual(["{\"type\":\"control.speed\",\"multiplier\":2}\n"]);
+    manager.acceptStdout(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "validation_prompt",
+      payload: {
+        kind: "feature",
+        stage: "choose",
+        day: 3,
+        simulation_cycle: 720,
+        requests: [{ id: "request-1", title: "Un abri", need: "Rester au sec" }],
+        selected_index: 0,
+        allowed_commands: ["1", "n", "q"],
+      },
+    })}`);
+    expect(manager.send({ type: "validation.select", request_id: "request-1" })).toBe(true);
+    manager.acceptStdout(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "validation_prompt",
+      payload: {
+        kind: "feature",
+        stage: "confirm",
+        day: 3,
+        simulation_cycle: 720,
+        requests: [{ id: "request-1", title: "Un abri", need: "Rester au sec" }],
+        selected_index: 1,
+        allowed_commands: ["a", "r", "b", "d", "q"],
+      },
+    })}`);
+    expect(manager.send({ type: "validation.decision", request_id: "request-1", decision: "approve" })).toBe(true);
+    expect(writes).toEqual([
+      "{\"version\":1,\"command\":\"set_speed\",\"speed\":2}\n",
+      "{\"version\":1,\"command\":\"validation\",\"text\":\"1\"}\n",
+      "{\"version\":1,\"command\":\"validation\",\"text\":\"a\"}\n",
+    ]);
     expect(manager.snapshot().state).toBeNull();
     manager.stop();
     expect(killedWith).toBe("SIGTERM");
@@ -32,7 +64,7 @@ describe("processus backend", () => {
     const observed: string[] = [];
     manager.subscribe((event) => observed.push(event.type));
     const snapshot = worldSnapshot({ simulation_cycle: 42 });
-    manager.acceptStdout(`AUTOPOIESIS_EVENT ${JSON.stringify({ type: "state", payload: snapshot })}`);
+    manager.acceptStdout(`AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "snapshot", payload: snapshot })}`);
     manager.acceptStdout("journal humain ignoré");
     expect(manager.snapshot().state?.simulation_cycle).toBe(42);
     expect(observed).toEqual(["state"]);

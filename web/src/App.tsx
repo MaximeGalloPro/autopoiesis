@@ -15,14 +15,18 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Inspector } from "./components/Inspector";
 import { ProgressDock } from "./components/ProgressDock";
-import { ValidationOverlay } from "./components/ValidationOverlay";
-import { type EntitySelection, WorldScene } from "./components/WorldScene";
+import { EvolutionCompletionOverlay, ValidationOverlay } from "./components/ValidationOverlay";
+import type { EntitySelection } from "./components/WorldScene";
 import { useSimulation } from "./hooks/useSimulation";
 import { seasonLabels } from "./lib/format";
 import { SIMULATION_SPEEDS, type EngineCommand, type SimulationSpeed } from "./protocol";
+
+const WorldScene = lazy(() => import("./components/WorldScene").then((module) => ({
+  default: module.WorldScene,
+})));
 
 const connectionLabels = {
   connecting: "Connexion…",
@@ -142,7 +146,9 @@ export default function App() {
             <div style={{ "--progress": `${dayProgress * 3.6}deg` } as React.CSSProperties}><span>{snapshot?.phase === "night" ? "☾" : "☀"}</span></div>
             <p><strong>{Math.round(dayProgress)}%</strong><small>de la journée</small></p>
           </div>
-          <WorldScene snapshot={snapshot} selected={selected} onSelect={setSelected} />
+          <Suspense fallback={<div className="world-canvas" aria-label="Chargement de la scène tridimensionnelle" />}>
+            <WorldScene snapshot={snapshot} selected={selected} onSelect={setSelected} />
+          </Suspense>
           <div className="world-legend" aria-label="Légende du monde">
             <span><i className="food" />Nourriture</span><span><i className="wood" />Bois</span><span><i className="fiber" />Fibres</span><span><i className="shelter" />Abri</span><span><i className="fire" /><Flame />Feu</span><span><i className="stock" />Réserve commune</span>
           </div>
@@ -202,6 +208,9 @@ export default function App() {
 
       <ProgressDock activity={data.activity} evolution={data.evolution} recompilation={data.recompilation} />
       {data.validation && <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} />}
+      {data.evolution_completion && (
+        <EvolutionCompletionOverlay completion={data.evolution_completion} sendCommand={sendCommand} />
+      )}
       {showShortcuts && <ShortcutHelp onClose={() => setShowShortcuts(false)} />}
       {commandError && <div className="toast error" role="alert"><TriangleAlert />{commandError}<button onClick={dismissCommandError} aria-label="Fermer">×</button></div>}
     </div>

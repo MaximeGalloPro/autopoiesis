@@ -78,12 +78,6 @@ static int recompile_target(const std::filesystem::path& project_root,
   return code;
 }
 
-int recompile_gui(const std::filesystem::path& project_root,
-                  const std::filesystem::path& data_directory,
-                  IUserInterface& interface) {
-  return recompile_target(project_root,data_directory,interface,"autopoiesis_gui");
-}
-
 int recompile_backend(const std::filesystem::path& project_root,
                       const std::filesystem::path& data_directory,
                       IUserInterface& interface) {

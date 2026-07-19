@@ -24,6 +24,7 @@ describe("interface de validation", () => {
       day: 3,
       simulation_cycle: 7200,
       requests: [request],
+      allowed_commands: ["1", "n", "q"],
     };
     const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} />);
     expect(html).toContain("Les autres resteront pending");
@@ -38,6 +39,7 @@ describe("interface de validation", () => {
       day: 3,
       simulation_cycle: 7200,
       requests: [{ ...request, source: "devil" as const }],
+      allowed_commands: ["a", "r", "d", "q"],
       real_world_basis: "Le froid réduit les rendements.",
       future_pressure: "Préparer une isolation testable.",
     };

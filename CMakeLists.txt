@@ -1,14 +1,21 @@
 cmake_minimum_required(VERSION 3.20)
 project(autopoiesis VERSION 0.1 LANGUAGES CXX)
 
-option(AUTOPOIESIS_BUILD_GUI "Build the native raylib interface" OFF)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(CURL REQUIRED)
-find_package(nlohmann_json REQUIRED)
+find_package(nlohmann_json 3.11.3 QUIET)
+if(NOT nlohmann_json_FOUND)
+  include(FetchContent)
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(nlohmann_json
+    URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+    URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
 find_package(Threads REQUIRED)
 
 add_library(autopoiesis_core
@@ -26,33 +33,6 @@ target_link_libraries(autopoiesis PRIVATE autopoiesis_core)
 add_executable(autopoiesis_backend src/web_main.cpp)
 target_link_libraries(autopoiesis_backend PRIVATE autopoiesis_core)
 target_compile_options(autopoiesis_backend PRIVATE -Wall -Wextra -Wpedantic)
-
-if(AUTOPOIESIS_BUILD_GUI)
-  find_package(raylib 6.0 QUIET)
-  if(NOT raylib_FOUND)
-    include(FetchContent)
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(raylib
-      GIT_REPOSITORY https://github.com/raysan5/raylib.git
-      GIT_TAG 6.0
-      GIT_SHALLOW TRUE)
-    FetchContent_MakeAvailable(raylib)
-  endif()
-  add_library(autopoiesis_raylib_ui src/raylib_interface.cpp)
-  target_link_libraries(autopoiesis_raylib_ui PUBLIC autopoiesis_core raylib)
-  target_compile_options(autopoiesis_raylib_ui PRIVATE -Wall -Wextra -Wpedantic)
-  add_executable(autopoiesis_gui src/main.cpp)
-  target_compile_definitions(autopoiesis_gui PRIVATE AUTOPOIESIS_GUI=1)
-  target_link_libraries(autopoiesis_gui PRIVATE autopoiesis_raylib_ui)
-  target_compile_options(autopoiesis_gui PRIVATE -Wall -Wextra -Wpedantic)
-  add_executable(autopoiesis_validation_cards_preview tests/validation_cards_preview.cpp)
-  target_link_libraries(autopoiesis_validation_cards_preview PRIVATE autopoiesis_raylib_ui)
-  add_executable(autopoiesis_activity_preview tests/activity_preview.cpp)
-  target_link_libraries(autopoiesis_activity_preview PRIVATE autopoiesis_raylib_ui)
-  add_executable(autopoiesis_evolution_progress_preview tests/evolution_progress_preview.cpp)
-  target_link_libraries(autopoiesis_evolution_progress_preview PRIVATE autopoiesis_raylib_ui)
-endif()
 
 enable_testing()
 add_executable(autopoiesis_tests tests/test_core.cpp)
@@ -114,7 +94,7 @@ target_link_libraries(autopoiesis_period_memory_tests PRIVATE autopoiesis_core)
 add_test(NAME persistent_period_memory COMMAND autopoiesis_period_memory_tests)
 add_executable(autopoiesis_ui_model_tests tests/test_ui_model.cpp)
 target_link_libraries(autopoiesis_ui_model_tests PRIVATE autopoiesis_core)
-add_test(NAME graphical_ui_model COMMAND autopoiesis_ui_model_tests)
+add_test(NAME ui_snapshot_model COMMAND autopoiesis_ui_model_tests)
 add_executable(autopoiesis_checkpoint_tests tests/test_checkpoint.cpp)
 target_link_libraries(autopoiesis_checkpoint_tests PRIVATE autopoiesis_core)
 add_test(NAME seamless_checkpoint_transfer COMMAND autopoiesis_checkpoint_tests)

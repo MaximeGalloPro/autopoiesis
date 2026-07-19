@@ -55,9 +55,9 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
 
 int main() {
   const auto arguments=restart_arguments(
-      {"/tmp/autopoiesis_gui","--no-api","--days","100","--delay-ms","500",
+      {"/tmp/autopoiesis_backend","--no-api","--days","100","--delay-ms","500",
        "--seed","42","--new-world"},2,2500);
-  assert((arguments==std::vector<std::string>{"/tmp/autopoiesis_gui","--no-api","--seed","42",
+  assert((arguments==std::vector<std::string>{"/tmp/autopoiesis_backend","--no-api","--seed","42",
                                               "--days","2","--delay-ms","2500"}));
   const pid_t replacement=fork();
   assert(replacement>=0);
@@ -67,7 +67,7 @@ int main() {
   assert(WIFEXITED(replacement_status)&&WEXITSTATUS(replacement_status)==0);
   if(const char* project_root=std::getenv("AUTOPOIESIS_TEST_RECOMPILE_ROOT")){
     RecompileInterface recompile_interface;
-    assert(recompile_gui(project_root,"/tmp/autopoiesis-recompile-test",recompile_interface)==0);
+    assert(recompile_backend(project_root,"/tmp/autopoiesis-recompile-test",recompile_interface)==0);
     assert(recompile_interface.updates>0);
     assert(recompile_interface.final_stage==RecompileStage::Ready);
   }
