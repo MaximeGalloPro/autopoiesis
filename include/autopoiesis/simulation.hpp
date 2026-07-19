@@ -12,6 +12,11 @@ struct PeriodContext {
   ClimateState climate;
   json previous_memories=json::array();
 };
+struct EvolutionContext {
+  json active_world_mechanisms=json::array();
+  json evolution_history=json::array();
+  std::vector<std::string> currently_available_actions;
+};
 class IDecider { public: virtual ~IDecider() = default; virtual Decision decide(const Perception&) = 0; };
 class ICycleReporter {
  public:
@@ -25,6 +30,11 @@ class ICycleReporter {
   }
   virtual json request_evolution(int, int, const Agent&, const std::vector<std::string>&,
                                  const json&) { return nullptr; }
+  virtual json request_evolution(int simulation_cycle, int day, const Agent& agent,
+                                 const std::vector<std::string>& history, const json& report,
+                                 const EvolutionContext&) {
+    return request_evolution(simulation_cycle,day,agent,history,report);
+  }
   virtual std::string last_error() const { return {}; }
 };
 class LocalDecider final : public IDecider {

@@ -18,4 +18,7 @@ int main() {
   assert(request.find("aspiration") != std::string::npos);
   assert(request.find("evolution_key") != std::string::npos);
   assert(request.find("navigation") != std::string::npos);
+  assert(request.find("active_world_mechanisms") != std::string::npos);
+  assert(request.find("evolution_history") != std::string::npos);
+  assert(request.find("nouvelle cle") != std::string::npos);
 }

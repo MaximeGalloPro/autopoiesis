@@ -22,6 +22,7 @@ struct SplitReporter final : ICycleReporter {
   std::vector<std::string> events;
   std::vector<std::size_t> memory_sizes;
   std::vector<CalendarDate> dates;
+  std::vector<EvolutionContext> evolution_contexts;
   int delay_ms{};
 
   json report_period(int simulation_cycle, int day, const Agent& agent,
@@ -48,6 +49,13 @@ struct SplitReporter final : ICycleReporter {
     events.push_back("request:" + agent.id + ":" + std::to_string(day) + ":" +
                      std::to_string(simulation_cycle));
     return nullptr;
+  }
+
+  json request_evolution(int simulation_cycle, int day, const Agent& agent,
+                         const std::vector<std::string>& history, const json& report,
+                         const EvolutionContext& context) override {
+    evolution_contexts.push_back(context);
+    return request_evolution(simulation_cycle,day,agent,history,report);
   }
 };
 
@@ -116,6 +124,14 @@ int main() {
   std::cout.rdbuf(previous_buffer);
   assert(terminal.str().find("Diagnostic API : HTTP 429") != std::string::npos);
 
+  std::ofstream(directory/"feature_requests.jsonl",std::ios::app)
+      << R"({"id":"known-cartography","status":"pending","evolution_key":"persistent_cartography","title":"Cartographie persistante","mechanism":{"summary":"Consigner les découvertes dans une carte durable."}})" << '\n';
+  std::ofstream(directory/"approved_feature_requests.jsonl",std::ios::app)
+      << R"({"id":"known-cartography","status":"approved"})" << '\n';
+  std::filesystem::create_directories(directory/"evolution_runs"/"known-cartography");
+  std::ofstream(directory/"evolution_runs"/"known-cartography"/"activation.json")
+      << R"({"status":"activated","commit":"abc123"})" << '\n';
+
   SplitReporter delayed_reporter;
   delayed_reporter.delay_ms=30;
   ActivityInterface activity_interface;
@@ -139,6 +155,21 @@ int main() {
   assert(activity_interface.activities.front().agent_name=="Ada");
   assert(activity_interface.activities.back().kind==UiActivityKind::EvolutionRequest);
   assert(activity_interface.activities.back().agent_name=="Cyra");
+  assert(delayed_reporter.evolution_contexts.size()==3);
+  const auto& evolution_context=delayed_reporter.evolution_contexts.front();
+  assert(!evolution_context.active_world_mechanisms.empty());
+  assert(std::any_of(evolution_context.active_world_mechanisms.begin(),
+                     evolution_context.active_world_mechanisms.end(),[](const json& mechanism){
+    return mechanism.value("key","")=="shelter_construction";
+  }));
+  assert(std::find(evolution_context.currently_available_actions.begin(),
+                   evolution_context.currently_available_actions.end(),"move")!=
+         evolution_context.currently_available_actions.end());
+  assert(std::any_of(evolution_context.evolution_history.begin(),
+                     evolution_context.evolution_history.end(),[](const json& evolution){
+    return evolution.value("id","")=="known-cartography"&&
+           evolution.value("status","")=="activated";
+  }));
 
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");

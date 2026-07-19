@@ -1,4 +1,5 @@
 #include "autopoiesis/simulation.hpp"
+#include "autopoiesis/feature_request.hpp"
 #include "autopoiesis/renderer.hpp"
 #include <algorithm>
 #include <atomic>
@@ -479,10 +480,13 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
 
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;
+          const EvolutionContext evolution_context{active_world_mechanisms(),
+              logger_.evolution_memory(24),available_actions(agent,world_,agents_)};
           auto request_result=run_with_activity(interface,
               {UiActivityKind::EvolutionRequest,date_,simulation_cycle_,agent.id,agent.name,
                call_number,total_calls,0},
-              [&]{return reporter_->request_evolution(simulation_cycle_,day_,agent,history,report);});
+              [&]{return reporter_->request_evolution(simulation_cycle_,day_,agent,history,report,
+                                                       evolution_context);});
           auto request=std::move(request_result.payload);
           std::cout << "Appel " << call_number << "/" << total_calls << " — demande d'évolution pour "
                     << agent.name << (request.is_null()?" indisponible":" terminée");

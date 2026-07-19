@@ -10,4 +10,6 @@ Règle calendaire : 30 journées forment un mois, 12 mois une année et quatre s
 
 Règle d'interface : la fenêtre raylib reçoit uniquement un instantané en lecture seule du moteur. Pendant les appels IA, elle anime une progression sans paralléliser ni ajouter d'appel. Pour la validation, elle affiche les trois demandes sous forme de cartes et renvoie seulement une commande à `HumanValidation`, qui reste l'unique autorité sur les statuts. Le mode terminal reste disponible.
 
+Règle de contexte d'évolution : le second appel reçoit le catalogue des mécanismes actifs, les actions disponibles et une mémoire compacte de 24 demandes antérieures au maximum. L'IA demandeuse doit distinguer une capacité absente d'une capacité active mais mal intégrée et ne jamais recréer une ancienne proposition sous une nouvelle clé.
+
 Règle de livraison : après chaque run de modifications, les tests et le build Docker doivent être suivis d'un commit puis d'un push. Une modification non poussée n'est pas livrée.

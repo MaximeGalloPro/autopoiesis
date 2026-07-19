@@ -22,6 +22,9 @@ class OpenAIClient final : public IDecider, public ICycleReporter {
   json request_evolution(int simulation_cycle, int day, const Agent& agent,
                          const std::vector<std::string>& history,
                          const json& report) override;
+  json request_evolution(int simulation_cycle, int day, const Agent& agent,
+                         const std::vector<std::string>& history, const json& report,
+                         const EvolutionContext& context) override;
   std::string last_error() const override { return last_error_; }
  private:
   std::string key_, model_, base_url_;

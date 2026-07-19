@@ -16,6 +16,7 @@ class Logger {
   void ai_report(int simulation_cycle, int day, const Agent& agent, const json& report,
                  const CalendarDate& date, const ClimateState& climate);
   json period_memories(const std::string& agent_id, std::size_t maximum = 12) const;
+  json evolution_memory(std::size_t maximum = 24) const;
   void ai_feature_request(int simulation_cycle, int day, const Agent& agent,
                           const json& report, const json& request);
   std::string devil_constraint(int simulation_cycle, int day, const json& request);

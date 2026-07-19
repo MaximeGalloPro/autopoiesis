@@ -121,6 +121,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 18. Un effet climatique doit être déterministe, borné, observable et laisser au moins une mitigation compatible avec les capacités actives.
 19. Une interface graphique observe un instantané du moteur ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine.
 20. Le rendu animé d'une fenêtre IA ne modifie ni le nombre ni l'ordre des appels : un seul appel réseau est actif à la fois, puis l'étape suivante commence après son retour.
+21. L'IA demandeuse reçoit avant sa proposition le catalogue des mécanismes actifs et une mémoire bornée des évolutions antérieures. Une nouvelle `evolution_key` ne rend jamais nouveau un mécanisme déjà proposé ou actif.
 
 ## Patterns
 
@@ -139,6 +140,12 @@ La mémoire narrative et la mémoire spatiale sont stockées séparément. La pr
 ### Mémoire persistante de période
 
 Le bilan IA produit exactement deux fragments destinés à la continuité : une phrase factuelle `bilan` et une phrase subjective `ressenti`, chacune limitée à 180 caractères. Avant le bilan suivant, le moteur relit dans `ai_reports.jsonl` au maximum les douze périodes les plus récentes du même personnage. Il ne transmet ni les rapports complets ni les demandes passées. Cette mémoire bornée survit à un nouveau lancement et n'ajoute aucun appel aux deux appels réglementaires par personnage.
+
+### Contexte de demande d'évolution
+
+Le second appel de chaque personnage reçoit `active_world_mechanisms`, les actions actuellement disponibles, les propositions de la fenêtre et au maximum 24 évolutions antérieures compactes. Chaque souvenir d'évolution contient seulement son identifiant, son statut `pending`, `approved` ou `activated`, sa clé, son titre et un résumé court du mécanisme. Les rapports complets, tests et artefacts de Dieu ne sont pas retransmis.
+
+Ce contexte sert au raisonnement de l'IA demandeuse, pas à un filtre sémantique local. Elle doit comparer le besoin observé aux mécanismes actifs et à l'historique avant de proposer. Si une capacité existe déjà mais n'est pas utilisée efficacement, la demande doit nommer l'intégration manquante démontrée par les actions ; elle ne doit ni recréer la capacité ni contourner le choix humain avec une nouvelle clé. Ajouter ou activer un mécanisme impose de tenir à jour le catalogue compact. Cette mémoire reste incluse dans le deuxième appel réglementaire et n'ajoute aucun appel API.
 
 ### Décision locale par utilité
 

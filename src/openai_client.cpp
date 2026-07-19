@@ -1,4 +1,5 @@
 #include "autopoiesis/openai_client.hpp"
+#include "autopoiesis/feature_request.hpp"
 #include <curl/curl.h>
 #include <chrono>
 #include <cstdlib>
@@ -139,7 +140,10 @@ std::string evolution_request_instructions(){
          "need, obstacle, proposed_change, les champs de mechanism et chaque element de acceptance_tests. "
          "Priorise la capacite manquante qui bloque le projet durable ou l'aspiration du personnage. Utilise evolution_key "
          "comme cle technique stable et choisis un domain. La proposition doit etre distincte des cles deja proposees "
-         "dans cette fenetre. Ne propose pas une simple optimisation de navigation, anti-boucle, repos ou seuil numerique, "
+         "dans cette fenetre. Examine d'abord active_world_mechanisms et evolution_history. Ne redemande jamais un mecanisme "
+         "deja actif, pending, approved ou activated, meme sous un autre titre ou une nouvelle cle evolution_key. Si une "
+         "capacite active ne suffit pas, demande uniquement l'integration manquante precise et prouvee par l'historique, "
+         "sans recreer cette capacite. Ne propose pas une simple optimisation de navigation, anti-boucle, repos ou seuil numerique, "
          "sauf si le contexte prouve qu'elle bloque directement la survie ou le projet. "
          "Decris un seul mecanisme deterministe incremental avec ses ressources, actions, preconditions, effets "
          "deterministes et tests d'acceptation executables. N'implemente et n'active rien : cette sortie est seulement "
@@ -179,9 +183,19 @@ json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent
 }
 
 json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report){
+  return request_evolution(simulation_cycle,day,agent,history,report,
+                           {active_world_mechanisms(),json::array(),{}});
+}
+
+json OpenAIClient::request_evolution(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const json& report,const EvolutionContext& context){
   if(proposal_window_cycle_!=simulation_cycle){proposal_window_cycle_=simulation_cycle;proposals_in_window_.clear();}
-  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",character_context(agent,history)},{"report",report},{"proposals_already_made",proposals_in_window_}};
-  auto result=post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),context,feature_request_schema());
+  json input={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},
+              {"character",character_context(agent,history)},{"report",report},
+              {"currently_available_actions",context.currently_available_actions},
+              {"active_world_mechanisms",context.active_world_mechanisms},
+              {"evolution_history",context.evolution_history},
+              {"proposals_already_made",proposals_in_window_}};
+  auto result=post_response(budget_,key_,model_,base_url_,evolution_request_instructions(),input,feature_request_schema());
   record_result("demande d'évolution",agent.name,result.error);
   if(result.value.is_object()&&result.value.value("requested",false))
     proposals_in_window_.push_back({{"evolution_key",result.value.value("evolution_key","")},{"title",result.value.value("title","")}});

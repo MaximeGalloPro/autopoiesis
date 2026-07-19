@@ -62,6 +62,49 @@ json Logger::period_memories(const std::string& agent_id,std::size_t maximum) co
   }
   return memories;
 }
+json Logger::evolution_memory(std::size_t maximum) const {
+  if(maximum==0)return json::array();
+  const auto bounded=[](std::string value,std::size_t limit){
+    if(value.size()<=limit)return value;
+    std::size_t end=limit;
+    while(end>0&&(static_cast<unsigned char>(value[end])&0xC0)==0x80)--end;
+    value.resize(end);return value;
+  };
+  std::map<std::string,std::string> decisions;
+  const auto read_decisions=[&](const std::string& filename,const std::string& status){
+    std::ifstream input(directory_+"/"+filename);std::string line;
+    while(std::getline(input,line))try{const auto item=json::parse(line);const auto id=item.value("id","");if(!id.empty())decisions[id]=status;}catch(const json::exception&){}
+  };
+  read_decisions("approved_feature_requests.jsonl","approved");
+  read_decisions("rejected_feature_requests.jsonl","rejected");
+
+  std::vector<json> evolutions;std::map<std::string,std::size_t> indexes;
+  std::ifstream input(directory_+"/feature_requests.jsonl");std::string line;
+  while(std::getline(input,line))try{
+    const auto request=json::parse(line);const auto id=request.value("id","");
+    if(id.empty())continue;
+    std::string status=decisions.contains(id)?decisions[id]:request.value("status","pending");
+    std::ifstream activation(directory_+"/evolution_runs/"+id+"/activation.json");
+    if(activation){try{json value;activation>>value;if(value.value("status","")=="activated")status="activated";}catch(const json::exception&){}}
+    if(status=="rejected")continue;
+    const auto summary=bounded(request.value("mechanism",json::object()).value("summary",""),280);
+    json compact={{"id",id},{"status",status},{"evolution_key",request.value("evolution_key","")},
+                  {"title",bounded(request.value("title",""),180)},{"mechanism_summary",summary}};
+    if(indexes.contains(id))evolutions[indexes[id]]=std::move(compact);
+    else{indexes[id]=evolutions.size();evolutions.push_back(std::move(compact));}
+  }catch(const json::exception&){}
+
+  json result=json::array();
+  const auto append_status=[&](bool priority){
+    for(auto it=evolutions.rbegin();it!=evolutions.rend()&&result.size()<maximum;++it){
+      const auto status=it->value("status","pending");
+      const bool important=status=="approved"||status=="activated";
+      if(important==priority)result.push_back(*it);
+    }
+  };
+  append_status(true);append_status(false);
+  return result;
+}
 void Logger::ai_feature_request(int simulation_cycle,int day,const Agent& agent,const json& report,const json& request) {
   std::string error;
   if(!validate_feature_request(request,error)) { message("Demande IA rejetee : "+error); return; }

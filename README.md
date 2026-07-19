@@ -40,6 +40,7 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 - Avec trois personnages, cela représente six appels API au cycle élémentaire `720`.
 - Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
 - Chaque nouveau bilan reçoit au maximum les douze souvenirs précédents du personnage, chacun réduit à une phrase de bilan et une phrase de ressenti de 180 caractères maximum. Cette mémoire vient de `ai_reports.jsonl`, survit aux relancements et n'ajoute aucun appel API.
+- Le second appel reçoit aussi le catalogue compact des mécanismes actifs, les actions actuellement disponibles et au maximum 24 évolutions antérieures `pending`, `approved` ou `activated`. Il doit proposer un mécanisme réellement nouveau plutôt que rebaptiser une ancienne demande ; ce contexte n'ajoute aucun appel API.
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
 - La fenêtre graphique et le terminal affichent l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
 - La validation est intégrée au même terminal et ne présente que les trois propositions les plus récentes de la fenêtre : choisir `1`, `2`, `3` ou `n` pour aucune, puis `a` approuve ou `r` refuse la proposition sélectionnée. `o` reprend et `q` ou `exit` arrête proprement. Les autres demandes restent `pending`.

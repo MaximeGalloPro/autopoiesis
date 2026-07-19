@@ -59,4 +59,37 @@ bool validate_feature_request(const json& request, std::string& error) {
   }
   return require_strings(request, "acceptance_tests", error);
 }
+
+json active_world_mechanisms() {
+  return json::array({
+      {{"key","toroidal_world_and_climate"},
+       {"summary","Carte torique de 40 par 24 cases, calendrier persistant, saisons, température, pluie et effets climatiques déterministes."},
+       {"resources",{"terrain","eau","arbres","buissons","abris"}},
+       {"actions",json::array()}},
+      {{"key","food_water_and_hunting"},
+       {"summary","Faim et soif, eau potable, cinq nourritures et cinq animaux avec consommation, chasse, nutrition et danger."},
+       {"resources",{"baies","racines","champignons","poisson","venaison","eau"}},
+       {"actions",{"drink","eat_food","eat_berries","hunt_animal","hunt_rabbit"}}},
+      {{"key","shelter_construction"},
+       {"summary","Récolte locale de bois et construction déterministe d'un abri à partir de matériaux disponibles."},
+       {"resources",{"arbres","bois","fibres","abri"}},
+       {"actions",{"harvest_wood","build_shelter","assemble_shelter"}}},
+      {{"key","needs_and_recovery"},
+       {"summary","Santé, faim, soif et fatigue avec sommeil, repos stationnaire et priorisation locale des urgences vitales."},
+       {"resources",json::array()},
+       {"actions",{"sleep","rest"}}},
+      {{"key","obstacle_aware_navigation"},
+       {"summary","Exploration déterministe utilisant la mémoire des cases, les obstacles connus, les visites et un routage BFS vers nourriture et eau."},
+       {"resources",{"mémoire spatiale","carte connue"}},
+       {"actions",{"observe","move"}}},
+      {{"key","social_interaction"},
+       {"summary","Dialogue local entre personnages adjacents avec confiance, affinité, interactions et monotonie persistantes pendant le run."},
+       {"resources",{"relations"}},
+       {"actions",{"talk"}}},
+      {{"key","durable_projects_and_memory"},
+       {"summary","Aspirations, projets durables, blocages explicites et mémoire narrative bornée entre les bilans IA."},
+       {"resources",{"projet","souvenirs de période"}},
+       {"actions",json::array()}}
+  });
+}
 }
