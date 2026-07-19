@@ -65,8 +65,8 @@ int main() {
   Simulation reported(42, fake, logger, &reporter);
   reported.run(2, 0, 0);
   assert(reporter.calls == 6);
-  assert(reporter.simulation_cycles[0] == 240);
-  assert(reporter.simulation_cycles[3] == 480);
+  assert(reporter.simulation_cycles[0] == 2400);
+  assert(reporter.simulation_cycles[3] == 4800);
   assert(reporter.histories[0].find("reason=I need rest") != std::string::npos);
   assert(reporter.histories[0].find("outcome=success") != std::string::npos);
   unsetenv("REPORT_EVERY_DAYS");
@@ -76,7 +76,7 @@ int main() {
   Simulation configured(42, fake, logger, &every_three);
   configured.run(3, 0, 0);
   assert(every_three.calls == 3);
-  assert(every_three.simulation_cycles[0] == 720);
+  assert(every_three.simulation_cycles[0] == 7200);
   unsetenv("REPORT_EVERY_DAYS");
 
   std::mt19937 local_rng(42);

@@ -31,15 +31,15 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 ## Horloge et appels API
 
 - Un **cycle élémentaire** est un créneau d'action pour chaque personnage.
-- Une **journée** contient `CYCLES_PER_DAY=240` cycles élémentaires.
+- Une **journée** contient `CYCLES_PER_DAY=2400` cycles élémentaires.
 - Un **mois** contient 30 journées et une **année** contient 12 mois, soit 360 journées.
 - Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le calendrier ne se remet pas à zéro lors d'une fenêtre IA.
-- La fenêtre IA par défaut est `REPORT_EVERY_DAYS=3`, donc `720` cycles élémentaires.
+- La fenêtre IA par défaut est `REPORT_EVERY_DAYS=3`, donc `7200` cycles élémentaires.
 - À la fin de cette fenêtre, chaque personnage déclenche exactement deux appels, dans cet ordre : bilan, puis demande d'évolution.
 - Les bilans et tous les champs des demandes d'évolution sont produits en français dans ces mêmes appels.
-- Avec trois personnages, cela représente six appels API au cycle élémentaire `720`.
-- Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
-- L'interface graphique publie un nouvel instantané après chaque cycle élémentaire. À 60 FPS, les déplacements restent visibles pendant les 720 cycles qui précèdent la fenêtre IA.
+- Avec trois personnages, cela représente six appels API au cycle élémentaire `7200` d'un nouveau monde configuré ainsi.
+- Aucun appel API n'est lancé entre les cycles élémentaires `1` et `7199`, et aucun retry HTTP n'est effectué.
+- L'interface graphique publie un nouvel instantané après chaque cycle élémentaire. À 60 FPS, les déplacements restent visibles pendant les 7200 cycles qui précèdent la fenêtre IA.
 - Le rendu terminal reste un résumé journalier réglé par `SIMULATION_RENDER_EVERY_DAYS` ; cette variable ne ralentit ni ne masque les cycles dans l'interface graphique.
 - Chaque nouveau bilan reçoit au maximum les douze souvenirs précédents du personnage, chacun réduit à une phrase de bilan et une phrase de ressenti de 180 caractères maximum. Cette mémoire vient de `ai_reports.jsonl`, survit aux relancements et n'ajoute aucun appel API.
 - Le second appel reçoit aussi le catalogue compact des mécanismes actifs, les actions actuellement disponibles et au maximum 24 évolutions antérieures `pending`, `approved` ou `activated`. Il doit proposer un mécanisme réellement nouveau plutôt que rebaptiser une ancienne demande ; ce contexte n'ajoute aucun appel API.
@@ -115,7 +115,7 @@ Sur macOS, la fenêtre graphique s'ouvre sans prendre le focus afin de ne pas
 changer automatiquement d'espace de travail. `AUTOPOIESIS_FOCUS_WINDOW=1`
 restaure l'activation immédiate de la fenêtre si ce comportement est préféré.
 
-Les valeurs par défaut sont `SIMULATION_DAYS=100`, `CYCLES_PER_DAY=240`,
+Les valeurs par défaut sont `SIMULATION_DAYS=100`, `CYCLES_PER_DAY=2400`,
 `SIMULATION_DELAY_MS=500`, `SIMULATION_RENDER_EVERY_DAYS=1` et
 `REPORT_EVERY_DAYS=3`. Les options de commande sont prioritaires :
 

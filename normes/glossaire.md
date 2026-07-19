@@ -60,7 +60,7 @@ Un cycle élémentaire est un créneau pendant lequel chaque personnage vivant e
 
 ### Journée
 
-Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `240` par défaut. Le paramètre `SIMULATION_DAYS` indique le nombre de journées exécutées par le programme.
+Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `2400` par défaut. Le paramètre `SIMULATION_DAYS` indique le nombre de journées exécutées par le programme.
 
 ### Mois, année et saison
 
@@ -92,7 +92,7 @@ La monotonie augmente lors des échecs, attentes et passages répétés, puis di
 
 ### Fenêtre IA
 
-Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 240 = 720` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Aucun appel n'est déclenché avant le cycle élémentaire `720` et aucun retry HTTP ne doit ajouter un appel au quota.
+Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 2400 = 7200` cycles élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Pour un nouveau monde utilisant cette horloge, aucun appel n'est déclenché avant le cycle élémentaire `7200` et aucun retry HTTP ne doit ajouter un appel au quota.
 
 Après ces six appels, le Diable effectue son tirage local. Ce tirage et la création éventuelle de sa contrainte n'ajoutent aucun appel API. La validation du Diable est une étape séparée et ne consomme pas le choix unique parmi les trois propositions des personnages.
 

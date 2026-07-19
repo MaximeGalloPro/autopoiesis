@@ -82,7 +82,7 @@ class Simulation {
   World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; Devil devil_;
   CalendarDate date_{date_from_absolute_day(1)};
   ClimateState climate_{climate_for(date_)};
-  int cycles_per_day_{240}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
+  int cycles_per_day_{2400}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
   std::map<std::string,std::vector<std::string>> action_history_;
   std::map<std::string,json> planning_history_;
   std::string checkpoint_path_;
