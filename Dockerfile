@@ -2,7 +2,7 @@ FROM debian:12-slim AS cpp-build
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-      build-essential ca-certificates cmake git libcurl4-openssl-dev nlohmann-json3-dev python3 \
+      build-essential ca-certificates cmake libcurl4-openssl-dev nlohmann-json3-dev python3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
