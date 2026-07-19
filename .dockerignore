@@ -1,6 +1,10 @@
 .git
+.context
+.playwright-mcp
 .env
 build
 data
 worktrees
+web/dist
+web/node_modules
 *.log

@@ -1,6 +1,6 @@
 import { extname, resolve, sep } from "node:path";
 import { Elysia } from "elysia";
-import type { EngineCommand } from "../src/protocol";
+import type { BackendEvent, EngineCommand } from "../src/protocol";
 import { BackendProcessManager } from "./backend-process";
 import { isEngineCommand } from "./command-schema";
 
@@ -16,13 +16,60 @@ const contentTypes: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+export function createEventRelay(
+  send: (event: BackendEvent) => void,
+  snapshotIntervalMs = 100,
+): { accept: (event: BackendEvent) => void; close: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pendingState: Extract<BackendEvent, { type: "state" }> | null = null;
+  let closed = false;
+
+  const flush = () => {
+    timer = null;
+    const event = pendingState;
+    pendingState = null;
+    if (!closed && event) send(event);
+  };
+
+  return {
+    accept(event) {
+      if (closed) return;
+      if (event.type === "state") {
+        pendingState = event;
+        if (timer === null) timer = setTimeout(flush, snapshotIntervalMs);
+        return;
+      }
+      // Une garde ou un statut important ne reste jamais derrière un rendu
+      // périmé : le dernier monde est envoyé d'abord, puis l'événement.
+      if (timer !== null) clearTimeout(timer);
+      flush();
+      send(event);
+    },
+    close() {
+      closed = true;
+      pendingState = null;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    },
+  };
+}
+
 export function createApp(
   manager: BackendProcessManager,
-  options: { serveStatic?: boolean; distDirectory?: string } = {},
+  options: {
+    serveStatic?: boolean;
+    distDirectory?: string;
+    safePreview?: boolean;
+    snapshotIntervalMs?: number;
+  } = {},
 ) {
   const sockets = new Map<string, () => void>();
   const serveStatic = options.serveStatic ?? true;
   const distDirectory = options.distDirectory ?? resolve(import.meta.dir, "../dist");
+  const safePreview = options.safePreview ?? process.env.AUTOPOIESIS_SAFE_PREVIEW === "1";
+  const configuredInterval = Number.parseInt(process.env.AUTOPOIESIS_WEB_SNAPSHOT_MS ?? "100", 10);
+  const snapshotIntervalMs = options.snapshotIntervalMs
+    ?? (Number.isFinite(configuredInterval) ? Math.max(16, Math.min(1_000, configuredInterval)) : 100);
 
   return new Elysia()
     .get("/api/health", () => {
@@ -43,6 +90,10 @@ export function createApp(
         set.status = 422;
         return { accepted: false, error: "Commande inconnue, mal paramétrée ou hors limites." };
       }
+      if (safePreview && body.type === "validation.decision" && body.decision === "approve") {
+        set.status = 403;
+        return { accepted: false, error: "L’approbation réelle est désactivée dans cette preview publique." };
+      }
       if (!manager.send(body)) {
         set.status = 503;
         return { accepted: false, error: "Le moteur n’est pas disponible." };
@@ -53,10 +104,16 @@ export function createApp(
     .ws("/ws", {
       open(ws) {
         ws.send(JSON.stringify({ type: "snapshot", payload: manager.snapshot() }));
-        const unsubscribe = manager.subscribe((event) => {
+        const relay = createEventRelay((event) => {
           ws.send(JSON.stringify({ type: "event", payload: event }));
+        }, snapshotIntervalMs);
+        const unsubscribe = manager.subscribe((event) => {
+          relay.accept(event);
         });
-        sockets.set(ws.id, unsubscribe);
+        sockets.set(ws.id, () => {
+          relay.close();
+          unsubscribe();
+        });
       },
       close(ws) {
         sockets.get(ws.id)?.();

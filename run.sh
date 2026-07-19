@@ -23,27 +23,52 @@ load_env_file() {
 
 load_env_file "$ROOT/.env"
 
-ui_mode="${AUTOPOIESIS_UI:-gui}"
+ui_mode="${AUTOPOIESIS_UI:-web}"
 simulation_args=()
 for argument in "$@"; do
   case "$argument" in
     --terminal) ui_mode="terminal" ;;
-    --gui) ui_mode="gui" ;;
+    --web) ui_mode="web" ;;
+    --gui)
+      printf 'L option --gui est obsolete ; lancement de l interface web.\n' >&2
+      ui_mode="web"
+      ;;
     *) simulation_args+=("$argument") ;;
   esac
 done
-if [[ "$ui_mode" != "gui" && "$ui_mode" != "terminal" ]]; then
-  printf 'AUTOPOIESIS_UI doit valoir gui ou terminal.\n' >&2
+if [[ "$ui_mode" == "gui" ]]; then
+  printf 'AUTOPOIESIS_UI=gui est obsolete ; utilisation de web.\n' >&2
+  ui_mode="web"
+fi
+if [[ "$ui_mode" != "web" && "$ui_mode" != "terminal" ]]; then
+  printf 'AUTOPOIESIS_UI doit valoir web ou terminal.\n' >&2
   exit 2
 fi
-
-docker compose build
 
 use_api="${USE_API:-1}"
 if [[ "$use_api" != "0" && "$use_api" != "1" ]]; then
   printf 'USE_API doit valoir 0 ou 1.\n' >&2
   exit 2
 fi
+
+for tool in docker; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    printf 'Outil requis introuvable : %s\n' "$tool" >&2
+    exit 127
+  fi
+done
+if [[ "$ui_mode" == "web" ]]; then
+  for tool in cmake bun; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      printf 'Outil requis pour le mode web introuvable : %s\n' "$tool" >&2
+      exit 127
+    fi
+  done
+fi
+
+# Le build Docker est la garde externe commune au lancement normal et au mode
+# terminal. Il compile le moteur, exécute ses tests et construit le client web.
+docker compose build
 
 evolution_autostart="${EVOLUTION_AUTOSTART:-1}"
 if [[ "$evolution_autostart" != "0" && "$evolution_autostart" != "1" ]]; then
@@ -60,8 +85,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
+mkdir -p "$ROOT/data"
 if [[ "$evolution_autostart" == "1" ]]; then
-  mkdir -p "$ROOT/data"
   request_offset=0
   if [[ -f "$ROOT/data/feature_requests.jsonl" ]]; then
     request_offset="$(wc -l < "$ROOT/data/feature_requests.jsonl")"
@@ -77,43 +102,37 @@ if [[ "$evolution_autostart" == "1" ]]; then
   daemon_pid=$!
 fi
 
-if [[ "$ui_mode" == "gui" ]]; then
-  cmake -S "$ROOT" -B "$ROOT/build" -DCMAKE_BUILD_TYPE=Release -DAUTOPOIESIS_BUILD_GUI=ON
-  cmake --build "$ROOT/build" --target autopoiesis_gui -j2
+if [[ "$ui_mode" == "web" ]]; then
+  cmake -S "$ROOT" -B "$ROOT/build" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$ROOT/build" --target autopoiesis_backend -j2
+  bun install --cwd "$ROOT/web" --frozen-lockfile
+  bun run --cwd "$ROOT/web" typecheck
+  bun run --cwd "$ROOT/web" build
+
+  export AUTOPOIESIS_BACKEND_PATH="$ROOT/build/autopoiesis_backend"
   export AUTOPOIESIS_DATA_DIR="$ROOT/data"
-  simulation_command=("$ROOT/build/autopoiesis_gui")
-  if [[ "$use_api" == "0" ]]; then
-    simulation_command+=(--no-api)
-  fi
+  web_command=(bun "$ROOT/web/server/index.ts")
   if [[ ${#simulation_args[@]} -gt 0 ]]; then
-    simulation_command+=("${simulation_args[@]}")
+    web_command+=("${simulation_args[@]}")
   fi
-  if "${simulation_command[@]}"; then
+  printf 'Interface web disponible sur http://localhost:%s\n' "${PORT:-3000}"
+  if "${web_command[@]}"; then
     simulation_status=0
   else
     simulation_status=$?
   fi
 else
-  if [[ "$use_api" == "1" ]]; then
-    terminal_command=(docker compose run --rm autopoiesis)
-    if [[ ${#simulation_args[@]} -gt 0 ]]; then
-      terminal_command+=("${simulation_args[@]}")
-    fi
-    if "${terminal_command[@]}"; then
-      simulation_status=0
-    else
-      simulation_status=$?
-    fi
+  terminal_command=(docker compose run --rm --entrypoint /app/build/autopoiesis autopoiesis)
+  if [[ "$use_api" == "0" ]]; then
+    terminal_command+=(--no-api)
+  fi
+  if [[ ${#simulation_args[@]} -gt 0 ]]; then
+    terminal_command+=("${simulation_args[@]}")
+  fi
+  if "${terminal_command[@]}"; then
+    simulation_status=0
   else
-    terminal_command=(docker compose run --rm autopoiesis --no-api)
-    if [[ ${#simulation_args[@]} -gt 0 ]]; then
-      terminal_command+=("${simulation_args[@]}")
-    fi
-    if "${terminal_command[@]}"; then
-      simulation_status=0
-    else
-      simulation_status=$?
-    fi
+    simulation_status=$?
   fi
 fi
 
@@ -121,4 +140,4 @@ if [[ "$simulation_status" -ne 0 ]]; then
   exit "$simulation_status"
 fi
 
-printf '\nSimulation terminee proprement.\n'
+printf '\nAutopoiesis termine proprement.\n'

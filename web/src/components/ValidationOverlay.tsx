@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, Flame, OctagonX, PauseCircle, ShieldCheck, Square, X } from "lucide-react";
-import type { EngineCommand, EvolutionRequest, ValidationPrompt } from "../protocol";
+import type { EngineCommand, EvolutionCompletion, EvolutionRequest, ValidationPrompt } from "../protocol";
 import { stringifyMechanism } from "../lib/format";
 
 function RequestCard({ request, devil, onSelect }: {
@@ -110,17 +110,57 @@ export function ValidationOverlay({ prompt, sendCommand }: {
           </div>
         )}
 
-        {prompt.stage === "complete" && (
+        {(prompt.stage === "complete" || prompt.stage === "empty") && (
           <div className="completion-choice">
             <PauseCircle size={42} />
-            <h3>La fenêtre est traitée</h3>
-            <p>Le moteur attend toujours une confirmation explicite avant de reprendre.</p>
+            <h3>{prompt.stage === "empty" ? "Aucune évolution disponible" : "La fenêtre est traitée"}</h3>
+            <p>{prompt.stage === "empty"
+              ? "La simulation reste sous garde humaine et peut reprendre sans modifier le monde."
+              : "Le moteur attend toujours une confirmation explicite avant de reprendre."}</p>
             <div className="modal-actions">
-              <button className="approve-button" onClick={() => void sendCommand({ type: "simulation.resume" })}><Check size={18} /> Reprendre</button>
+              {prompt.allowed_commands.includes("o") && (
+                <button className="approve-button" onClick={() => void sendCommand({ type: "simulation.resume" })}><Check size={18} /> Reprendre</button>
+              )}
               <button className="danger-ghost" onClick={() => void sendCommand({ type: "simulation.stop" })}><Square size={15} /> Arrêter</button>
             </div>
           </div>
         )}
+      </section>
+    </div>
+  );
+}
+
+export function EvolutionCompletionOverlay({ completion, sendCommand }: {
+  completion: EvolutionCompletion;
+  sendCommand: (command: EngineCommand) => Promise<boolean>;
+}) {
+  const successful = completion.stage === "complete" && completion.successful;
+  return (
+    <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="evolution-completion-title">
+      <section className="validation-modal">
+        <header className="validation-heading">
+          <div className="validation-icon">{successful ? <Check /> : <OctagonX />}</div>
+          <div>
+            <span className="eyebrow">Garde humaine · transfert de version</span>
+            <h2 id="evolution-completion-title">{successful ? "La nouvelle évolution est prête" : "L’évolution reste inactive"}</h2>
+            <p>{completion.message}</p>
+          </div>
+        </header>
+        <div className="completion-choice">
+          <PauseCircle size={42} />
+          <h3>Voulez-vous passer à l’étape suivante&nbsp;?</h3>
+          <p>{completion.detail || "Le moteur attend une confirmation explicite."}</p>
+          <div className="modal-actions">
+            {successful && completion.allowed_commands.includes("o") && (
+              <button className="approve-button" onClick={() => void sendCommand({ type: "simulation.resume" })}>
+                <Check size={18} /> Recompiler et reprendre
+              </button>
+            )}
+            <button className="danger-ghost" onClick={() => void sendCommand({ type: "simulation.stop" })}>
+              <Square size={15} /> Arrêter proprement
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );

@@ -6,19 +6,43 @@ const emptyState: PublicState = {
   activity: null,
   validation: null,
   evolution: null,
+  evolution_completion: null,
   recompilation: null,
   engine: { status: "starting", pid: null, restarts: 0, last_error: null },
   latest_event: null,
 };
 
-function applyEvent(current: PublicState, event: BackendEvent): PublicState {
+export function applyEvent(current: PublicState, event: BackendEvent): PublicState {
   const base = { ...current, latest_event: event };
   switch (event.type) {
-    case "state": return { ...base, state: event.payload };
+    case "state": return {
+      ...base,
+      state: event.payload,
+      activity: null,
+      validation: null,
+      evolution: null,
+      evolution_completion: null,
+      recompilation: null,
+    };
+    case "runtime": return {
+      ...base,
+      state: current.state ? {
+        ...current.state,
+        paused: event.payload.paused,
+        speed: event.payload.speed,
+        delay_ms: event.payload.delay_ms,
+      } : null,
+    };
     case "activity": return { ...base, activity: event.payload };
-    case "validation": return { ...base, validation: event.payload };
-    case "evolution_progress": return { ...base, evolution: event.payload };
-    case "recompilation": return { ...base, recompilation: event.payload };
+    case "validation": return { ...base, validation: event.payload, activity: null };
+    case "evolution_progress": return { ...base, evolution: event.payload, validation: null };
+    case "evolution_completion": return {
+      ...base,
+      evolution: event.payload,
+      evolution_completion: event.payload,
+      validation: null,
+    };
+    case "recompilation": return { ...base, recompilation: event.payload, evolution_completion: null };
     case "engine": return { ...base, engine: event.payload };
     case "notice": return base;
   }
@@ -34,6 +58,32 @@ export function useSimulation() {
     let disposed = false;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let stateFrame: number | null = null;
+    let pendingState: Extract<BackendEvent, { type: "state" }> | null = null;
+
+    const flushPendingState = () => {
+      stateFrame = null;
+      const event = pendingState;
+      pendingState = null;
+      if (event && !disposed) setData((current) => applyEvent(current, event));
+    };
+
+    const applyIncomingEvent = (event: BackendEvent) => {
+      if (event.type === "state") {
+        pendingState = event;
+        if (stateFrame === null) stateFrame = window.requestAnimationFrame(flushPendingState);
+        return;
+      }
+
+      const precedingState = pendingState;
+      pendingState = null;
+      if (stateFrame !== null) window.cancelAnimationFrame(stateFrame);
+      stateFrame = null;
+      setData((current) => applyEvent(
+        precedingState ? applyEvent(current, precedingState) : current,
+        event,
+      ));
+    };
 
     const connect = () => {
       if (disposed) return;
@@ -48,8 +98,14 @@ export function useSimulation() {
       socket.addEventListener("message", (message) => {
         try {
           const parsed = JSON.parse(String(message.data)) as ClientMessage;
-          if (parsed.type === "snapshot") setData(parsed.payload);
-          else if (parsed.type === "event") setData((current) => applyEvent(current, parsed.payload));
+          if (parsed.type === "snapshot") {
+            pendingState = null;
+            if (stateFrame !== null) window.cancelAnimationFrame(stateFrame);
+            stateFrame = null;
+            setData(parsed.payload);
+          } else if (parsed.type === "event") {
+            applyIncomingEvent(parsed.payload);
+          }
         } catch {
           setConnection("error");
         }
@@ -73,6 +129,7 @@ export function useSimulation() {
     return () => {
       disposed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (stateFrame !== null) window.cancelAnimationFrame(stateFrame);
       socket?.close();
     };
   }, []);

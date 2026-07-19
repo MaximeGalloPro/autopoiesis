@@ -1,7 +1,7 @@
 import { createApp } from "./app";
 import { BackendProcessManager } from "./backend-process";
 
-const manager = new BackendProcessManager();
+const manager = new BackendProcessManager({ binaryArgs: process.argv.slice(2) });
 
 if (import.meta.main) {
   const port = Number.parseInt(process.env.PORT ?? "3000", 10);

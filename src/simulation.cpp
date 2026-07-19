@@ -1419,7 +1419,7 @@ bool Simulation::run_day(IUserInterface* interface){
       const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,
                                            logger_.recent(),cycle_in_day_,cycles_per_day_,dangers_);
       if(!interface->present(snapshot)){
-        logger_.message("Interface graphique fermée par l'utilisateur.");
+        logger_.message("Interface utilisateur fermée par l'utilisateur.");
         return false;
       }
     }
@@ -1487,7 +1487,7 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
           history.clear();
         }
         if(stop_requested)
-          logger_.message("Interface graphique fermée pendant la fenêtre IA.");
+          logger_.message("Interface utilisateur fermée pendant la fenêtre IA.");
         else
           std::cout << "Fenêtre IA terminée : " << total_calls << " appels tentés.\n" << std::flush;
       }
@@ -1513,7 +1513,7 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
       if(interface&&interface->restart_requested())return {true,days-i-1};
     }
     if(delay_ms>0){
-      if(interface){if(!interface->idle_for(delay_ms)){logger_.message("Interface graphique fermée par l'utilisateur.");break;}}
+      if(interface){if(!interface->idle_for(delay_ms)){logger_.message("Interface utilisateur fermée par l'utilisateur.");break;}}
       else std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
     }
   }

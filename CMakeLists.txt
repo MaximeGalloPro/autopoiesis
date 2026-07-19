@@ -1,20 +1,28 @@
 cmake_minimum_required(VERSION 3.20)
 project(autopoiesis VERSION 0.1 LANGUAGES CXX)
 
-option(AUTOPOIESIS_BUILD_GUI "Build the native raylib interface" OFF)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(CURL REQUIRED)
-find_package(nlohmann_json REQUIRED)
+find_package(nlohmann_json 3.11.3 QUIET)
+if(NOT nlohmann_json_FOUND)
+  include(FetchContent)
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(nlohmann_json
+    URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+    URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
 find_package(Threads REQUIRED)
 
 add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
     src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
-    src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp)
+    src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp
+    src/web_interface.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
@@ -22,32 +30,9 @@ target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(autopoiesis src/main.cpp)
 target_link_libraries(autopoiesis PRIVATE autopoiesis_core)
 
-if(AUTOPOIESIS_BUILD_GUI)
-  find_package(raylib 6.0 QUIET)
-  if(NOT raylib_FOUND)
-    include(FetchContent)
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(raylib
-      GIT_REPOSITORY https://github.com/raysan5/raylib.git
-      GIT_TAG 6.0
-      GIT_SHALLOW TRUE)
-    FetchContent_MakeAvailable(raylib)
-  endif()
-  add_library(autopoiesis_raylib_ui src/raylib_interface.cpp)
-  target_link_libraries(autopoiesis_raylib_ui PUBLIC autopoiesis_core raylib)
-  target_compile_options(autopoiesis_raylib_ui PRIVATE -Wall -Wextra -Wpedantic)
-  add_executable(autopoiesis_gui src/main.cpp)
-  target_compile_definitions(autopoiesis_gui PRIVATE AUTOPOIESIS_GUI=1)
-  target_link_libraries(autopoiesis_gui PRIVATE autopoiesis_raylib_ui)
-  target_compile_options(autopoiesis_gui PRIVATE -Wall -Wextra -Wpedantic)
-  add_executable(autopoiesis_validation_cards_preview tests/validation_cards_preview.cpp)
-  target_link_libraries(autopoiesis_validation_cards_preview PRIVATE autopoiesis_raylib_ui)
-  add_executable(autopoiesis_activity_preview tests/activity_preview.cpp)
-  target_link_libraries(autopoiesis_activity_preview PRIVATE autopoiesis_raylib_ui)
-  add_executable(autopoiesis_evolution_progress_preview tests/evolution_progress_preview.cpp)
-  target_link_libraries(autopoiesis_evolution_progress_preview PRIVATE autopoiesis_raylib_ui)
-endif()
+add_executable(autopoiesis_backend src/web_main.cpp)
+target_link_libraries(autopoiesis_backend PRIVATE autopoiesis_core)
+target_compile_options(autopoiesis_backend PRIVATE -Wall -Wextra -Wpedantic)
 
 enable_testing()
 add_executable(autopoiesis_tests tests/test_core.cpp)
@@ -109,7 +94,7 @@ target_link_libraries(autopoiesis_period_memory_tests PRIVATE autopoiesis_core)
 add_test(NAME persistent_period_memory COMMAND autopoiesis_period_memory_tests)
 add_executable(autopoiesis_ui_model_tests tests/test_ui_model.cpp)
 target_link_libraries(autopoiesis_ui_model_tests PRIVATE autopoiesis_core)
-add_test(NAME graphical_ui_model COMMAND autopoiesis_ui_model_tests)
+add_test(NAME ui_snapshot_model COMMAND autopoiesis_ui_model_tests)
 add_executable(autopoiesis_checkpoint_tests tests/test_checkpoint.cpp)
 target_link_libraries(autopoiesis_checkpoint_tests PRIVATE autopoiesis_core)
 add_test(NAME seamless_checkpoint_transfer COMMAND autopoiesis_checkpoint_tests)
@@ -119,51 +104,9 @@ add_test(NAME campfire_night_routine COMMAND autopoiesis_campfire_tests)
 add_executable(autopoiesis_camp_stockpile_tests tests/test_camp_stockpile.cpp)
 target_link_libraries(autopoiesis_camp_stockpile_tests PRIVATE autopoiesis_core)
 add_test(NAME shared_camp_stockpile COMMAND autopoiesis_camp_stockpile_tests)
-add_executable(autopoiesis_collective_camp_tests tests/test_collective_camp.cpp)
-target_link_libraries(autopoiesis_collective_camp_tests PRIVATE autopoiesis_core)
-add_test(NAME collective_home_camp COMMAND autopoiesis_collective_camp_tests)
-add_executable(autopoiesis_inventory_tests tests/test_inventory.cpp)
-target_link_libraries(autopoiesis_inventory_tests PRIVATE autopoiesis_core)
-add_test(NAME bounded_character_inventory COMMAND autopoiesis_inventory_tests)
-add_executable(autopoiesis_resource_transport_tests tests/test_resource_transport.cpp)
-target_link_libraries(autopoiesis_resource_transport_tests PRIVATE autopoiesis_core)
-add_test(NAME resource_transport_to_camp COMMAND autopoiesis_resource_transport_tests)
-add_executable(autopoiesis_food_planning_tests tests/test_food_planning.cpp)
-target_link_libraries(autopoiesis_food_planning_tests PRIVATE autopoiesis_core)
-add_test(NAME planned_food_and_preservation COMMAND autopoiesis_food_planning_tests)
-add_executable(autopoiesis_collective_life_tests tests/test_collective_life.cpp)
-target_link_libraries(autopoiesis_collective_life_tests PRIVATE autopoiesis_core)
-add_test(NAME collective_camp_life COMMAND autopoiesis_collective_life_tests)
-add_executable(autopoiesis_crafting_tests tests/test_crafting.cpp)
-target_link_libraries(autopoiesis_crafting_tests PRIVATE autopoiesis_core)
-add_test(NAME explicit_crafting_recipes COMMAND autopoiesis_crafting_tests)
-add_executable(autopoiesis_tool_chain_tests tests/test_tool_chain.cpp)
-target_link_libraries(autopoiesis_tool_chain_tests PRIVATE autopoiesis_core)
-add_test(NAME required_tool_chain COMMAND autopoiesis_tool_chain_tests)
-add_executable(autopoiesis_skill_tests tests/test_skills.cpp)
-target_link_libraries(autopoiesis_skill_tests PRIVATE autopoiesis_core)
-add_test(NAME progressive_skills COMMAND autopoiesis_skill_tests)
-add_executable(autopoiesis_spatial_building_tests tests/test_spatial_building.cpp)
-target_link_libraries(autopoiesis_spatial_building_tests PRIVATE autopoiesis_core)
-add_test(NAME spatial_building_designations COMMAND autopoiesis_spatial_building_tests)
-add_executable(autopoiesis_ecosystem_tests tests/test_ecosystem.cpp)
-target_link_libraries(autopoiesis_ecosystem_tests PRIVATE autopoiesis_core)
-add_test(NAME renewable_ecosystem COMMAND autopoiesis_ecosystem_tests)
-add_executable(autopoiesis_health_tests tests/test_health.cpp)
-target_link_libraries(autopoiesis_health_tests PRIVATE autopoiesis_core)
-add_test(NAME detailed_health COMMAND autopoiesis_health_tests)
-add_executable(autopoiesis_emotion_tests tests/test_emotions.cpp)
-target_link_libraries(autopoiesis_emotion_tests PRIVATE autopoiesis_core)
-add_test(NAME causal_emotions COMMAND autopoiesis_emotion_tests)
-add_executable(autopoiesis_relationship_tests tests/test_relationships.cpp)
-target_link_libraries(autopoiesis_relationship_tests PRIVATE autopoiesis_core)
-add_test(NAME active_relationships COMMAND autopoiesis_relationship_tests)
-add_executable(autopoiesis_population_tests tests/test_population.cpp)
-target_link_libraries(autopoiesis_population_tests PRIVATE autopoiesis_core)
-add_test(NAME evolving_population COMMAND autopoiesis_population_tests)
-add_executable(autopoiesis_danger_tests tests/test_dangers.cpp)
-target_link_libraries(autopoiesis_danger_tests PRIVATE autopoiesis_core)
-add_test(NAME active_dangers COMMAND autopoiesis_danger_tests)
+add_executable(autopoiesis_web_interface_tests tests/test_web_interface.cpp)
+target_link_libraries(autopoiesis_web_interface_tests PRIVATE autopoiesis_core)
+add_test(NAME web_stdio_protocol COMMAND autopoiesis_web_interface_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -193,20 +136,6 @@ foreach(test_target
     autopoiesis_checkpoint_tests
     autopoiesis_campfire_tests
     autopoiesis_camp_stockpile_tests
-    autopoiesis_collective_camp_tests
-    autopoiesis_inventory_tests
-    autopoiesis_resource_transport_tests
-    autopoiesis_food_planning_tests
-    autopoiesis_collective_life_tests
-    autopoiesis_crafting_tests
-    autopoiesis_tool_chain_tests
-    autopoiesis_skill_tests
-    autopoiesis_spatial_building_tests
-    autopoiesis_ecosystem_tests
-    autopoiesis_health_tests
-    autopoiesis_emotion_tests
-    autopoiesis_relationship_tests
-    autopoiesis_population_tests
-    autopoiesis_danger_tests)
+    autopoiesis_web_interface_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

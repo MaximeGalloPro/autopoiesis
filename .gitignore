@@ -2,6 +2,7 @@
 /data/*
 !.gitkeep
 /worktrees/
+/.playwright-mcp/
 scripts/__pycache__/
 *.pyc
 *.log
