@@ -174,6 +174,8 @@ Les pratiques réussies font progresser huit compétences locales : coupe du boi
 
 Le foyer peut désormais réserver les matériaux d'un chantier puis placer sur la carte un mur, une porte, un lit, une réserve ou un atelier. Un bâtisseur équipé d'une hache rejoint une case voisine et fournit plusieurs unités de travail ; sa compétence accélère le chantier. Les murs bloquent les chemins, les portes restent praticables, les lits améliorent le repos et les ateliers renforcent les réparations.
 
+L'écosystème progresse une fois par journée sans appel API. Les plantes repoussent jusqu'à leur capacité, mais une parcelle totalement vidée exige six jours avant sa première repousse. Lapins, cerfs, sangliers, loups et poissons se reproduisent à des rythmes distincts sans dépasser leur capacité ; un loup peut tuer un herbivore adjacent. Naissances, prédations, repousses et zones épuisées apparaissent dans les événements et l'en-tête graphique.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

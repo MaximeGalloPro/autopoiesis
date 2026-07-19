@@ -546,6 +546,12 @@ struct RaylibInterface::Impl {
     DrawText(TextFormat("%d °C · %s · jour absolu %d · cycle %d",snapshot.climate.temperature_c,
                         snapshot.climate.condition.c_str(),snapshot.date.absolute_day,
                         snapshot.simulation_cycle),210,44,14,secondary_text);
+    const int ecology_width=std::max(0,screen_width-940);
+    if(ecology_width>120)DrawText(clipped(
+        TextFormat("Écosystème J%d · naissances %d · prédations %d · épuisées %d",
+                   snapshot.ecology.day,snapshot.ecology.total_births,
+                   snapshot.ecology.total_predations,snapshot.ecology.depleted_patches),
+        ecology_width,12).c_str(),650,46,12,secondary_text);
     DrawText(snapshot.phase==DayPhase::Night?"NUIT":"JOUR",112,48,12,
              snapshot.phase==DayPhase::Night?Color{137,170,219,255}:accent);
     draw_speed_controls();

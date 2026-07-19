@@ -34,6 +34,7 @@ struct UiSnapshot {
   CalendarDate date;
   int simulation_cycle{};
   ClimateState climate;
+  EcologyState ecology;
   DayPhase phase{DayPhase::Day};
   int cycle_in_day{1};
   int cycles_per_day{2400};

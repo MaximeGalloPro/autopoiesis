@@ -146,6 +146,9 @@ add_test(NAME progressive_skills COMMAND autopoiesis_skill_tests)
 add_executable(autopoiesis_spatial_building_tests tests/test_spatial_building.cpp)
 target_link_libraries(autopoiesis_spatial_building_tests PRIVATE autopoiesis_core)
 add_test(NAME spatial_building_designations COMMAND autopoiesis_spatial_building_tests)
+add_executable(autopoiesis_ecosystem_tests tests/test_ecosystem.cpp)
+target_link_libraries(autopoiesis_ecosystem_tests PRIVATE autopoiesis_core)
+add_test(NAME renewable_ecosystem COMMAND autopoiesis_ecosystem_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -183,6 +186,7 @@ foreach(test_target
     autopoiesis_crafting_tests
     autopoiesis_tool_chain_tests
     autopoiesis_skill_tests
-    autopoiesis_spatial_building_tests)
+    autopoiesis_spatial_building_tests
+    autopoiesis_ecosystem_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

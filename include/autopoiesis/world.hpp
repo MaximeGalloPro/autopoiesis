@@ -20,6 +20,9 @@ class World {
   int food(Position p) const;
   const std::vector<FoodResource>& food_resources() const { return food_resources_; }
   const std::vector<Animal>& animals() const { return animals_; }
+  int population(AnimalType type) const;
+  int carrying_capacity(AnimalType type) const;
+  EcologyState ecology() const;
   const Animal* animal(const std::string& id) const;
   bool consume_food(Position p, FoodType* eaten = nullptr, int* nutrition = nullptr);
   bool hunt_animal(Position hunter, const std::string& animal_id, Animal* hunted = nullptr);
@@ -96,6 +99,8 @@ class World {
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;
   std::map<std::pair<int,int>, Building> buildings_;
   std::optional<Position> primary_campfire_;
+  EcologyState ecology_;
+  int next_animal_id_{2};
   void replenish_branches();
   int index(Position p) const { const auto canonical=wrap(p); return canonical.y * width + canonical.x; }
 };

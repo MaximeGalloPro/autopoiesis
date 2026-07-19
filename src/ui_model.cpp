@@ -39,6 +39,7 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
   snapshot.date=date;
   snapshot.simulation_cycle=simulation_cycle;
   snapshot.climate=climate;
+  snapshot.ecology=world.ecology();
   snapshot.cycle_in_day=cycle_in_day;
   snapshot.cycles_per_day=cycles_per_day;
   snapshot.phase=day_phase_for(cycle_in_day,cycles_per_day);

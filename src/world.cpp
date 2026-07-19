@@ -33,7 +33,7 @@ bool World::passable(Position p) const { p=wrap(p);const auto structure=building
 bool World::drinkable(Position p) const { for(const auto neighbor:neighbors(p))if(terrain(neighbor)==Terrain::Water)return true;return terrain(p)==Terrain::Water; }
 int World::food(Position p) const { p=wrap(p);int total=0;for(const auto& resource:food_resources_)if(resource.position==p)total+=resource.amount;return total; }
 int World::berries(Position p) const { p=wrap(p);for(const auto& resource:food_resources_)if(resource.type==FoodType::Berries&&resource.position==p)return resource.amount;return 0; }
-bool World::consume_food(Position p,FoodType* eaten,int* nutrition) { p=wrap(p);for(auto& resource:food_resources_)if(resource.position==p&&resource.amount>0&&terrain(p)!=Terrain::Water){--resource.amount;if(eaten)*eaten=resource.type;if(nutrition)*nutrition=resource.nutrition;return true;}return false; }
+bool World::consume_food(Position p,FoodType* eaten,int* nutrition) { p=wrap(p);for(auto& resource:food_resources_)if(resource.position==p&&resource.amount>0&&terrain(p)!=Terrain::Water){--resource.amount;if(resource.amount==0)resource.depleted_days=0;if(eaten)*eaten=resource.type;if(nutrition)*nutrition=resource.nutrition;return true;}return false; }
 bool World::eat_berries(Position p) { p=wrap(p);for(auto& resource:food_resources_)if(resource.type==FoodType::Berries&&resource.position==p&&resource.amount>0){--resource.amount;return true;}return false; }
 int World::wood(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.wood; }
 int World::fibers(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.fibers; }
@@ -80,6 +80,7 @@ void World::apply_climate(const CalendarDate& date,const ClimateState& climate) 
   for(auto& resource:food_resources_){
     const bool plant=resource.type==FoodType::Berries||resource.type==FoodType::Roots||resource.type==FoodType::Mushrooms;
     if(!plant)continue;
+    if(resource.amount==0)continue;
     if(date.season==Season::Spring&&climate.rainfall_mm>=8)resource.amount=std::min(resource.capacity,resource.amount+1);
     else if(date.season==Season::Autumn&&climate.rainfall_mm>=8&&resource.type!=FoodType::Berries)resource.amount=std::min(resource.capacity,resource.amount+1);
     else if(date.season==Season::Summer&&climate.temperature_c>=29&&date.day_of_month%5==0)resource.amount=std::max(0,resource.amount-1);
@@ -87,18 +88,50 @@ void World::apply_climate(const CalendarDate& date,const ClimateState& climate) 
   }
 }
 const Animal* World::animal(const std::string& id) const { for(const auto& candidate:animals_)if(candidate.id==id)return &candidate;return nullptr; }
-bool World::hunt_animal(Position hunter,const std::string& animal_id,Animal* hunted) { for(auto& candidate:animals_)if(candidate.id==animal_id&&candidate.alive&&adjacent(hunter,candidate.position)){candidate.alive=false;if(hunted)*hunted=candidate;if(candidate.type==AnimalType::Rabbit)rabbit_alive_=false;return true;}return false; }
+int World::population(AnimalType type) const { return static_cast<int>(std::count_if(animals_.begin(),animals_.end(),[&](const Animal& animal){return animal.alive&&animal.type==type;})); }
+int World::carrying_capacity(AnimalType type) const { switch(type){case AnimalType::Rabbit:return 6;case AnimalType::Deer:return 4;case AnimalType::Boar:return 3;case AnimalType::Wolf:return 2;case AnimalType::Fish:return 6;}return 0; }
+EcologyState World::ecology() const { auto state=ecology_;state.depleted_patches=static_cast<int>(std::count_if(food_resources_.begin(),food_resources_.end(),[](const FoodResource& resource){const bool plant=resource.type==FoodType::Berries||resource.type==FoodType::Roots||resource.type==FoodType::Mushrooms;return plant&&resource.amount==0;}));return state; }
+bool World::hunt_animal(Position hunter,const std::string& animal_id,Animal* hunted) { for(auto& candidate:animals_)if(candidate.id==animal_id&&candidate.alive&&adjacent(hunter,candidate.position)){candidate.alive=false;if(hunted)*hunted=candidate;if(candidate.id=="rabbit-1")rabbit_alive_=false;return true;}return false; }
 bool World::hunt_rabbit(Position hunter) {
   return hunt_animal(hunter,"rabbit-1");
 }
 void World::advance_nature(std::mt19937& rng) {
+  ++ecology_.day;ecology_.births=0;ecology_.predations=0;ecology_.regrown_food=0;
   replenish_branches();
+  for(auto& resource:food_resources_){
+    const bool plant=resource.type==FoodType::Berries||resource.type==FoodType::Roots||resource.type==FoodType::Mushrooms;
+    if(!plant)continue;
+    if(resource.amount==0){
+      if(++resource.depleted_days>=6){resource.amount=1;resource.depleted_days=0;++ecology_.regrown_food;}
+    }else{
+      resource.depleted_days=0;
+      if(resource.amount<resource.capacity&&ecology_.day%2==0){++resource.amount;++ecology_.regrown_food;}
+    }
+  }
+  for(auto& predator:animals_)if(predator.alive&&predator.type==AnimalType::Wolf){
+    auto prey=std::find_if(animals_.begin(),animals_.end(),[&](const Animal& candidate){
+      return candidate.alive&&(candidate.type==AnimalType::Rabbit||candidate.type==AnimalType::Deer||candidate.type==AnimalType::Boar)&&adjacent(predator.position,candidate.position);
+    });
+    if(prey!=animals_.end()){prey->alive=false;if(prey->id=="rabbit-1")rabbit_alive_=false;++ecology_.predations;++ecology_.total_predations;}
+  }
+  const auto reproduction_interval=[](AnimalType type){switch(type){case AnimalType::Rabbit:return 3;case AnimalType::Deer:return 6;case AnimalType::Boar:return 8;case AnimalType::Wolf:return 12;case AnimalType::Fish:return 4;}return 100;};
+  for(const auto type:{AnimalType::Rabbit,AnimalType::Deer,AnimalType::Boar,AnimalType::Wolf,AnimalType::Fish}){
+    if(ecology_.day%reproduction_interval(type)!=0||population(type)<=0||population(type)>=carrying_capacity(type))continue;
+    if(type==AnimalType::Wolf&&population(AnimalType::Rabbit)+population(AnimalType::Deer)+population(AnimalType::Boar)<2)continue;
+    const auto parent=std::find_if(animals_.begin(),animals_.end(),[&](const Animal& animal){return animal.alive&&animal.type==type;});
+    Position spawn=parent->position;
+    if(type!=AnimalType::Fish)for(const auto candidate:neighbors(parent->position))if(passable(candidate)&&std::none_of(animals_.begin(),animals_.end(),[&](const Animal& animal){return animal.alive&&animal.position==candidate;})){spawn=candidate;break;}
+    const int danger=parent->danger,nutrition=parent->nutrition;
+    animals_.push_back({animal_type_name(type)+"-"+std::to_string(next_animal_id_++),type,spawn,true,danger,nutrition});
+    ++ecology_.births;++ecology_.total_births;
+  }
   for(auto& candidate:animals_){
     if(!candidate.alive||candidate.type==AnimalType::Fish||std::uniform_int_distribution<int>(0,3)(rng)!=0)continue;
     std::vector<Position> options;for(const auto p:neighbors(candidate.position))if(passable(p))options.push_back(p);
     if(!options.empty())candidate.position=options[std::uniform_int_distribution<size_t>(0,options.size()-1)(rng)];
-    if(candidate.type==AnimalType::Rabbit)rabbit_=candidate.position;
+    if(candidate.id=="rabbit-1")rabbit_=candidate.position;
   }
+  ecology_.depleted_patches=ecology().depleted_patches;
 }
 void World::replenish_branches() {
   for(int y=0;y<height;++y)for(int x=0;x<width;++x){
@@ -123,7 +156,8 @@ json World::checkpoint() const {
   for(const auto& resource:food_resources_)foods.push_back({
       {"type",static_cast<int>(resource.type)},
       {"x",resource.position.x},{"y",resource.position.y},
-      {"amount",resource.amount},{"nutrition",resource.nutrition},{"capacity",resource.capacity}});
+      {"amount",resource.amount},{"nutrition",resource.nutrition},{"capacity",resource.capacity},
+      {"depleted_days",resource.depleted_days}});
   json animals=json::array();
   for(const auto& animal:animals_)animals.push_back({
       {"id",animal.id},{"type",static_cast<int>(animal.type)},
@@ -152,6 +186,11 @@ json World::checkpoint() const {
           {"iron_ore_resources",std::move(iron)},
           {"construction",std::move(construction)},
           {"buildings",std::move(buildings)},
+          {"ecology",{{"day",ecology_.day},{"births",ecology_.births},
+                      {"predations",ecology_.predations},{"regrown_food",ecology_.regrown_food},
+                      {"depleted_patches",ecology_.depleted_patches},
+                      {"total_births",ecology_.total_births},{"total_predations",ecology_.total_predations}}},
+          {"next_animal_id",next_animal_id_},
           {"primary_campfire",primary_campfire_?json{{"x",primary_campfire_->x},{"y",primary_campfire_->y}}:json(nullptr)}};
 }
 
@@ -169,7 +208,7 @@ void World::restore_checkpoint(const json& state) {
       static_cast<FoodType>(value.at("type").get<int>()),
       {value.at("x").get<int>(),value.at("y").get<int>()},
       value.at("amount").get<int>(),value.at("nutrition").get<int>(),
-      value.at("capacity").get<int>()});
+      value.at("capacity").get<int>(),value.value("depleted_days",0)});
   std::vector<Animal> restored_animals;
   for(const auto& value:state.at("animals"))restored_animals.push_back({
       value.at("id").get<std::string>(),static_cast<AnimalType>(value.at("type").get<int>()),
@@ -208,6 +247,11 @@ void World::restore_checkpoint(const json& state) {
   iron_ore_resources_=std::move(restored_iron);
   construction_cells_=std::move(restored_construction);
   buildings_=std::move(restored_buildings);
+  const auto ecology=state.value("ecology",json::object());
+  ecology_={ecology.value("day",0),ecology.value("births",0),ecology.value("predations",0),
+            ecology.value("regrown_food",0),ecology.value("depleted_patches",0),
+            ecology.value("total_births",0),ecology.value("total_predations",0)};
+  next_animal_id_=state.value("next_animal_id",2);
   primary_campfire_.reset();
   const auto primary=state.value("primary_campfire",json(nullptr));
   if(!primary.is_null())primary_campfire_=wrap({primary.at("x").get<int>(),primary.at("y").get<int>()});

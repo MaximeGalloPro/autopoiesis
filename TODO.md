@@ -28,9 +28,9 @@ charges, rôles et réserves.
 - [x] **G06 - Outils nécessaires** : collecter le fer, fondre un lingot avec du charbon, fabriquer et équiper une hache obligatoire, puis l'user et la réparer avec du bois.
 - [x] **G07 - Compétences progressives** : huit savoirs gagnent de l'expérience sur les seules réussites, produisent des niveaux et spécialisations visibles, améliorent l'entretien des outils et se transmettent au foyer par une leçon quotidienne bornée.
 - [x] **G08 - Construction spatiale** : réserver atomiquement les coûts, désigner puis bâtir avec une hache murs, portes, lits, réserves et ateliers persistants, visibles et fonctionnels sur la carte.
-- [ ] **G10 - Écosystème renouvelable** : croissance, reproduction, prédation et surexploitation locale.
+- [x] **G10 - Écosystème renouvelable** : repousses bornées, récupération lente des parcelles épuisées, reproduction sous capacité, prédation réelle des loups et indicateurs écologiques persistants.
 
-Critère de sortie : un abri fonctionnel exige une chaîne matière → outil →
+Critère de sortie atteint : un abri fonctionnel exige une chaîne matière → outil →
 travail → bâtiment, avec coût, durée et compétence observables.
 
 ### Phase 3 - Produire des histoires humaines

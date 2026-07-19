@@ -90,7 +90,7 @@ struct Project {
 };
 struct Relationship { int trust{}; int affinity{}; int interactions{}; };
 struct ShelterConstruction { Position position; int progress{}; };
-struct FoodResource { FoodType type; Position position; int amount; int nutrition; int capacity{}; };
+struct FoodResource { FoodType type; Position position; int amount; int nutrition; int capacity{}; int depleted_days{}; };
 struct FoodItem {
   FoodType type{FoodType::Berries};
   int nutrition{};
@@ -106,6 +106,16 @@ struct Tool {
   friend bool operator==(const Tool&,const Tool&)=default;
 };
 struct Animal { std::string id; AnimalType type; Position position; bool alive{true}; int danger{}; int nutrition{}; };
+struct EcologyState {
+  int day{};
+  int births{};
+  int predations{};
+  int regrown_food{};
+  int depleted_patches{};
+  int total_births{};
+  int total_predations{};
+  friend bool operator==(const EcologyState&,const EcologyState&)=default;
+};
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};
   Personality personality; Attributes attributes; int thirst{20}; std::deque<std::string> memories; bool alive{true}; int sleeping_days{0}; int critical_hunger_days{0}; int critical_thirst_days{0};
