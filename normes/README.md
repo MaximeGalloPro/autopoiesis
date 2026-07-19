@@ -8,7 +8,7 @@ Règle d'horloge à retenir : un cycle élémentaire est une opportunité d'acti
 
 Règle calendaire : 30 journées forment un mois, 12 mois une année et quatre saisons déterministes influencent nourriture, soif, faim et fatigue sans ajouter d'appel API. Chaque bilan reçoit seulement les douze couples `bilan` et `ressenti` précédents du personnage.
 
-Règle d'interface : la fenêtre raylib reçoit uniquement un instantané en lecture seule du moteur. Pendant les appels IA, elle anime une progression sans paralléliser ni ajouter d'appel. Pour la validation, elle affiche les trois demandes sous forme de cartes et renvoie seulement une commande à `HumanValidation`, qui reste l'unique autorité sur les statuts. Le mode terminal reste disponible.
+Règle d'interface : React et Three.js reçoivent uniquement des instantanés en lecture seule relayés par Elysia depuis le backend C++. Pendant les appels IA, le web anime une progression sans paralléliser ni ajouter d'appel. Pour la validation, il affiche les trois demandes sous forme de cartes et renvoie seulement une commande bornée à `HumanValidation`, qui reste l'unique autorité sur les statuts. Le mode terminal reste disponible.
 
 Règle de vitesse : pause, ralentissement et accélération agissent uniquement sur la cadence graphique. Aucun cycle élémentaire, aucune décision et aucune validation ne peut être sauté.
 
