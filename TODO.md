@@ -22,6 +22,8 @@ Ce fichier sert de point de reprise lors du changement d’ordinateur.
 - [x] Remplacer la décision locale purement réactive par utilité, persistance d'objectif et BFS sur mémoire limitée.
 - [x] Ajouter le Diable : tirage local une fois par fenêtre, contraintes rationnelles, validation séparée et approbation automatique optionnelle.
 - [x] Notifier macOS à la fin du workflow de Dieu ou lorsqu'il dépasse le délai d'attente.
+- [x] Ajouter mois, années, saisons, climat déterministe et effets bornés sur nourriture et personnages.
+- [x] Conserver douze mémoires de période par personnage sous forme d'une phrase de bilan et d'une phrase de ressenti.
 - [ ] Étendre progressivement le catalogue du Diable lorsque de nouvelles capacités rendent des contraintes réelles jouables.
 - [ ] Ajouter reproduction et renouvellement déterministe des populations et ressources.
 - [ ] Ajouter inventaires, conservation des aliments et partage entre personnages.

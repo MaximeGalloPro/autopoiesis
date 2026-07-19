@@ -1,4 +1,5 @@
 #pragma once
+#include "calendar.hpp"
 #include "types.hpp"
 #include <random>
 
@@ -35,6 +36,7 @@ class World {
   bool create_shelter(Position p);
   void add_materials(Position p, int wood, int fibers);
   bool build_shelter(Position p);
+  void apply_climate(const CalendarDate& date, const ClimateState& climate);
   void advance_nature(std::mt19937& rng);
   std::string ascii(const std::vector<Agent>& agents) const;
  private:

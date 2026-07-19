@@ -15,11 +15,14 @@ actions locales → 3 journées → bilan IA → demande IA à Dieu
 
 - Un **cycle élémentaire** est un créneau d'action pour chaque personnage.
 - Une **journée** contient `CYCLES_PER_DAY=240` cycles élémentaires.
+- Un **mois** contient 30 journées et une **année** contient 12 mois, soit 360 journées.
+- Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le calendrier ne se remet pas à zéro lors d'une fenêtre IA.
 - La fenêtre IA par défaut est `REPORT_EVERY_DAYS=3`, donc `720` cycles élémentaires.
 - À la fin de cette fenêtre, chaque personnage déclenche exactement deux appels, dans cet ordre : bilan, puis demande d'évolution.
 - Les bilans et tous les champs des demandes d'évolution sont produits en français dans ces mêmes appels.
 - Avec trois personnages, cela représente six appels API au cycle élémentaire `720`.
 - Aucun appel API n'est lancé entre les cycles élémentaires `1` et `719`, et aucun retry HTTP n'est effectué.
+- Chaque nouveau bilan reçoit au maximum les douze souvenirs précédents du personnage, chacun réduit à une phrase de bilan et une phrase de ressenti de 180 caractères maximum. Cette mémoire vient de `ai_reports.jsonl`, survit aux relancements et n'ajoute aucun appel API.
 - Le moteur s'arrête à la fin de chaque fenêtre IA et attend une confirmation humaine avant de poursuivre. `o` reprend, `q` arrête le run.
 - Le terminal affiche l'avancement des six appels (`en cours`, `terminé` ou `indisponible`) avant d'ouvrir cette pause.
 - La validation est intégrée au même terminal et ne présente que les trois propositions les plus récentes de la fenêtre : choisir `1`, `2`, `3` ou `n` pour aucune, puis `a` approuve ou `r` refuse la proposition sélectionnée. `o` reprend et `q` ou `exit` arrête proprement. Les autres demandes restent `pending`.
@@ -48,6 +51,8 @@ action et les demandes d'évolution restent `pending` jusqu'à leur approbation.
 ## Monde et survie
 
 - La carte mesure `40 × 24`, soit quatre fois la surface initiale, et forme un tore : franchir un bord ramène au bord opposé.
+- La saison produit chaque jour une température, une pluviométrie et une condition déterministes. Le printemps régénère les plantes avec la pluie, l'automne favorise racines et champignons, la chaleur estivale augmente la soif et l'hiver raréfie progressivement les végétaux.
+- Les jours de gel augmentent faim et fatigue ; un abri réduit fortement cette exposition. Une pluie importante fatigue légèrement les personnages non abrités.
 - La survie suit santé, faim, soif et fatigue. L'eau est recherchée puis consommée avec l'action locale `drink`.
 - Les aliments sont les baies, racines, champignons, poissons et venaison.
 - La faune comprend lapins, cerfs, sangliers, loups et poissons, avec danger, nutrition et habitat distincts.
@@ -94,7 +99,10 @@ ou le statut HTTP et les champs d'erreur API utiles, avec masquage des secrets.
 intégrée à chaque fin de fenêtre ; `0` est réservé aux runs automatisés.
 
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
-`data/feature_requests.jsonl`.
+`data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
+calendaire et son climat. Le jour absolu, le mois et l'année continuent entre
+les fenêtres du run actif ; les deux phrases de mémoire restent disponibles
+entre plusieurs lancements grâce au journal.
 
 ## Évolution contrôlée
 

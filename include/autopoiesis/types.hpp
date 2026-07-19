@@ -52,7 +52,7 @@ struct Project {
 };
 struct Relationship { int trust{}; int affinity{}; int interactions{}; };
 struct ShelterConstruction { Position position; int progress{}; };
-struct FoodResource { FoodType type; Position position; int amount; int nutrition; };
+struct FoodResource { FoodType type; Position position; int amount; int nutrition; int capacity{}; };
 struct Animal { std::string id; AnimalType type; Position position; bool alive{true}; int danger{}; int nutrition{}; };
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};

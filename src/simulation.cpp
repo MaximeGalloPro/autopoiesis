@@ -267,11 +267,22 @@ Perception Simulation::perceive(Agent& a) {
   json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
   json construction=nullptr;if(a.shelter_construction)construction={{"x",a.shelter_construction->position.x},{"y",a.shelter_construction->position.y},{"progress",a.shelter_construction->progress}};
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",available_actions(a,world_,agents_)}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
 void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_days;if(a.critical_hunger_days>3)a.health=clamp_stat(a.health-std::max(1,7-a.attributes.willpower/20));}else a.critical_hunger_days=0;if(a.thirst>=90){++a.critical_thirst_days;if(a.critical_thirst_days>1)a.health=clamp_stat(a.health-std::max(2,10-a.attributes.willpower/15));}else a.critical_thirst_days=0;if(a.health==0)a.alive=false;}
+
+void Simulation::apply_climate_effects(Agent& agent,const CalendarDate& date,const ClimateState& climate) {
+  if(!agent.alive)return;
+  const bool sheltered=world_.shelter_level(agent.position)>0;
+  if(date.season==Season::Summer&&climate.temperature_c>=29)agent.thirst=clamp_stat(agent.thirst+3);
+  if(date.season==Season::Winter&&climate.temperature_c<=2){
+    agent.hunger=clamp_stat(agent.hunger+2);
+    agent.fatigue=clamp_stat(agent.fatigue+(sheltered?1:4));
+  }
+  if(climate.rainfall_mm>=8&&!sheltered)agent.fatigue=clamp_stat(agent.fatigue+1);
+}
 
 std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.type==DecisionType::Blocked){a.remember("I reported a blockage: "+d.obstacle);return "signale un blocage : "+d.obstacle;}
@@ -346,7 +357,10 @@ void Simulation::update_behavior_after_action(Agent& agent,const Agent& before,c
 
 void Simulation::run_day(){
   ++day_;
+  date_=date_from_absolute_day(day_);
+  climate_=climate_for(date_);
   world_.advance_nature(rng_);
+  world_.apply_climate(date_,climate_);
   for(auto& agent:agents_) {
     if(!agent.alive||agent.sleeping_days<=0) continue;
     --agent.sleeping_days;
@@ -379,13 +393,14 @@ void Simulation::run_day(){
       if(!decision.obstacle.empty()) entry+=" obstacle="+decision.obstacle;
       if(!decision.desired_result.empty()) entry+=" desired_result="+decision.desired_result;
       entry+=" project="+agent.project.key+" project_status="+project_status_name(agent.project.status)+" project_progress="+std::to_string(agent.project.progress)+"/"+std::to_string(agent.project.target)+" boredom="+std::to_string(agent.boredom);
+      entry+=" calendar="+calendar_label(date_)+" temperature_c="+std::to_string(climate_.temperature_c)+" climate="+climate_.condition;
       if(!agent.project.missing_capability.empty())entry+=" missing_capability="+agent.project.missing_capability;
       history.push_back(entry);
       if(history.size()>1200) history.erase(history.begin());
-      logger_.event(simulation_cycle_,day_,before,decision,result,agent);
+      logger_.event(simulation_cycle_,day_,before,decision,result,agent,date_,climate_);
     }
   }
-  for(auto& agent:agents_) if(agent.alive) update_needs(agent);
+  for(auto& agent:agents_) if(agent.alive){update_needs(agent);apply_climate_effects(agent,date_,climate_);}
 }
 
 void Simulation::run(int days,int delay_ms,int render_every_days,const ValidationGate& validation_gate){
@@ -394,10 +409,10 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
     bool period_complete=day_%report_every_days_==0;
     bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
     if(all_dead) logger_.message("Simulation arrêtée : tous les personnages sont morts.");
-    if((render_every_days>0&&day_%render_every_days==0)||all_dead) render(day_,simulation_cycle_,world_,agents_,logger_);
+    if((render_every_days>0&&day_%render_every_days==0)||all_dead) render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
 
     if(period_complete){
-      std::cout << "\n=== FENETRE IA : Jour " << day_ << " / Cycle elementaire "
+      std::cout << "\n=== FENETRE IA : " << calendar_label(date_) << " / Jour absolu " << day_ << " / Cycle elementaire "
                 << simulation_cycle_ << " ===\n" << std::flush;
       if(!reporter_){
         std::cout << "API désactivée : aucun appel à effectuer.\n" << std::flush;
@@ -408,12 +423,13 @@ void Simulation::run(int days,int delay_ms,int render_every_days,const Validatio
           auto& history=action_history_[agent.id];
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — bilan de " << agent.name << " (en cours...)\n" << std::flush;
-          auto report=reporter_->report_period(simulation_cycle_,day_,agent,history);
+          const PeriodContext period_context{date_,climate_,logger_.period_memories(agent.id,12)};
+          auto report=reporter_->report_period(simulation_cycle_,day_,agent,history,period_context);
           std::cout << "Appel " << call_number << "/" << total_calls << " — bilan de "
                     << agent.name << (report.is_null()?" indisponible":" terminé");
           if(report.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
           std::cout << "\n" << std::flush;
-          if(!report.is_null()) logger_.ai_report(simulation_cycle_,day_,agent,report);
+          if(!report.is_null()) logger_.ai_report(simulation_cycle_,day_,agent,report,date_,climate_);
 
           std::cout << "Appel " << ++call_number << "/" << total_calls
                     << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;

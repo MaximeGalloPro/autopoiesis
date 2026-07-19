@@ -96,8 +96,10 @@ static json report_schema(){
     {"character_voice",{{"type","string"},{"description","Texte uniquement en francais."}}},
     {"day_summary",{{"type","string"},{"description","Resume uniquement en francais."}}},
     {"state_assessment",{{"type","string"},{"description","Evaluation uniquement en francais."}}},
+    {"memory_summary",{{"type","string"},{"maxLength",180},{"description","Une phrase factuelle tres courte en francais a conserver comme bilan."}}},
+    {"memory_feeling",{{"type","string"},{"maxLength",180},{"description","Une phrase subjective tres courte en francais a conserver comme ressenti."}}},
     {"ask_god",{{"type","boolean"}}}
-  }},{"required",{"character_voice","day_summary","state_assessment","ask_god"}}};
+  }},{"required",{"character_voice","day_summary","state_assessment","memory_summary","memory_feeling","ask_god"}}};
 }
 
 static json french_string(){
@@ -125,6 +127,9 @@ std::string period_report_instructions(){
          "le resume de la periode, l'evaluation de son etat et l'indication qu'une demande d'evolution doit suivre ou non. "
          "Relie explicitement ses actions a son aspiration et a son projet durable. Mentionne les progres, la monotonie, "
          "les relations et surtout toute capacite manquante qui bloque ce projet. "
+         "Utilise les souvenirs des periodes precedentes pour conserver une continuite sans les recopier. "
+         "Produis aussi memory_summary et memory_feeling : exactement une phrase tres courte chacun, 180 caracteres maximum, "
+         "la premiere factuelle pour le bilan persistant et la seconde subjective pour le ressenti persistant. "
          "Ne propose et ne pretend aucun changement de code ou du monde dans cet appel.";
 }
 
@@ -160,7 +165,14 @@ Decision OpenAIClient::decide(const Perception& p){
 }
 
 json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history){
-  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},{"character",character_context(agent,history)}};
+  const auto date=date_from_absolute_day(day);
+  return report_period(simulation_cycle,day,agent,history,{date,climate_for(date),json::array()});
+}
+
+json OpenAIClient::report_period(int simulation_cycle,int day,const Agent& agent,const std::vector<std::string>& history,const PeriodContext& period){
+  json context={{"output_language","fr-FR"},{"day",day},{"simulation_cycle",simulation_cycle},
+                {"calendar",calendar_json(period.date)},{"climate",climate_json(period.climate)},
+                {"previous_period_memories",period.previous_memories},{"character",character_context(agent,history)}};
   auto result=post_response(budget_,key_,model_,base_url_,period_report_instructions(),context,report_schema());
   record_result("bilan",agent.name,result.error);
   return result.value;

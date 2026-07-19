@@ -1,9 +1,12 @@
 #include "autopoiesis/renderer.hpp"
 
 namespace apo {
-void render(int day, int simulation_cycle, const World& world,
+void render(const CalendarDate& date, int simulation_cycle, const ClimateState& climate, const World& world,
             const std::vector<Agent>& agents, const Logger& logger) {
-  std::cout << "\033[2J\033[H\nAUTOPOIESIS — Jour " << day
+  std::cout << "\033[2J\033[H\nAUTOPOIESIS — Année " << date.year
+            << " | Mois " << date.month << " | Jour " << date.day_of_month
+            << " | " << season_name(date.season) << " | " << climate.temperature_c
+            << " °C, " << climate.condition << "\nJour absolu " << date.absolute_day
             << " | Cycle elementaire " << simulation_cycle << "\n\n"
             << world.ascii(agents) << '\n';
   for (const auto& agent : agents) {

@@ -13,6 +13,7 @@ World::World(unsigned) : cells_(width * height, Terrain::Ground), rabbit_{15, 4}
     {FoodType::Mushrooms,{22,10},7,28},{FoodType::Mushrooms,{3,19},7,28},
     {FoodType::Fish,{5,2},6,45},{FoodType::Fish,{32,15},6,45},
     {FoodType::Venison,{30,6},1,55}};
+  for(auto& resource:food_resources_)resource.capacity=resource.amount;
   animals_={{"rabbit-1",AnimalType::Rabbit,rabbit_,true,0,35},
             {"deer-1",AnimalType::Deer,{30,6},true,10,55},
             {"boar-1",AnimalType::Boar,{24,16},true,45,50},
@@ -38,6 +39,16 @@ bool World::harvest_tree(Position p) { p=wrap(p);if(terrain(p)!=Terrain::Tree)re
 bool World::create_shelter(Position p) { p=wrap(p);if(!passable(p)||shelter_level(p)>0)return false;construction_cells_[{p.x,p.y}].shelter_level=1;return true; }
 void World::add_materials(Position p,int wood_amount,int fiber_amount) { p=wrap(p);auto& cell=construction_cells_[{p.x,p.y}];cell.wood+=std::max(0,wood_amount);cell.fibers+=std::max(0,fiber_amount); }
 bool World::build_shelter(Position p) { p=wrap(p);if(!passable(p))return false;auto& cell=construction_cells_[{p.x,p.y}];if(cell.wood<3||cell.fibers<2)return false;cell.wood-=3;cell.fibers-=2;++cell.shelter_level;return true; }
+void World::apply_climate(const CalendarDate& date,const ClimateState& climate) {
+  for(auto& resource:food_resources_){
+    const bool plant=resource.type==FoodType::Berries||resource.type==FoodType::Roots||resource.type==FoodType::Mushrooms;
+    if(!plant)continue;
+    if(date.season==Season::Spring&&climate.rainfall_mm>=8)resource.amount=std::min(resource.capacity,resource.amount+1);
+    else if(date.season==Season::Autumn&&climate.rainfall_mm>=8&&resource.type!=FoodType::Berries)resource.amount=std::min(resource.capacity,resource.amount+1);
+    else if(date.season==Season::Summer&&climate.temperature_c>=29&&date.day_of_month%5==0)resource.amount=std::max(0,resource.amount-1);
+    else if(date.season==Season::Winter&&date.day_of_month%10==0)resource.amount=std::max(0,resource.amount-1);
+  }
+}
 const Animal* World::animal(const std::string& id) const { for(const auto& candidate:animals_)if(candidate.id==id)return &candidate;return nullptr; }
 bool World::hunt_animal(Position hunter,const std::string& animal_id,Animal* hunted) { for(auto& candidate:animals_)if(candidate.id==animal_id&&candidate.alive&&adjacent(hunter,candidate.position)){candidate.alive=false;if(hunted)*hunted=candidate;if(candidate.type==AnimalType::Rabbit)rabbit_alive_=false;return true;}return false; }
 bool World::hunt_rabbit(Position hunter) {

@@ -16,6 +16,9 @@ class OpenAIClient final : public IDecider, public ICycleReporter {
   Decision decide(const Perception&) override;
   json report_period(int simulation_cycle, int day, const Agent& agent,
                      const std::vector<std::string>& history) override;
+  json report_period(int simulation_cycle, int day, const Agent& agent,
+                     const std::vector<std::string>& history,
+                     const PeriodContext& context) override;
   json request_evolution(int simulation_cycle, int day, const Agent& agent,
                          const std::vector<std::string>& history,
                          const json& report) override;

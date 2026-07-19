@@ -62,6 +62,14 @@ Un cycle élémentaire est un créneau pendant lequel chaque personnage vivant e
 
 Une journée contient `CYCLES_PER_DAY` cycles élémentaires, soit `240` par défaut. Le paramètre `SIMULATION_DAYS` indique le nombre de journées exécutées par le programme.
 
+### Mois, année et saison
+
+Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
+
+### Climat
+
+État quotidien déterministe dérivé du jour absolu et de la saison : température, pluviométrie et condition. Il agit uniquement par des règles locales validées : régénération ou raréfaction progressive des aliments, soif lors des fortes chaleurs, faim et fatigue pendant le gel, avec protection mesurable des abris. Il ne déclenche aucun appel API.
+
 ### Monde torique
 
 La carte canonique mesure `40 × 24`. Elle ne possède pas de bord bloquant : tout déplacement dépassant une coordonnée est normalisé vers le côté opposé. Les distances, perceptions, voisinages et chemins utilisent tous cette même topologie.
@@ -109,6 +117,8 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 14. Une aspiration ou un projet n'est pas décoratif : sa progression, son blocage et ses effets décisionnels doivent être observables et testés.
 15. Un blocage local enrichit l'historique du personnage mais ne produit jamais directement une demande à Dieu ; seules les deux étapes IA de fin de fenêtre peuvent créer cette demande.
 16. Le Diable ne crée que des demandes structurées issues d'un catalogue local testé ; il n'applique jamais lui-même une contrainte au monde.
+17. Le calendrier et le climat progressent avec le jour absolu et ne se réinitialisent jamais à une frontière de fenêtre IA.
+18. Un effet climatique doit être déterministe, borné, observable et laisser au moins une mitigation compatible avec les capacités actives.
 
 ## Patterns
 
@@ -123,6 +133,10 @@ En cas de réponse invalide, d'erreur réseau ou de budget API épuisé : journa
 ### Mémoire séparée
 
 La mémoire narrative et la mémoire spatiale sont stockées séparément. La première est courte et FIFO ; la seconde conserve les cases explorées par personnage.
+
+### Mémoire persistante de période
+
+Le bilan IA produit exactement deux fragments destinés à la continuité : une phrase factuelle `bilan` et une phrase subjective `ressenti`, chacune limitée à 180 caractères. Avant le bilan suivant, le moteur relit dans `ai_reports.jsonl` au maximum les douze périodes les plus récentes du même personnage. Il ne transmet ni les rapports complets ni les demandes passées. Cette mémoire bornée survit à un nouveau lancement et n'ajoute aucun appel aux deux appels réglementaires par personnage.
 
 ### Décision locale par utilité
 

@@ -26,27 +26,10 @@ std::vector<json> catalog(const World& world,const std::vector<Agent>& agents){
   const bool has_food=!world.food_resources().empty();
   const bool has_animals=!world.animals().empty();
   bool has_water=false;
-  bool has_materials=false;
   for(int y=0;y<World::height;++y)for(int x=0;x<World::width;++x){
     const Position position{x,y};
     has_water=has_water||world.terrain(position)==Terrain::Water;
-    has_materials=has_materials||world.wood(position)>0||world.fibers(position)>0;
   }
-
-  if(has_materials)values.push_back(constraint(
-      "night_cold_exposure","survie","Le froid nocturne met les personnages à l’épreuve",
-      "Rendre l’abri et le regroupement utiles face aux variations normales de température.",
-      "Le monde ne distingue actuellement ni la chaleur du jour ni le froid de la nuit.",
-      "Ajouter une température journalière déterministe et une fatigue de froid atténuée par un abri ou la présence d’un autre personnage.",
-      "Exposition thermique journalière",
-      {"Phase du cycle élémentaire dans la journée","Température ambiante","Niveau d’abri de la case","Personnages présents sur la case"},
-      {"Calculer la température courante","Appliquer l’exposition en fin de journée","Journaliser la protection utilisée"},
-      {"Le personnage est vivant","La journée se termine","La température et les protections sont calculées avant toute mutation"},
-      {"La température vaut 6 la nuit, 14 à l’aube et au crépuscule, 22 le jour","Sous 10 degrés, un personnage sans protection gagne 8 fatigue","Un abri annule cette fatigue et la présence d’un autre personnage la réduit à 4","Aucun effet thermique n’ajoute d’appel API"},
-      {"Une nuit froide ajoute 8 fatigue à un personnage seul et exposé","Deux personnages sur la même case ne gagnent que 4 fatigue","Un personnage dans un abri ne gagne aucune fatigue de froid","La même journée et la même graine produisent les mêmes températures"},
-      "La température baisse la nuit et l’exposition au froid augmente la dépense énergétique.",
-      {"Se déplacer vers un abri existant","Se regrouper sur une même case","Construire progressivement un abri"},
-      "Des nuits répétées rendent nécessaires plusieurs abris, le feu ou des vêtements."));
 
   if(has_food)values.push_back(constraint(
       "perishable_fresh_food","survie","La nourriture fraîche commence à se dégrader",
