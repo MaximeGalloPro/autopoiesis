@@ -84,6 +84,10 @@ La charge d'un personnage est la somme de son bois, de ses branches et de sa rat
 
 Une ressource connue devient une destination de navigation sur la seule carte mémorisée. Après collecte, le porteur conserve son objectif jusqu'à une case adjacente au foyer, où `deposit_food` ou `deposit_materials` transfère atomiquement sa charge vers la réserve correspondante. Le dépôt de matériaux vide ensemble le bois et les branches du porteur ; un échec ne modifie aucun des deux emplacements. Les stocks du foyer sont persistants et visibles au survol du feu.
 
+### Repas et conservation
+
+Une ration conserve son type, sa nutrition, son état cru ou cuit, son âge et sa durée de vie. Chaque début de journée vieillit les rations stockées et transportées ; atteindre la durée de vie les détruit avec un événement explicite. `cook_camp_food` choisit d'abord la ration crue la plus proche de la péremption, remet son âge à zéro, augmente sa nutrition de 20 % avec un minimum de 5 et ajoute trois jours de conservation. Pour manger, les préférences persistantes du personnage priment, puis la durée restante départage les rations. Une faim critique autorise un repas immédiat sans cuisson.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -150,6 +154,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 25. Une ressource transportée appartient à exactement un emplacement : monde, inventaire d'un personnage ou réserve. Chaque transfert est une action locale validée et persistante.
 26. Une collecte ne peut jamais porter la charge au-delà de la capacité bornée du personnage. La disponibilité de l'action et son exécution appliquent toutes deux cette règle.
 27. Un dépôt est conservatif et atomique : la quantité ajoutée à la réserve est exactement celle retirée de l'inventaire, ou aucun état ne change.
+28. L'âge alimentaire avance une seule fois par journée complète et sans appel API. La cuisson et la consommation sont des actions locales validées ; une ration avariée n'est jamais consommable.
 
 ## Patterns
 

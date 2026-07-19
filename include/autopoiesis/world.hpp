@@ -42,7 +42,12 @@ class World {
   bool place_campfire(Position p);
   int stored_food(Position campfire_position) const;
   bool store_food(Position campfire_position, const FoodItem& food);
-  bool take_stored_food(Position campfire_position, FoodItem* food = nullptr);
+  bool take_stored_food(Position campfire_position, FoodItem* food = nullptr,
+                        const std::vector<FoodType>& preferences = {});
+  int raw_stored_food(Position campfire_position) const;
+  int cooked_stored_food(Position campfire_position) const;
+  bool cook_stored_food(Position campfire_position);
+  int age_stored_food();
   int stored_wood(Position campfire_position) const;
   int stored_branches(Position campfire_position) const;
   bool store_materials(Position campfire_position, int wood, int branches);

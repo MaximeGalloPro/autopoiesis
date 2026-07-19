@@ -162,6 +162,8 @@ Les personnages disposent d'un inventaire de transport borné par leur force. Bo
 
 Le foyer stocke séparément nourriture, bois et branches. Les personnages rejoignent les ressources repérées puis rapportent leur charge par la carte qu'ils connaissent ; survoler le feu affiche le détail de la réserve.
 
+Les rations vieillissent chaque jour. Près du feu, un personnage affamé peut cuisiner avant de manger : les aliments urgents sont préparés d'abord, la cuisson améliore leur nutrition et leur conservation, et les préférences propres à chacun orientent le choix dans la réserve.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

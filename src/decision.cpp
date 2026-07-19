@@ -19,6 +19,7 @@ std::vector<std::string> available_actions(const Agent& a, const World& w, const
   if(a.alive&&occupies_current_cell&&(a.wood_inventory>0||a.branch_inventory>0)&&w.nearby_campfire(a.position)) r.push_back("deposit_materials");
   if(a.alive&&occupies_current_cell&&a.carried_food) r.push_back("eat_carried_food");
   if(a.alive&&occupies_current_cell){const auto fire=w.nearby_campfire(a.position);if(fire&&w.stored_food(*fire)>0)r.push_back("eat_camp_food");}
+  if(a.alive&&occupies_current_cell){const auto fire=w.nearby_campfire(a.position);if(fire&&w.raw_stored_food(*fire)>0)r.push_back("cook_camp_food");}
   const bool at_construction_site=!a.shelter_construction||a.shelter_construction->position==a.position;
   if(a.alive&&occupies_current_cell&&a.wood_inventory>0&&w.passable(a.position)&&w.shelter_level(a.position)==0&&at_construction_site) r.push_back("assemble_shelter");
   if (w.rabbit_alive() && w.adjacent(a.position,w.rabbit())) r.push_back("hunt_rabbit");
@@ -29,7 +30,7 @@ std::vector<std::string> available_actions(const Agent& a, const World& w, const
 }
 bool validate_decision(const Decision& d,const Agent& a,const World& w,const std::vector<Agent>& agents,std::string& e) {
   if (d.type==DecisionType::Blocked) return (!d.need.empty() && !d.obstacle.empty() && !d.desired_result.empty()) || (e="blocked fields missing",false);
-  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food"}; if (!names.contains(d.action)) {e="unknown action";return false;}
+  static const std::set<std::string> names{"observe","move","wait","talk","sleep","rest","drink","eat_food","eat_berries","hunt_animal","hunt_rabbit","build_shelter","harvest_wood","assemble_shelter","collect_branch","build_campfire","rest_by_campfire","collect_food","deposit_food","deposit_materials","eat_carried_food","eat_camp_food","cook_camp_food"}; if (!names.contains(d.action)) {e="unknown action";return false;}
   auto avail=available_actions(a,w,agents); if (std::find(avail.begin(),avail.end(),d.action)==avail.end()) {e="action unavailable";return false;}
   if (d.action=="move") { if (!d.parameters.is_object() || !d.parameters.contains("direction") || !d.parameters["direction"].is_string()) {e="direction required";return false;} auto dir=d.parameters["direction"].get<std::string>(); if (!std::set<std::string>{"north","south","east","west"}.contains(dir)){e="invalid direction";return false;} }
   if (d.action=="hunt_animal") { if(!d.parameters.is_object()||!d.parameters.contains("animal_id")||!d.parameters["animal_id"].is_string()){e="animal_id required";return false;}const auto* target=w.animal(d.parameters["animal_id"].get<std::string>());if(!target||!target->alive||!w.adjacent(a.position,target->position)){e="hunt target not adjacent";return false;} }

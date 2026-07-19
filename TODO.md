@@ -14,7 +14,7 @@ suivante.
 - [x] **G02 - Foyer collectif** : le premier feu devient le foyer partagé, sa fumée le signale et chaque personnage possède une place nocturne distincte persistante.
 - [x] **G03 - Inventaires complets** : bois, branches et ration partagent une charge bornée dérivée de la force ; le décideur et le moteur empêchent tout dépassement et l'interface expose la capacité.
 - [x] **G04 - Transport des ressources** : cibler des branches connues, les ramasser, rejoindre le foyer par BFS et transférer atomiquement bois et branches dans sa réserve persistante.
-- [ ] **G09 - Alimentation planifiée** : repas, nutrition, préférences, réserves, cuisson et conservation progressive.
+- [x] **G09 - Alimentation planifiée** : préférences persistantes, sélection anti-gaspillage, ration crue ou cuite, nutrition améliorée et péremption quotidienne des stocks comme du transport.
 - [ ] **G14 - Vie collective** : repas partagés, veillées, rôles spontanés, célébrations et deuils.
 
 Critère de sortie : un personnage collecte une nourriture, la rapporte au camp

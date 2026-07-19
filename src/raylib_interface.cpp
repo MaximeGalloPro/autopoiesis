@@ -49,8 +49,10 @@ std::string action_label(const std::string& action) {
   if(action=="rest_by_campfire")return "Rester près du feu";
   if(action=="collect_food")return "Ramasser pour le camp";
   if(action=="deposit_food")return "Déposer au camp";
+  if(action=="deposit_materials")return "Déposer les matériaux";
   if(action=="eat_carried_food")return "Manger la ration portée";
   if(action=="eat_camp_food")return "Manger à la réserve";
+  if(action=="cook_camp_food")return "Cuisiner une ration";
   return action;
 }
 
@@ -409,7 +411,8 @@ struct RaylibInterface::Impl {
     }
     if(hovered_cell&&hovered_cell->campfire&&!hovered_agent){
       const std::string label=clipped(
-          TextFormat("Réserve · nourriture %d · bois %d · branches %d",hovered_cell->stored_food,
+          TextFormat("Réserve · nourriture %d (%d cuite) · bois %d · branches %d",
+                     hovered_cell->stored_food,hovered_cell->cooked_food,
                      hovered_cell->stored_wood,hovered_cell->stored_branches),
           std::max(80,static_cast<int>(viewport.width)-16),14);
       const int label_width=MeasureText(label.c_str(),14)+18;

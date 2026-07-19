@@ -46,8 +46,12 @@ bool World::adjacent_campfire(Position p) const { for(const auto neighbor:neighb
 std::optional<Position> World::nearby_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return neighbor;return std::nullopt; }
 bool World::place_campfire(Position p) { p=wrap(p);if(!passable(p)||campfire(p)||primary_campfire_)return false;construction_cells_[{p.x,p.y}].campfire=true;primary_campfire_=p;return true; }
 int World::stored_food(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:static_cast<int>(found->second.food_stockpile.size()); }
-bool World::store_food(Position p,const FoodItem& food) { p=wrap(p);if(!campfire(p)||food.nutrition<=0)return false;construction_cells_[{p.x,p.y}].food_stockpile.push_back(food);return true; }
-bool World::take_stored_food(Position p,FoodItem* food) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire||found->second.food_stockpile.empty())return false;if(food)*food=found->second.food_stockpile.front();found->second.food_stockpile.erase(found->second.food_stockpile.begin());return true; }
+bool World::store_food(Position p,const FoodItem& food) { p=wrap(p);if(!campfire(p)||food.nutrition<=0)return false;FoodItem stored=food;if(stored.shelf_life_days<=0)stored.shelf_life_days=food_shelf_life(stored.type);stored.age_days=std::max(0,stored.age_days);construction_cells_[{p.x,p.y}].food_stockpile.push_back(stored);return true; }
+bool World::take_stored_food(Position p,FoodItem* food,const std::vector<FoodType>& preferences) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire||found->second.food_stockpile.empty())return false;auto& stock=found->second.food_stockpile;auto selected=stock.begin();auto rank=[&](FoodType type){const auto match=std::find(preferences.begin(),preferences.end(),type);return match==preferences.end()?static_cast<int>(preferences.size()):static_cast<int>(std::distance(preferences.begin(),match));};for(auto candidate=stock.begin()+1;candidate!=stock.end();++candidate){const auto candidate_score=std::tuple{rank(candidate->type),candidate->shelf_life_days-candidate->age_days,candidate->cooked?0:1};const auto selected_score=std::tuple{rank(selected->type),selected->shelf_life_days-selected->age_days,selected->cooked?0:1};if(candidate_score<selected_score)selected=candidate;}if(food)*food=*selected;stock.erase(selected);return true; }
+int World::raw_stored_food(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;return static_cast<int>(std::count_if(found->second.food_stockpile.begin(),found->second.food_stockpile.end(),[](const FoodItem& food){return !food.cooked;})); }
+int World::cooked_stored_food(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;return static_cast<int>(std::count_if(found->second.food_stockpile.begin(),found->second.food_stockpile.end(),[](const FoodItem& food){return food.cooked;})); }
+bool World::cook_stored_food(Position p) { p=wrap(p);auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire)return false;auto& stock=found->second.food_stockpile;auto selected=std::min_element(stock.begin(),stock.end(),[](const FoodItem& left,const FoodItem& right){if(left.cooked!=right.cooked)return !left.cooked;return left.shelf_life_days-left.age_days<right.shelf_life_days-right.age_days;});if(selected==stock.end()||selected->cooked)return false;selected->cooked=true;selected->age_days=0;selected->shelf_life_days+=3;selected->nutrition+=std::max(5,selected->nutrition/5);return true; }
+int World::age_stored_food() { int spoiled=0;for(auto&[_,cell]:construction_cells_){for(auto& food:cell.food_stockpile)++food.age_days;const auto before=cell.food_stockpile.size();std::erase_if(cell.food_stockpile,[](const FoodItem& food){return food.age_days>=food.shelf_life_days;});spoiled+=static_cast<int>(before-cell.food_stockpile.size());}return spoiled; }
 int World::stored_wood(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.wood_stockpile; }
 int World::stored_branches(Position p) const { p=wrap(p);const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.branch_stockpile; }
 bool World::store_materials(Position p,int wood_amount,int branch_amount) { p=wrap(p);if(!campfire(p)||wood_amount<0||branch_amount<0||wood_amount+branch_amount==0)return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile+=wood_amount;cell.branch_stockpile+=branch_amount;return true; }
@@ -109,7 +113,7 @@ json World::checkpoint() const {
       {"danger",animal.danger},{"nutrition",animal.nutrition}});
   json construction=json::array();
   for(const auto&[position,cell]:construction_cells_){
-    json stored=json::array();for(const auto& food:cell.food_stockpile)stored.push_back({{"type",static_cast<int>(food.type)},{"nutrition",food.nutrition}});
+    json stored=json::array();for(const auto& food:cell.food_stockpile)stored.push_back({{"type",static_cast<int>(food.type)},{"nutrition",food.nutrition},{"cooked",food.cooked},{"age_days",food.age_days},{"shelf_life_days",food.shelf_life_days}});
     construction.push_back({{"x",position.first},{"y",position.second},{"wood",cell.wood},
       {"fibers",cell.fibers},{"shelter_level",cell.shelter_level},
       {"loose_branches",cell.loose_branches},{"campfire",cell.campfire},
@@ -152,7 +156,9 @@ void World::restore_checkpoint(const json& state) {
         value.value("campfire",false),value.value("stored_wood",0),
         value.value("stored_branches",0),{}};
     for(const auto& food:value.value("stored_food",json::array()))cell.food_stockpile.push_back({
-        static_cast<FoodType>(food.at("type").get<int>()),food.at("nutrition").get<int>()});
+        static_cast<FoodType>(food.at("type").get<int>()),food.at("nutrition").get<int>(),
+        food.value("cooked",false),food.value("age_days",0),
+        food.value("shelf_life_days",food_shelf_life(static_cast<FoodType>(food.at("type").get<int>()))) });
     restored_construction[{value.at("x").get<int>(),value.at("y").get<int>()}]=std::move(cell);
   }
   const auto& rabbit=state.at("rabbit");

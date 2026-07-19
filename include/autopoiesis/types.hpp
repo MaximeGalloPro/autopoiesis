@@ -56,6 +56,9 @@ struct FoodResource { FoodType type; Position position; int amount; int nutritio
 struct FoodItem {
   FoodType type{FoodType::Berries};
   int nutrition{};
+  bool cooked{};
+  int age_days{};
+  int shelf_life_days{3};
   friend bool operator==(const FoodItem&,const FoodItem&)=default;
 };
 struct Animal { std::string id; AnimalType type; Position position; bool alive{true}; int danger{}; int nutrition{}; };
@@ -91,6 +94,7 @@ inline int clamp_stat(int value) { return std::clamp(value, 0, 100); }
 inline json personality_json(const Personality& p) { return {{"curiosity",p.curiosity},{"prudence",p.prudence},{"sociability",p.sociability},{"patience",p.patience},{"empathy",p.empathy}}; }
 inline json attributes_json(const Attributes& a) { return {{"strength",a.strength},{"agility",a.agility},{"endurance",a.endurance},{"toughness",a.toughness},{"recuperation",a.recuperation},{"disease_resistance",a.disease_resistance},{"focus",a.focus},{"willpower",a.willpower},{"memory",a.memory},{"spatial_sense",a.spatial_sense}}; }
 inline std::string food_type_name(FoodType type);
+inline int food_shelf_life(FoodType type) { switch(type){case FoodType::Berries:return 3;case FoodType::Roots:return 5;case FoodType::Mushrooms:return 3;case FoodType::Fish:return 2;case FoodType::Venison:return 2;}return 3; }
 inline std::string project_status_name(ProjectStatus status) { switch(status){case ProjectStatus::Candidate:return "candidate";case ProjectStatus::Active:return "active";case ProjectStatus::Blocked:return "blocked";case ProjectStatus::Completed:return "completed";case ProjectStatus::Abandoned:return "abandoned";} return "unknown"; }
 inline json behavior_json(const BehaviorProfile& behavior) { json foods=json::array();for(const auto food:behavior.preferred_foods)foods.push_back(food_type_name(food));return {{"archetype",behavior.archetype},{"aspiration",behavior.aspiration},{"construction_drive",behavior.construction_drive},{"provision_drive",behavior.provision_drive},{"exploration_drive",behavior.exploration_drive},{"social_drive",behavior.social_drive},{"preferred_foods",foods}}; }
 inline json project_json(const Project& project) { return {{"key",project.key},{"title",project.title},{"status",project_status_name(project.status)},{"step",project.step},{"progress",project.progress},{"target",project.target},{"blocked_reason",project.blocked_reason},{"missing_capability",project.missing_capability},{"started_day",project.started_day},{"last_progress_cycle",project.last_progress_cycle}}; }

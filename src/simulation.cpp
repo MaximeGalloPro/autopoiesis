@@ -71,7 +71,7 @@ json agent_checkpoint(const Agent& agent) {
   json campfires=json::array();for(const auto& position:agent.known_campfires)campfires.push_back({{"x",position.first},{"y",position.second}});
   json home=nullptr;if(agent.home_camp)home={{"x",agent.home_camp->x},{"y",agent.home_camp->y}};
   json rest_position=nullptr;if(agent.camp_rest_position)rest_position={{"x",agent.camp_rest_position->x},{"y",agent.camp_rest_position->y}};
-  json carried=nullptr;if(agent.carried_food)carried={{"type",static_cast<int>(agent.carried_food->type)},{"nutrition",agent.carried_food->nutrition}};
+  json carried=nullptr;if(agent.carried_food)carried={{"type",static_cast<int>(agent.carried_food->type)},{"nutrition",agent.carried_food->nutrition},{"cooked",agent.carried_food->cooked},{"age_days",agent.carried_food->age_days},{"shelf_life_days",agent.carried_food->shelf_life_days}};
   json shelter=nullptr;
   if(agent.shelter_construction)shelter={{"x",agent.shelter_construction->position.x},
       {"y",agent.shelter_construction->position.y},{"progress",agent.shelter_construction->progress}};
@@ -158,7 +158,9 @@ Agent restore_agent(const json& state) {
   agent.branch_inventory=state.value("branch_inventory",0);
   const auto carried=state.value("carried_food",json(nullptr));
   if(!carried.is_null())agent.carried_food=FoodItem{
-      static_cast<FoodType>(carried.at("type").get<int>()),carried.at("nutrition").get<int>()};
+      static_cast<FoodType>(carried.at("type").get<int>()),carried.at("nutrition").get<int>(),
+      carried.value("cooked",false),carried.value("age_days",0),
+      carried.value("shelf_life_days",food_shelf_life(static_cast<FoodType>(carried.at("type").get<int>())))};
   if(!state.at("shelter_construction").is_null()){
     const auto& shelter=state.at("shelter_construction");
     agent.shelter_construction=ShelterConstruction{
@@ -249,6 +251,8 @@ Decision LocalDecider::decide(const Perception& p) {
     return {DecisionType::Action,"eat_berries",json::object(),"I need food","food","","be fed"};
   if(best_goal=="eat"&&has_action("eat_carried_food"))
     return {DecisionType::Action,"eat_carried_food",json::object(),"Je mange la nourriture que je transporte.","food","","be fed"};
+  if(best_goal=="eat"&&hunger<75&&has_action("cook_camp_food"))
+    return {DecisionType::Action,"cook_camp_food",json::object(),"Je prépare une ration avant le repas.","food","","préparer un repas"};
   if(best_goal=="eat"&&has_action("eat_camp_food"))
     return {DecisionType::Action,"eat_camp_food",json::object(),"Je prends un repas dans la réserve commune.","food","","be fed"};
   const bool vital_emergency=hunger>=75||thirst>=75;
@@ -597,6 +601,7 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "deposit_materials") return result == "depose des materiaux au camp";
   if (decision.action == "eat_carried_food") return result == "mange sa nourriture transportee";
   if (decision.action == "eat_camp_food") return result == "mange une reserve du camp";
+  if (decision.action == "cook_camp_food") return result == "cuit une ration au camp";
   return true;
 }
 
@@ -706,7 +711,7 @@ Perception Simulation::perceive(Agent& a) {
   }
   json construction=nullptr;if(a.shelter_construction)construction={{"x",a.shelter_construction->position.x},{"y",a.shelter_construction->position.y},{"progress",a.shelter_construction->progress}};
   const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
-  json carried=nullptr;if(a.carried_food)carried={{"type",food_type_name(a.carried_food->type)},{"nutrition",a.carried_food->nutrition}};
+  json carried=nullptr;if(a.carried_food)carried={{"type",food_type_name(a.carried_food->type)},{"nutrition",a.carried_food->nutrition},{"cooked",a.carried_food->cooked},{"age_days",a.carried_food->age_days},{"shelf_life_days",a.carried_food->shelf_life_days}};
   json home=nullptr;if(a.home_camp)home={{"x",a.home_camp->x},{"y",a.home_camp->y}};
   json rest_position=nullptr;if(a.camp_rest_position)rest_position={{"x",a.camp_rest_position->x},{"y",a.camp_rest_position->y}};
   return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"time",{{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"carried_food",carried},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"animals",animals},{"memories",mem},{"available_actions",actions}}};
@@ -744,11 +749,12 @@ std::string Simulation::execute(Agent&a,const Decision&d){
   if(d.action=="collect_branch"){if(inventory_full(a))return "inventaire plein";if(!a.alive||!world_.take_branch(a.position))return "aucune branche a ramasser";++a.branch_inventory;a.remember("J'ai ramasse une branche pour le camp.");return "ramasse une branche";}
   if(d.action=="build_campfire"){if(!a.alive||a.branch_inventory<3||!world_.place_campfire(a.position))return "ne peut pas allumer de feu";a.branch_inventory-=3;a.known_campfires.insert({a.position.x,a.position.y});a.remember("J'ai allume un feu de camp.");return "allume un feu de camp";}
   if(d.action=="rest_by_campfire"){if(!a.alive||!world_.adjacent_campfire(a.position))return "aucun feu a proximite";a.fatigue=clamp_stat(a.fatigue-1);return "reste pres du feu de camp";}
-  if(d.action=="collect_food"){if(inventory_full(a))return "inventaire plein";FoodItem food;if(!a.alive||a.carried_food||!world_.consume_food(a.position,&food.type,&food.nutrition))return "aucune nourriture a ramasser";a.carried_food=food;a.remember("J'ai pris une nourriture pour la réserve commune.");return "ramasse de la nourriture";}
+  if(d.action=="collect_food"){if(inventory_full(a))return "inventaire plein";FoodItem food;if(!a.alive||a.carried_food||!world_.consume_food(a.position,&food.type,&food.nutrition))return "aucune nourriture a ramasser";food.shelf_life_days=food_shelf_life(food.type);a.carried_food=food;a.remember("J'ai pris une nourriture pour la réserve commune.");return "ramasse de la nourriture";}
   if(d.action=="deposit_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!a.carried_food||!fire||!world_.store_food(*fire,*a.carried_food))return "ne peut pas deposer de nourriture";a.carried_food.reset();a.remember("J'ai approvisionne la réserve commune.");return "depose de la nourriture au camp";}
   if(d.action=="deposit_materials"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.store_materials(*fire,a.wood_inventory,a.branch_inventory))return "ne peut pas deposer de materiaux";a.wood_inventory=0;a.branch_inventory=0;a.remember("J'ai rapporté des matériaux au foyer.");return "depose des materiaux au camp";}
-  if(d.action=="eat_carried_food"){if(!a.alive||!a.carried_food)return "aucune nourriture transportee";const auto food=*a.carried_food;a.carried_food.reset();a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange sa nourriture transportee";}
-  if(d.action=="eat_camp_food"){const auto fire=world_.nearby_campfire(a.position);FoodItem food;if(!a.alive||!fire||!world_.take_stored_food(*fire,&food))return "aucune reserve au camp";a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange une reserve du camp";}
+  if(d.action=="eat_carried_food"){if(!a.alive||!a.carried_food)return "aucune nourriture transportee";const auto food=*a.carried_food;a.carried_food.reset();a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));return "mange sa nourriture transportee";}
+  if(d.action=="eat_camp_food"){const auto fire=world_.nearby_campfire(a.position);FoodItem food;if(!a.alive||!fire||!world_.take_stored_food(*fire,&food,a.behavior.preferred_foods))return "aucune reserve au camp";a.hunger=clamp_stat(a.hunger-food.nutrition);if(food.type==FoodType::Mushrooms&&!food.cooked)a.health=clamp_stat(a.health-std::max(0,5-a.attributes.disease_resistance/20));a.remember("J'ai mangé une ration "+food_type_name(food.type)+(food.cooked?" cuite.":"."));return "mange une reserve du camp";}
+  if(d.action=="cook_camp_food"){const auto fire=world_.nearby_campfire(a.position);if(!a.alive||!fire||!world_.cook_stored_food(*fire))return "aucune ration crue au camp";a.remember("J'ai cuit une ration pour le groupe.");return "cuit une ration au camp";}
   if(d.action=="assemble_shelter"){
     if(!a.alive||a.wood_inventory<1||!world_.passable(a.position)||world_.shelter_level(a.position)>0||(a.shelter_construction&&a.shelter_construction->position!=a.position))return "assemblage impossible";
     if(!a.shelter_construction)a.shelter_construction=ShelterConstruction{a.position,0};
@@ -823,8 +829,15 @@ bool Simulation::run_day(IUserInterface* interface){
   date_=date_from_absolute_day(day_);
   climate_=climate_for(date_);
   world_.advance_nature(rng_);
+  const int spoiled_food=world_.age_stored_food();
+  if(spoiled_food>0)logger_.message(std::to_string(spoiled_food)+" ration(s) du foyer se sont avariées.");
   world_.apply_climate(date_,climate_);
   for(auto& agent:agents_) {
+    if(agent.carried_food&&++agent.carried_food->age_days>=agent.carried_food->shelf_life_days){
+      agent.carried_food.reset();
+      agent.remember("Ma ration transportée s'est avariée.");
+      logger_.message(agent.name+" perd une ration transportée avariée.");
+    }
     if(!agent.alive||agent.sleeping_days<=0) continue;
     --agent.sleeping_days;
     agent.fatigue=clamp_stat(agent.fatigue-(10+agent.attributes.recuperation/10));
