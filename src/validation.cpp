@@ -413,6 +413,8 @@ bool HumanValidation::review_devil(int day,int simulation_cycle) {
 
   output_ << "\n=== APPARITION DU DIABLE ===\n"
           << request.value("title","Contrainte sans titre") << "\n"
+          << "Difficulté : " << request.value("difficulty",1) << "/5\n"
+          << "Adaptation : " << request.value("adaptation",json::object()).value("rationale","non précisée") << "\n"
           << "Fondement réel : " << request.value("real_world_basis","non précisé") << "\n"
           << "Pression future : " << request.value("future_pressure","non précisée") << "\n";
 

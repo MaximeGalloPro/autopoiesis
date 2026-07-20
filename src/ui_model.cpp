@@ -21,9 +21,20 @@ std::string mood_for(const Agent& agent) {
   if(!agent.alive)return "Sans vie";
   if(agent.sleeping_days>0)return "Repos profond";
   if(agent.health<=30)return "Inquiétude pour sa santé";
+  if(!agent.conditions.empty())return "Fragilisé par une affection";
   if(agent.thirst>=75)return "Tension liée à la soif";
   if(agent.hunger>=75)return "Tension liée à la faim";
   if(agent.fatigue>=75)return "Épuisement";
+  if(!agent.emotions.empty()){
+    const auto dominant=std::max_element(agent.emotions.begin(),agent.emotions.end(),
+        [](const Emotion& left,const Emotion& right){return left.intensity<right.intensity;});
+    if(dominant->type==EmotionType::Joy)return "Joie : "+dominant->cause;
+    if(dominant->type==EmotionType::Fear)return "Peur : "+dominant->cause;
+    if(dominant->type==EmotionType::Anger)return "Colère : "+dominant->cause;
+    if(dominant->type==EmotionType::Sadness)return "Tristesse : "+dominant->cause;
+    if(dominant->type==EmotionType::Hope)return "Espoir : "+dominant->cause;
+    return "Stress : "+dominant->cause;
+  }
   if(agent.project.status==ProjectStatus::Blocked)return "Frustration face au projet";
   if(agent.boredom>=70)return "Lassitude";
   if(agent.boredom<=20)return "Engagement";
@@ -34,11 +45,13 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                             const ClimateState& climate, const World& world,
                             const std::vector<Agent>& agents,
                             const std::vector<std::string>& recent_events,
-                            int cycle_in_day, int cycles_per_day) {
+                            int cycle_in_day, int cycles_per_day,
+                            const std::vector<DangerEvent>& dangers) {
   UiSnapshot snapshot;
   snapshot.date=date;
   snapshot.simulation_cycle=simulation_cycle;
   snapshot.climate=climate;
+  snapshot.ecology=world.ecology();
   snapshot.cycle_in_day=cycle_in_day;
   snapshot.cycles_per_day=cycles_per_day;
   snapshot.phase=day_phase_for(cycle_in_day,cycles_per_day);
@@ -50,12 +63,18 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
     snapshot.cells.push_back({position,world.terrain(position),world.food(position),
                               world.wood(position),world.fibers(position),
                               world.shelter_level(position),world.branches(position),
-                              world.campfire(position),world.stored_food(position)});
+                              world.campfire(position),world.stored_food(position),
+                              world.stored_wood(position),world.stored_branches(position),
+                              world.cooked_stored_food(position),world.stored_crafted_items(position),
+                              world.iron_ore(position),world.stored_iron_ore(position),
+                              world.building(position)});
   }
   snapshot.agents.reserve(agents.size());
   for(const auto& agent:agents)
-    snapshot.agents.push_back({agent,mood_for(agent),available_actions(agent,world,agents)});
+    snapshot.agents.push_back({agent,mood_for(agent),
+        available_actions(agent,world,agents,date.absolute_day,snapshot.phase)});
   snapshot.animals=world.animals();
+  snapshot.dangers=dangers;
   snapshot.recent_events=recent_events;
   return snapshot;
 }

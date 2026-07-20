@@ -70,9 +70,71 @@ La phase diurne occupe les trois quarts d'une journée et la phase nocturne le q
 
 Les cases praticables voisines d'un arbre produisent progressivement des branches. Un personnage peut ramasser une branche locale ; trois branches permettent d'allumer un feu de camp persistant sur sa case. Un feu n'entre dans sa mémoire spatiale qu'après avoir été perçu. Pendant le dernier sixième de la phase diurne et durant la nuit, il rejoint par la carte connue une case adjacente à un feu mémorisé et s'y repose, sauf urgence vitale prioritaire.
 
+Le premier feu construit devient le foyer principal et empêche la création de foyers concurrents. Sa fumée transmet seulement ses coordonnées aux personnages : elle ne révèle aucun terrain ni chemin. Chaque membre adopte ce foyer, réserve la première case adjacente praticable encore libre et doit la rejoindre par sa propre carte connue avant de se reposer.
+
 ### Réserve commune
 
 Chaque feu possède une réserve alimentaire persistante. Un personnage ne transporte initialement qu'un aliment à la fois, avec son type et sa nutrition. `collect_food` retire atomiquement cet aliment du monde, `deposit_food` exige un feu adjacent connu et transfère l'objet vers sa réserve, puis `eat_camp_food` permet à n'importe quel personnage adjacent de le consommer. Aucun aliment ne peut être dupliqué ou devenir commun sans ces transitions validées.
+
+### Inventaire borné
+
+La charge d'un personnage est la somme de son bois, de ses branches et de sa ration transportée, à raison d'une unité par élément. Sa capacité vaut `clamp(4 + force / 25, 4, 10)` et se déduit de sa force persistée. Le décideur masque les collectes impossibles et le moteur les refuse à nouveau avec `inventaire plein` : aucun appel IA ni décision invalide ne peut contourner cette borne.
+
+### Transport de ressources
+
+Une ressource connue devient une destination de navigation sur la seule carte mémorisée. Après collecte, le porteur conserve son objectif jusqu'à une case adjacente au foyer, où `deposit_food` ou `deposit_materials` transfère atomiquement sa charge vers la réserve correspondante. Le dépôt de matériaux vide ensemble le bois et les branches du porteur ; un échec ne modifie aucun des deux emplacements. Les stocks du foyer sont persistants et visibles au survol du feu.
+
+### Repas et conservation
+
+Une ration conserve son type, sa nutrition, son état cru ou cuit, son âge et sa durée de vie. Chaque début de journée vieillit les rations stockées et transportées ; atteindre la durée de vie les détruit avec un événement explicite. `cook_camp_food` choisit d'abord la ration crue la plus proche de la péremption, remet son âge à zéro, augmente sa nutrition de 20 % avec un minimum de 5 et ajoute trois jours de conservation. Pour manger, les préférences persistantes du personnage priment, puis la durée restante départage les rations. Une faim critique autorise un repas immédiat sans cuisson.
+
+### Vie collective
+
+L'adoption du foyer attribue une fois un rôle collectif selon la pulsion dominante : bâtisseur, intendant, éclaireur ou médiateur. Deux membres présents près du même feu peuvent partager un repas de deux rations, tenir une veillée uniquement la nuit, célébrer l'achèvement d'un projet ou honorer un mort. Repas et veillée marquent les deux participants pour la journée afin de rester bornés. Chaque activité produit des souvenirs et des effets déterministes sur faim, fatigue, monotonie ou relations ; rôles, dates d'activité, célébration en attente et deuils accomplis sont persistés.
+
+### Recette de fabrication
+
+Une recette porte une clé stable, des quantités de bois et de branches, une liste d'objets intermédiaires requis, un objet produit et une quantité de sortie. `craft_camp_item` n'est disponible qu'au foyer pour une recette entièrement approvisionnée. Le moteur vérifie toutes les entrées avant de les retirer, puis ajoute la sortie dans la même transition. Le registre initial produit manche en bois, charbon et corde ; ses objets et stocks sont typés, persistants et visibles dans le total de réserve.
+
+### Outil et durabilité
+
+Le minerai de fer apparaît en gisements finis sur des cases praticables et occupe une unité de charge. Deux minerais et un charbon produisent un lingot ; un lingot et un manche produisent une hache. `equip_axe` retire exactement une hache de la réserve. `harvest_wood` exige une hache équipée de durabilité positive, transforme un arbre en une unité de bois et retire un point de durabilité seulement en cas de réussite. Près du foyer, `repair_axe` consomme une unité de bois et restaure dix points sans dépasser le maximum de vingt.
+
+### Compétence progressive
+
+Les huit compétences sont coupe du bois, extraction, fabrication, construction, cueillette, chasse, cuisine et sociabilité. Une action n'accorde de l'expérience que si son effet moteur a réussi. Cinq points d'expérience donnent un niveau, avec un maximum de dix ; les niveaux et les trois spécialisations dominantes sont persistants et observables. La coupe du bois augmente directement l'efficacité d'une réparation. Au même foyer, un mentor ayant au moins deux niveaux d'avance peut transmettre un point de la compétence choisie ; chaque personnage donne et reçoit au plus une leçon par journée.
+
+### Construction spatiale
+
+Une désignation associe une case et un type parmi mur, porte, lit, réserve et atelier. Le foyer vérifie puis réserve toutes les matières et pièces requises dans une seule transition ; un échec ne crée aucun chantier et ne consomme rien. Depuis une case adjacente, un personnage vivant muni d'une hache fournit une unité de travail, augmentée tous les trois niveaux de construction, et use l'outil uniquement si le travail réussit. Un mur achevé bloque la navigation, une porte reste praticable, un lit améliore le repos et un atelier proche améliore la réparation. État, avancement et effets survivent au checkpoint.
+
+### Écosystème renouvelable
+
+Chaque journée applique une transition écologique locale avant les actions. Une parcelle végétale partiellement consommée regagne au plus une unité tous les deux jours jusqu'à sa capacité ; une parcelle vidée reste stérile cinq jours et recommence à pousser au sixième. Chaque espèce possède une cadence de reproduction et une capacité : aucune naissance ne peut la dépasser. Un loup prélève au plus un lapin, cerf ou sanglier vivant sur une case adjacente avant les déplacements. Jour écologique, naissances, prédations, repousses, épuisements et cumuls sont déterministes, persistants et observables.
+
+### Santé détaillée
+
+Une affection typée conserve un identifiant, une cause, une sévérité, un âge et son état de traitement. Une chasse dangereuse peut créer une blessure ; des champignons crus peuvent provoquer une maladie selon la résistance. Une blessure non traitée de sévérité suffisante crée une infection au troisième jour. Au même foyer, un compagnon peut traiter une affection non soignée et renforcer la confiance réciproque. Une convalescence par jour exige le feu, un abri ou un lit ; récupération et lit réduisent alors la sévérité. Les affections retirent quotidiennement de la santé tant qu'elles persistent.
+
+### Émotions causales
+
+Une émotion nomme toujours un événement déclencheur conservé comme souvenir, une intensité, une durée et un effet décisionnel explicite. Son intensité décroît une fois par journée selon la volonté du personnage et elle disparaît à intensité ou durée nulle. Huit émotions actives au maximum sont conservées ; la moins intense cède la place. Une peur suffisante interdit une chasse dont le danger dépasse la tolérance courante du personnage.
+
+### Relations actives
+
+Une relation conserve confiance, affinité, nombre d'interactions et conflit actif. Toute interaction exige deux personnages vivants réellement adjacents. L'avertissement partage les espèces observées et l'entraide réduit une fatigue élevée, au plus une fois par jour pour leur initiateur. L'accompagnement mémorise un compagnon jusqu'au lendemain et infléchit les déplacements locaux. Le conflit est réciproque, causé par la colère et dégrade le lien ; seule une réconciliation valide le clôt et restaure partiellement le lien.
+
+### Population évolutive
+
+Chaque résident conserve son âge en jours, son origine, son jour d'arrivée, ses éventuels parents et la cause d'un départ ou décès. Le vieillissement est quotidien. Une arrivée peut survenir tous les 60 jours si le foyer est abrité, sous huit résidents et possède quatre rations au-delà de sa réserve minimale. Une naissance peut survenir tous les 90 jours avec deux adultes, un abri, six rations dédiées et moins de dix résidents. Ces événements consomment les rations. Tous les 30 jours, une détresse vitale durable sans lien de soutien entraîne un départ. À 80 ans, le décès naturel est explicite. Un enfant ne peut exécuter les métiers et interactions réservés aux adultes.
+
+### Dangers actifs
+
+Un danger conserve type, position, sévérité, jour d'avertissement, durée, cause, texte d'alerte et mitigation. Les types initiaux sont prédateur, tempête, départ de feu, accident de travail et pénurie. La détection crée uniquement l'alerte ; aucun effet ne s'applique avant le lendemain. Les effets sont localisés sauf tempête et pénurie, et un abri ou lit situé sur la case protège des dangers climatiques. Les blessures, peurs et décès produits nomment le danger causal. L'alerte reste persistante, perceptible par les décideurs et visible sur la carte jusqu'à expiration.
+
+### Diable adaptatif
+
+À chaque tirage réussi, le Diable calcule un score de stabilité borné sur la santé, la satisfaction des besoins, les outils, le foyer, ses réserves et ses abris. Le niveau de pression combine ce score, le jour absolu et le nombre de contraintes historiques. Chaque entrée du catalogue porte une difficulté de 1 à 5. Le Diable exclut les clés déjà vécues, choisit la difficulté maximale inférieure ou égale au niveau courant, puis départage de façon pseudo-aléatoire reproductible au sein de ce palier. La proposition expose score, niveau, difficulté, historique et justification avant toute validation.
 
 ### Mois, année et saison
 
@@ -138,6 +200,21 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 23. Toute évolution qui modifie un état persistant doit conserver la lecture de la version précédente du checkpoint ou fournir une migration déterministe couverte par un test.
 24. Pause et vitesse graphique ne changent ni l'ordre ni le nombre des cycles élémentaires. L'accélération peut réduire les rendus intermédiaires, jamais les décisions ou validations du moteur.
 25. Une ressource transportée appartient à exactement un emplacement : monde, inventaire d'un personnage ou réserve. Chaque transfert est une action locale validée et persistante.
+26. Une collecte ne peut jamais porter la charge au-delà de la capacité bornée du personnage. La disponibilité de l'action et son exécution appliquent toutes deux cette règle.
+27. Un dépôt est conservatif et atomique : la quantité ajoutée à la réserve est exactement celle retirée de l'inventaire, ou aucun état ne change.
+28. L'âge alimentaire avance une seule fois par journée complète et sans appel API. La cuisson et la consommation sont des actions locales validées ; une ration avariée n'est jamais consommable.
+29. Une activité collective doit exiger la présence réelle de ses participants au même foyer, être bornée par personnage et par journée lorsque répétable, et modifier un état persistant observable.
+30. Une recette ne peut consommer partiellement ses entrées : soit tous les coûts sont retirés et toutes les sorties ajoutées, soit le monde reste strictement identique.
+31. Une action exigeant un outil doit être absente sans cet outil et revérifier son type et sa durabilité à l'exécution. Seule une action réussie peut user l'outil.
+32. Une compétence ne progresse que sur une réussite validée. Une leçon exige la présence au même foyer, un écart de niveau suffisant et les limites quotidiennes du mentor comme de l'élève.
+33. Une désignation de bâtiment réserve toutes ses entrées ou aucune. Le travail exige une proximité réelle et un outil valide ; un bâtiment incomplet ne produit aucun effet final.
+34. Une transition écologique ne crée jamais une population au-dessus de sa capacité ni une ressource au-dessus de son maximum. Une prédation retire une proie réelle et une parcelle épuisée conserve une pénalité de récupération persistante.
+35. Toute affection nomme sa cause et évolue une fois par journée. Un soin exige un patient réel au même foyer ; une convalescence est bornée à une fois par jour et aucune guérison ne peut augmenter la sévérité.
+36. Toute émotion nomme sa cause et son effet. Elle est bornée en nombre, intensité et durée ; son effet ne contourne jamais la validation déterministe d'une action.
+37. Une interaction relationnelle nomme une cible vivante adjacente et valide ses propres préconditions. Conflit et réconciliation sont réciproques ; avertissement et entraide sont bornés à une fois par journée.
+38. Toute variation de population est déterministe, persistante et conditionnée par la capacité réelle du foyer. Une arrivée ou naissance consomme ses réserves et ne dépasse jamais les plafonds définis.
+39. Un danger avertit toujours au moins une journée avant son premier effet. Sa zone, sa durée et sa mitigation sont déterministes ; il ne contourne ni la santé détaillée ni la persistance.
+40. Le Diable ne répète pas une clé historique et ne dépasse pas son niveau de pression calculé tant qu'une proposition admissible existe. Son adaptation reste inspectable et reproductible depuis le checkpoint RNG.
 
 ## Patterns
 

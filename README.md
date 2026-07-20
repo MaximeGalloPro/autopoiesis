@@ -62,6 +62,21 @@ survie, la carte connue, les relations et les générateurs pseudo-aléatoires
 dans `data/simulation-state.json`. Les bilans sont journalisés dans
 `data/ai_reports.jsonl` et les demandes dans `data/feature_requests.jsonl`.
 
+## Monde et vie collective
+
+Le monde torique `40 × 24` fait évoluer localement le climat, les ressources,
+la faune et les dangers annoncés. Le foyer collectif centralise nourriture et
+matériaux, permet cuisine, fabrication, réparation et chantiers, et soutient les
+activités sociales. Les personnages transportent un inventaire borné, acquièrent
+des compétences transmissibles, développent des relations et des émotions
+causales, et conservent blessures, maladies et convalescence.
+
+La population vieillit et peut connaître arrivées, naissances, départs et morts.
+Le Diable adapte ses contraintes à la stabilité observée du foyer, au temps et
+aux pressions déjà rencontrées, sans contourner la validation humaine ni les
+gardes déterministes du moteur. Tous ces états restent persistants et sont
+projetés en lecture seule dans l’observatoire web.
+
 ## Démarrage normal
 
 Prérequis : Docker avec Compose, CMake, un compilateur C++20 et Bun 1.3 ou plus

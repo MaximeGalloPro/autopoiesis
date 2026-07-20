@@ -71,6 +71,7 @@ int main() {
   assert(snapshot.date.absolute_day == 95);
   assert(snapshot.width == World::width);
   assert(snapshot.height == World::height);
+  assert(snapshot.ecology.day==0);
   assert(snapshot.cells.size() == static_cast<std::size_t>(World::width * World::height));
   assert(snapshot.agents.size() == 1);
   assert(snapshot.agents[0].state.name == "Ada");
@@ -102,6 +103,7 @@ int main() {
   assert(interface.present_count==4);
   assert(interface.idle_milliseconds==7);
   assert(interface.last_snapshot.date.absolute_day==1);
+  assert(interface.last_snapshot.ecology.day==1);
   assert(interface.last_snapshot.simulation_cycle==4);
   assert(interface.last_snapshot.agents.size()==3);
 
