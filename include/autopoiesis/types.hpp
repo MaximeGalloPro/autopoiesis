@@ -55,6 +55,20 @@ enum class AnimalType { Rabbit, Deer, Boar, Wolf, Fish };
 enum class DecisionType { Action, Blocked };
 enum class HealthConditionType { Injury, Disease, Infection };
 enum class EmotionType { Joy, Fear, Anger, Sadness, Hope, Stress };
+enum class DangerType { Predator, Storm, Wildfire, Accident, Shortage };
+struct DangerEvent {
+  std::string id;
+  DangerType type{DangerType::Predator};
+  Position position;
+  int severity{};
+  int warning_day{};
+  int remaining_days{};
+  std::string cause;
+  std::string warning;
+  std::string mitigation;
+  friend bool operator==(const DangerEvent&,const DangerEvent&)=default;
+};
+inline std::string danger_name(DangerType type) { switch(type){case DangerType::Predator:return "predator";case DangerType::Storm:return "storm";case DangerType::Wildfire:return "wildfire";case DangerType::Accident:return "accident";case DangerType::Shortage:return "shortage";}return "unknown"; }
 struct Emotion {
   std::string id;
   EmotionType type{EmotionType::Joy};

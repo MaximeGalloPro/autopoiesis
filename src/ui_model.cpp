@@ -45,7 +45,8 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                             const ClimateState& climate, const World& world,
                             const std::vector<Agent>& agents,
                             const std::vector<std::string>& recent_events,
-                            int cycle_in_day, int cycles_per_day) {
+                            int cycle_in_day, int cycles_per_day,
+                            const std::vector<DangerEvent>& dangers) {
   UiSnapshot snapshot;
   snapshot.date=date;
   snapshot.simulation_cycle=simulation_cycle;
@@ -73,6 +74,7 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
     snapshot.agents.push_back({agent,mood_for(agent),
         available_actions(agent,world,agents,date.absolute_day,snapshot.phase)});
   snapshot.animals=world.animals();
+  snapshot.dangers=dangers;
   snapshot.recent_events=recent_events;
   return snapshot;
 }

@@ -39,7 +39,7 @@ travail → bâtiment, avec coût, durée et compétence observables.
 - [x] **G12 - Émotions causales** : joie, peur, colère, tristesse, espoir et stress relient une cause mémorisée à une intensité, une durée et un effet décisionnel borné.
 - [x] **G13 - Relations actives** : entraide, avertissement, accompagnement temporaire, conflit émotionnel et réconciliation modifient les liens et les comportements.
 - [x] **G15 - Population évolutive** : vieillissement quotidien, arrivées et naissances conditionnées par le foyer, départ par détresse et mort naturelle persistants.
-- [ ] **G16 - Dangers actifs** : animaux territoriaux, incendies, accidents, tempêtes et pénuries signalées.
+- [x] **G16 - Dangers actifs** : prédateurs, tempêtes, incendies, accidents et pénuries avertissent un jour avant leurs effets localisés et mitigables.
 
 Critère de sortie : une difficulté laisse une trace durable dans la santé, les
 relations et les décisions d'au moins deux personnages.

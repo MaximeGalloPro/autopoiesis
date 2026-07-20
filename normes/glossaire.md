@@ -128,6 +128,10 @@ Une relation conserve confiance, affinité, nombre d'interactions et conflit act
 
 Chaque résident conserve son âge en jours, son origine, son jour d'arrivée, ses éventuels parents et la cause d'un départ ou décès. Le vieillissement est quotidien. Une arrivée peut survenir tous les 60 jours si le foyer est abrité, sous huit résidents et possède quatre rations au-delà de sa réserve minimale. Une naissance peut survenir tous les 90 jours avec deux adultes, un abri, six rations dédiées et moins de dix résidents. Ces événements consomment les rations. Tous les 30 jours, une détresse vitale durable sans lien de soutien entraîne un départ. À 80 ans, le décès naturel est explicite. Un enfant ne peut exécuter les métiers et interactions réservés aux adultes.
 
+### Dangers actifs
+
+Un danger conserve type, position, sévérité, jour d'avertissement, durée, cause, texte d'alerte et mitigation. Les types initiaux sont prédateur, tempête, départ de feu, accident de travail et pénurie. La détection crée uniquement l'alerte ; aucun effet ne s'applique avant le lendemain. Les effets sont localisés sauf tempête et pénurie, et un abri ou lit situé sur la case protège des dangers climatiques. Les blessures, peurs et décès produits nomment le danger causal. L'alerte reste persistante, perceptible par les décideurs et visible sur la carte jusqu'à expiration.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -205,6 +209,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 36. Toute émotion nomme sa cause et son effet. Elle est bornée en nombre, intensité et durée ; son effet ne contourne jamais la validation déterministe d'une action.
 37. Une interaction relationnelle nomme une cible vivante adjacente et valide ses propres préconditions. Conflit et réconciliation sont réciproques ; avertissement et entraide sont bornés à une fois par journée.
 38. Toute variation de population est déterministe, persistante et conditionnée par la capacité réelle du foyer. Une arrivée ou naissance consomme ses réserves et ne dépasse jamais les plafonds définis.
+39. Un danger avertit toujours au moins une journée avant son premier effet. Sa zone, sa durée et sa mitigation sont déterministes ; il ne contourne ni la santé détaillée ni la persistance.
 
 ## Patterns
 

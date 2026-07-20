@@ -421,6 +421,12 @@ struct RaylibInterface::Impl {
       const Color color=animal.danger>=60?Color{190,68,62,255}:Color{214,215,190,255};
       DrawCircle(x,y,std::max(2.5F,cell_width*0.18F),color);
     }
+    for(const auto& danger:snapshot.dangers){
+      const int x=static_cast<int>(viewport.x+(danger.position.x+0.5F)*cell_width);
+      const int y=static_cast<int>(viewport.y+(danger.position.y+0.5F)*cell_height);
+      DrawCircleLines(x,y,std::max(5.0F,cell_width*0.32F),{231,82,72,255});
+      DrawText("!",x-3,y-7,14,{255,220,151,255});
+    }
     for(const auto& agent:snapshot.agents){
       if(!agent.state.alive)continue;
       const int x=static_cast<int>(viewport.x+(agent.state.position.x+0.5F)*cell_width);
@@ -585,6 +591,8 @@ struct RaylibInterface::Impl {
                    snapshot.ecology.day,snapshot.ecology.total_births,
                    snapshot.ecology.total_predations,snapshot.ecology.depleted_patches),
         ecology_width,12).c_str(),650,46,12,secondary_text);
+    if(!snapshot.dangers.empty())DrawText(TextFormat("ALERTES %d",static_cast<int>(snapshot.dangers.size())),
+                                          24,64,11,{231,82,72,255});
     DrawText(snapshot.phase==DayPhase::Night?"NUIT":"JOUR",112,48,12,
              snapshot.phase==DayPhase::Night?Color{137,170,219,255}:accent);
     draw_speed_controls();

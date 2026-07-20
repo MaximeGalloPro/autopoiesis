@@ -839,6 +839,11 @@ void Simulation::load_checkpoint() {
   action_history_=state.value("action_history",decltype(action_history_){});
   planning_history_=state.value("planning_history",decltype(planning_history_){});
   next_agent_id_=state.value("next_agent_id",static_cast<int>(agents_.size())+1);
+  for(const auto& danger:state.value("dangers",json::array()))dangers_.push_back({
+      danger.at("id").get<std::string>(),static_cast<DangerType>(danger.at("type").get<int>()),
+      {danger.value("x",0),danger.value("y",0)},danger.value("severity",1),danger.value("warning_day",day_),
+      danger.value("remaining_days",1),danger.value("cause",""),danger.value("warning",""),danger.value("mitigation","")});
+  next_danger_id_=state.value("next_danger_id",1);
   restore_rng(rng_,state.at("rng").get<std::string>());
   devil_.restore_rng_checkpoint(state.at("devil_rng").get<std::string>());
   decider_.restore_checkpoint(state.value("decider",json::object()));
@@ -850,11 +855,16 @@ void Simulation::load_checkpoint() {
 void Simulation::save_checkpoint() const {
   if(checkpoint_path_.empty())return;
   json agents=json::array();for(const auto& agent:agents_)agents.push_back(agent_checkpoint(agent));
+  json dangers=json::array();for(const auto& danger:dangers_)dangers.push_back({
+      {"id",danger.id},{"type",static_cast<int>(danger.type)},{"x",danger.position.x},{"y",danger.position.y},
+      {"severity",danger.severity},{"warning_day",danger.warning_day},{"remaining_days",danger.remaining_days},
+      {"cause",danger.cause},{"warning",danger.warning},{"mitigation",danger.mitigation}});
   const json state={{"version",1},{"day",day_},{"simulation_cycle",simulation_cycle_},
       {"world",world_.checkpoint()},{"agents",std::move(agents)},
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
-      {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_}};
+      {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_},
+      {"dangers",std::move(dangers)},{"next_danger_id",next_danger_id_}};
   const std::filesystem::path target(checkpoint_path_);
   if(!target.parent_path().empty())std::filesystem::create_directories(target.parent_path());
   const auto temporary=target.string()+".tmp";
@@ -931,7 +941,8 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   const auto ecology=world_.ecology();
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"day",day_},{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"emotions",emotions_json(a)},{"companion_id",a.companion_id},{"companion_until_day",a.companion_until_day},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
+  json dangers=json::array();for(const auto& danger:dangers_)dangers.push_back({{"id",danger.id},{"type",danger_name(danger.type)},{"x",danger.position.x},{"y",danger.position.y},{"severity",danger.severity},{"warning_day",danger.warning_day},{"warning",danger.warning},{"mitigation",danger.mitigation}});
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"day",day_},{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"emotions",emotions_json(a)},{"companion_id",a.companion_id},{"companion_until_day",a.companion_until_day},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"dangers",dangers},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -1000,6 +1011,51 @@ void Simulation::update_population() {
   if(sheltered&&day_%90==0&&residents<10&&adults.size()>=2&&world_.stored_food(*camp)>=residents*6+6&&consume_reserves(6)){
     make_resident("birth",0,{adults[0],adults[1]});logger_.message("Une naissance agrandit le foyer.");
   }
+}
+
+void Simulation::update_dangers() {
+  auto warn=[&](DangerType type,Position position,int severity,int duration,
+                std::string cause,std::string warning,std::string mitigation){
+    position=world_.wrap(position);
+    if(std::any_of(dangers_.begin(),dangers_.end(),[&](const DangerEvent& danger){return danger.type==type&&danger.position==position;}))return;
+    dangers_.push_back({"danger-"+std::to_string(next_danger_id_++),type,position,std::clamp(severity,1,100),day_,duration,
+                        std::move(cause),std::move(warning),std::move(mitigation)});
+    logger_.message("Alerte : "+dangers_.back().warning);
+  };
+  for(const auto& animal:world_.animals())if(animal.alive&&animal.type==AnimalType::Wolf)
+    for(const auto& agent:agents_)if(agent.alive&&world_.adjacent(agent.position,animal.position))
+      warn(DangerType::Predator,animal.position,animal.danger,2,"loup territorial proche de "+agent.name,
+           "un loup menace un résident","s'éloigner ou former un groupe");
+  if(climate_.rainfall_mm>=10)warn(DangerType::Storm,{0,0},std::min(100,climate_.rainfall_mm*4),2,
+      "fortes précipitations","une tempête approche","rejoindre un abri");
+  if(const auto camp=world_.primary_campfire()){
+    const int residents=static_cast<int>(std::count_if(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;}));
+    if(climate_.temperature_c>=30&&climate_.rainfall_mm==0&&day_%15==0)
+      warn(DangerType::Wildfire,*camp,65,2,"chaleur sèche près du feu","un départ de feu est probable","s'abriter et quitter le foyer immédiat");
+    if(world_.stored_food(*camp)<residents*2)
+      warn(DangerType::Shortage,*camp,45,2,"moins de deux rations par résident","les réserves deviennent critiques","collecter et conserver de la nourriture");
+  }
+  for(const auto& agent:agents_)if(agent.alive&&agent.equipped_tool&&agent.fatigue>=80)
+    warn(DangerType::Accident,agent.position,50,2,"travail outillé malgré l'épuisement de "+agent.name,
+         "un accident de travail menace "+agent.name,"se reposer avant de travailler");
+
+  for(auto& danger:dangers_){
+    if(danger.warning_day==day_)continue;
+    for(auto& agent:agents_)if(agent.alive){
+      const auto building=world_.building(agent.position);
+      const bool sheltered=world_.shelter_level(agent.position)>0||
+          (building&&building->complete&&building->type==BuildingType::Bed);
+      const int distance=world_.toroidal_distance(agent.position,danger.position);
+      if(danger.type==DangerType::Predator&&distance<=1){agent.health=clamp_stat(agent.health-std::max(2,danger.severity/12));add_health_condition(agent,HealthConditionType::Injury,12,"attaque de prédateur");add_emotion(agent,EmotionType::Fear,55,"attaque d'un loup","chercher la sécurité",4,day_);}
+      else if(danger.type==DangerType::Storm&&!sheltered){agent.fatigue=clamp_stat(agent.fatigue+std::max(3,danger.severity/10));add_emotion(agent,EmotionType::Fear,30,"tempête sans abri","rejoindre un abri",3,day_);}
+      else if(danger.type==DangerType::Wildfire&&distance<=2&&!sheltered){agent.health=clamp_stat(agent.health-5);add_emotion(agent,EmotionType::Fear,50,"feu près du foyer","s'éloigner du feu",4,day_);}
+      else if(danger.type==DangerType::Accident&&agent.position==danger.position){agent.health=clamp_stat(agent.health-4);add_health_condition(agent,HealthConditionType::Injury,10,"accident de travail");}
+      else if(danger.type==DangerType::Shortage)agent.hunger=clamp_stat(agent.hunger+4);
+      if(agent.health==0){agent.alive=false;agent.death_cause="danger : "+danger_name(danger.type);}
+    }
+    --danger.remaining_days;
+  }
+  std::erase_if(dangers_,[](const DangerEvent& danger){return danger.remaining_days<=0;});
 }
 
 void Simulation::apply_climate_effects(Agent& agent,const CalendarDate& date,const ClimateState& climate) {
@@ -1361,7 +1417,7 @@ bool Simulation::run_day(IUserInterface* interface){
     }
     if(interface){
       const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,
-                                           logger_.recent(),cycle_in_day_,cycles_per_day_);
+                                           logger_.recent(),cycle_in_day_,cycles_per_day_,dangers_);
       if(!interface->present(snapshot)){
         logger_.message("Interface graphique fermée par l'utilisateur.");
         return false;
@@ -1370,6 +1426,7 @@ bool Simulation::run_day(IUserInterface* interface){
   }
   for(auto& agent:agents_) if(agent.alive){update_needs(agent);update_health_conditions(agent);update_emotions(agent);apply_climate_effects(agent,date_,climate_);}
   update_population();
+  update_dangers();
   return true;
 }
 

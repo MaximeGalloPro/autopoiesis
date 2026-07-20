@@ -85,6 +85,8 @@ class Simulation {
   int cycles_per_day_{2400}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
   int cycle_in_day_{1};
   int next_agent_id_{4};
+  std::vector<DangerEvent> dangers_;
+  int next_danger_id_{1};
   std::map<std::string,std::vector<std::string>> action_history_;
   std::map<std::string,json> planning_history_;
   std::string checkpoint_path_;
@@ -95,6 +97,7 @@ class Simulation {
   void update_health_conditions(Agent&);
   void update_emotions(Agent&);
   void update_population();
+  void update_dangers();
   void apply_climate_effects(Agent&, const CalendarDate&, const ClimateState&);
   void update_behavior_after_action(Agent&, const Agent& before, const Decision&,
                                     const std::string& result, bool succeeded);

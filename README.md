@@ -184,6 +184,8 @@ Les relations produisent des actes locaux : avertir partage les dangers observé
 
 La population vieillit chaque jour. Tous les deux mois, un foyer abrité et suffisamment approvisionné peut accueillir un voyageur ; tous les trois mois, deux adultes peuvent avoir un enfant si les réserves le permettent. Une détresse vitale durable sans soutien provoque un départ mensuel, et le grand âge une mort naturelle. Âge, origine et population vivante sont visibles et persistants.
 
+Les dangers actifs sont annoncés avant de frapper. Loup territorial, tempête, départ de feu, accident lié à l'épuisement et pénurie conservent position, sévérité, cause et mitigation. L'alerte apparaît dans la perception et sur la carte ; les effets ne commencent que le lendemain et un abri protège des dangers climatiques locaux.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre
