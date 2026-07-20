@@ -35,6 +35,7 @@ export interface AiServiceController {
 export interface AiServicesOptions {
   projectRoot?: string;
   environment?: NodeJS.ProcessEnv;
+  evolutionScriptPath?: string;
   codexPath?: string | null;
   dockerAvailable?: boolean;
   codexAuthenticated?: boolean;
@@ -88,7 +89,8 @@ export class AiServicesManager implements AiServiceController {
     this.backend = backend;
     this.projectRoot = options.projectRoot ?? resolve(import.meta.dir, "../..");
     this.environment = options.environment ?? process.env;
-    this.script = resolve(this.projectRoot, "scripts/run-evolution-daemon-loop.sh");
+    this.script = options.evolutionScriptPath
+      ?? resolve(this.projectRoot, "scripts/run-evolution-daemon-loop.sh");
     this.spawnSidecar = options.spawn ?? defaultSpawn;
     this.initialCodexEnabled = this.environment.EVOLUTION_AUTOSTART === "1";
     const codexPath = options.codexPath === undefined
@@ -98,7 +100,8 @@ export class AiServicesManager implements AiServiceController {
     const dockerAvailable = options.dockerAvailable
       ?? Boolean(findExecutable(this.environment, undefined, "docker"));
     const apiAvailable = Boolean(this.environment.LLM_API_KEY && this.environment.OPENAI_MODEL);
-    const codexAvailable = Boolean(codexPath && authenticated && existsSync(this.script));
+    const scriptAvailable = existsSync(this.script);
+    const codexAvailable = Boolean(codexPath && authenticated && scriptAvailable);
     this.state = {
       api: {
         available: apiAvailable,
@@ -112,6 +115,7 @@ export class AiServicesManager implements AiServiceController {
         enabled: false,
         detail: !codexPath ? "CLI Codex absent."
           : !authenticated ? "CLI Codex non authentifié."
+          : !scriptAvailable ? "Script du workflow Codex absent."
           : !dockerAvailable ? "Codex est prêt, mais Docker manque pour la vérification obligatoire."
           : "Codex et le vérificateur Docker sont prêts.",
       },
