@@ -16,6 +16,7 @@ describe("supervision des services IA", () => {
           OPENAI_MODEL: "test-model",
           USE_API: "0",
         },
+        evolutionScriptPath: "/bin/true",
         codexPath: "/bin/true",
         codexAuthenticated: true,
         dockerAvailable: true,
@@ -41,6 +42,7 @@ describe("supervision des services IA", () => {
       { send() { return true; } },
       {
         environment: { PATH: process.env.PATH },
+        evolutionScriptPath: "/bin/true",
         codexPath: "/bin/true",
         codexAuthenticated: true,
         dockerAvailable: false,
