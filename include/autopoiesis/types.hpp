@@ -177,8 +177,16 @@ struct Agent {
   int companion_until_day{};
   int last_help_day{};
   int last_warning_day{};
+  int age_days{25*360};
+  std::string origin{"founder"};
+  int arrival_day{1};
+  std::vector<std::string> parent_ids;
+  int departure_day{};
+  std::string departure_reason;
+  std::string death_cause;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
+inline bool is_adult(const Agent& agent) { return agent.age_days>=16*360; }
 inline HealthCondition& add_health_condition(Agent& agent,HealthConditionType type,int severity,const std::string& cause) { agent.conditions.push_back({agent.id+"-condition-"+std::to_string(agent.next_condition_id++),type,std::clamp(severity,1,100),0,false,cause});return agent.conditions.back(); }
 inline json health_conditions_json(const Agent& agent) { json result=json::array();for(const auto& condition:agent.conditions)result.push_back({{"id",condition.id},{"type",health_condition_name(condition.type)},{"severity",condition.severity},{"days",condition.days},{"treated",condition.treated},{"cause",condition.cause}});return result; }
 inline Emotion& add_emotion(Agent& agent,EmotionType type,int intensity,const std::string& cause,

@@ -124,6 +124,10 @@ Une émotion nomme toujours un événement déclencheur conservé comme souvenir
 
 Une relation conserve confiance, affinité, nombre d'interactions et conflit actif. Toute interaction exige deux personnages vivants réellement adjacents. L'avertissement partage les espèces observées et l'entraide réduit une fatigue élevée, au plus une fois par jour pour leur initiateur. L'accompagnement mémorise un compagnon jusqu'au lendemain et infléchit les déplacements locaux. Le conflit est réciproque, causé par la colère et dégrade le lien ; seule une réconciliation valide le clôt et restaure partiellement le lien.
 
+### Population évolutive
+
+Chaque résident conserve son âge en jours, son origine, son jour d'arrivée, ses éventuels parents et la cause d'un départ ou décès. Le vieillissement est quotidien. Une arrivée peut survenir tous les 60 jours si le foyer est abrité, sous huit résidents et possède quatre rations au-delà de sa réserve minimale. Une naissance peut survenir tous les 90 jours avec deux adultes, un abri, six rations dédiées et moins de dix résidents. Ces événements consomment les rations. Tous les 30 jours, une détresse vitale durable sans lien de soutien entraîne un départ. À 80 ans, le décès naturel est explicite. Un enfant ne peut exécuter les métiers et interactions réservés aux adultes.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -200,6 +204,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 35. Toute affection nomme sa cause et évolue une fois par journée. Un soin exige un patient réel au même foyer ; une convalescence est bornée à une fois par jour et aucune guérison ne peut augmenter la sévérité.
 36. Toute émotion nomme sa cause et son effet. Elle est bornée en nombre, intensité et durée ; son effet ne contourne jamais la validation déterministe d'une action.
 37. Une interaction relationnelle nomme une cible vivante adjacente et valide ses propres préconditions. Conflit et réconciliation sont réciproques ; avertissement et entraide sont bornés à une fois par journée.
+38. Toute variation de population est déterministe, persistante et conditionnée par la capacité réelle du foyer. Une arrivée ou naissance consomme ses réserves et ne dépasse jamais les plafonds définis.
 
 ## Patterns
 

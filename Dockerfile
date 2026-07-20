@@ -28,4 +28,5 @@ COPY --from=build /src/build/autopoiesis_ecosystem_tests /usr/local/bin/autopoie
 COPY --from=build /src/build/autopoiesis_health_tests /usr/local/bin/autopoiesis_health_tests
 COPY --from=build /src/build/autopoiesis_emotion_tests /usr/local/bin/autopoiesis_emotion_tests
 COPY --from=build /src/build/autopoiesis_relationship_tests /usr/local/bin/autopoiesis_relationship_tests
+COPY --from=build /src/build/autopoiesis_population_tests /usr/local/bin/autopoiesis_population_tests
 ENTRYPOINT ["/usr/local/bin/autopoiesis"]

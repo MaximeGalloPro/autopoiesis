@@ -158,6 +158,9 @@ add_test(NAME causal_emotions COMMAND autopoiesis_emotion_tests)
 add_executable(autopoiesis_relationship_tests tests/test_relationships.cpp)
 target_link_libraries(autopoiesis_relationship_tests PRIVATE autopoiesis_core)
 add_test(NAME active_relationships COMMAND autopoiesis_relationship_tests)
+add_executable(autopoiesis_population_tests tests/test_population.cpp)
+target_link_libraries(autopoiesis_population_tests PRIVATE autopoiesis_core)
+add_test(NAME evolving_population COMMAND autopoiesis_population_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -199,6 +202,7 @@ foreach(test_target
     autopoiesis_ecosystem_tests
     autopoiesis_health_tests
     autopoiesis_emotion_tests
-    autopoiesis_relationship_tests)
+    autopoiesis_relationship_tests
+    autopoiesis_population_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

@@ -87,6 +87,10 @@ std::vector<std::string> available_actions(const Agent& a, const World& w,
   if(std::any_of(w.animals().begin(),w.animals().end(),[&](const Animal& animal){return animal.alive&&w.adjacent(a.position,animal.position);})) r.push_back("hunt_animal");
   for (const auto& other:agents)
     if (other.alive && other.id!=a.id && w.adjacent(a.position,other.position)) r.push_back("talk");
+  if(!is_adult(a)){
+    static const std::set<std::string> child_actions{"observe","wait","move","sleep","rest","drink","eat_food","eat_berries","eat_carried_food","eat_camp_food"};
+    std::erase_if(r,[&](const std::string& action){return !child_actions.contains(action);});
+  }
   return r;
 }
 bool validate_decision(const Decision& d,const Agent& a,const World& w,const std::vector<Agent>& agents,std::string& e,int current_day,DayPhase phase) {

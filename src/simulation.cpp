@@ -129,7 +129,10 @@ json agent_checkpoint(const Agent& agent) {
           {"last_convalescence_day",agent.last_convalescence_day},
           {"emotions",std::move(emotions)},{"next_emotion_id",agent.next_emotion_id},
           {"companion_id",agent.companion_id},{"companion_until_day",agent.companion_until_day},
-          {"last_help_day",agent.last_help_day},{"last_warning_day",agent.last_warning_day}};
+          {"last_help_day",agent.last_help_day},{"last_warning_day",agent.last_warning_day},
+          {"age_days",agent.age_days},{"origin",agent.origin},{"arrival_day",agent.arrival_day},
+          {"parent_ids",agent.parent_ids},{"departure_day",agent.departure_day},
+          {"departure_reason",agent.departure_reason},{"death_cause",agent.death_cause}};
 }
 
 Agent restore_agent(const json& state) {
@@ -226,6 +229,11 @@ Agent restore_agent(const json& state) {
   agent.companion_until_day=state.value("companion_until_day",0);
   agent.last_help_day=state.value("last_help_day",0);
   agent.last_warning_day=state.value("last_warning_day",0);
+  agent.age_days=state.value("age_days",25*360);
+  agent.origin=state.value("origin","founder");agent.arrival_day=state.value("arrival_day",1);
+  agent.parent_ids=state.value("parent_ids",std::vector<std::string>{});
+  agent.departure_day=state.value("departure_day",0);
+  agent.departure_reason=state.value("departure_reason","");agent.death_cause=state.value("death_cause","");
   return agent;
 }
 
@@ -830,6 +838,7 @@ void Simulation::load_checkpoint() {
   date_=date_from_absolute_day(std::max(1,day_));climate_=climate_for(date_);
   action_history_=state.value("action_history",decltype(action_history_){});
   planning_history_=state.value("planning_history",decltype(planning_history_){});
+  next_agent_id_=state.value("next_agent_id",static_cast<int>(agents_.size())+1);
   restore_rng(rng_,state.at("rng").get<std::string>());
   devil_.restore_rng_checkpoint(state.at("devil_rng").get<std::string>());
   decider_.restore_checkpoint(state.value("decider",json::object()));
@@ -845,7 +854,7 @@ void Simulation::save_checkpoint() const {
       {"world",world_.checkpoint()},{"agents",std::move(agents)},
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
-      {"decider",decider_.checkpoint()}};
+      {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_}};
   const std::filesystem::path target(checkpoint_path_);
   if(!target.parent_path().empty())std::filesystem::create_directories(target.parent_path());
   const auto temporary=target.string()+".tmp";
@@ -926,7 +935,7 @@ Perception Simulation::perceive(Agent& a) {
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
-void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_days;if(a.critical_hunger_days>3)a.health=clamp_stat(a.health-std::max(1,7-a.attributes.willpower/20));}else a.critical_hunger_days=0;if(a.thirst>=90){++a.critical_thirst_days;if(a.critical_thirst_days>1)a.health=clamp_stat(a.health-std::max(2,10-a.attributes.willpower/15));}else a.critical_thirst_days=0;if(a.health==0)a.alive=false;}
+void Simulation::update_needs(Agent& a){if(a.hunger>=90){++a.critical_hunger_days;if(a.critical_hunger_days>3)a.health=clamp_stat(a.health-std::max(1,7-a.attributes.willpower/20));}else a.critical_hunger_days=0;if(a.thirst>=90){++a.critical_thirst_days;if(a.critical_thirst_days>1)a.health=clamp_stat(a.health-std::max(2,10-a.attributes.willpower/15));}else a.critical_thirst_days=0;if(a.health==0){a.alive=false;if(a.death_cause.empty())a.death_cause="besoins vitaux non satisfaits";}}
 
 void Simulation::update_health_conditions(Agent& agent) {
   if(!agent.alive)return;
@@ -946,7 +955,7 @@ void Simulation::update_health_conditions(Agent& agent) {
   });
   if(infection_risk&&!infected){add_health_condition(agent,HealthConditionType::Infection,20,"blessure non soignée");agent.remember("Ma blessure s'est infectée.");}
   std::erase_if(agent.conditions,[](const HealthCondition& condition){return condition.severity<=0;});
-  if(agent.health==0)agent.alive=false;
+  if(agent.health==0){agent.alive=false;if(agent.death_cause.empty())agent.death_cause="complications de santé";}
 }
 
 void Simulation::update_emotions(Agent& agent) {
@@ -954,6 +963,43 @@ void Simulation::update_emotions(Agent& agent) {
   const int decay=std::clamp(6+agent.attributes.willpower/20,6,11);
   for(auto& emotion:agent.emotions){emotion.intensity=std::max(0,emotion.intensity-decay);--emotion.remaining_days;}
   std::erase_if(agent.emotions,[](const Emotion& emotion){return emotion.intensity<=0||emotion.remaining_days<=0;});
+}
+
+void Simulation::update_population() {
+  for(auto& agent:agents_)if(agent.alive){
+    ++agent.age_days;
+    if(agent.age_days>=80*360){agent.alive=false;agent.death_cause="vieillesse";agent.remember("Ma vie s'achève après un grand âge.");logger_.message(agent.name+" meurt de vieillesse.");}
+  }
+  if(day_%30!=0)return;
+  for(auto& agent:agents_)if(agent.alive){
+    int belonging=0;for(const auto&[_,relationship]:agent.relationships)belonging+=relationship.trust+relationship.affinity;
+    if((agent.critical_hunger_days>=4||agent.critical_thirst_days>=3)&&belonging<10){
+      agent.alive=false;agent.departure_day=day_;agent.departure_reason="détresse vitale sans soutien";
+      agent.remember("J'ai quitté le foyer faute de ressources et de soutien.");logger_.message(agent.name+" quitte le foyer.");
+    }
+  }
+  const auto camp=world_.primary_campfire();
+  if(!camp)return;
+  const auto sheltered=[&]{if(world_.shelter_level(*camp)>0)return true;for(const auto neighbor:world_.neighbors(*camp))if(world_.shelter_level(neighbor)>0)return true;return world_.has_completed_building(BuildingType::Bed);}();
+  int residents=static_cast<int>(std::count_if(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;}));
+  auto consume_reserves=[&](int amount){for(int index=0;index<amount;++index)if(!world_.take_stored_food(*camp))return false;return true;};
+  auto make_resident=[&](std::string origin,int age,std::vector<std::string> parents){
+    const int serial=next_agent_id_++;Agent newcomer;
+    newcomer.id="a"+std::to_string(serial);newcomer.name=origin=="birth"?"Enfant "+std::to_string(serial):"Voyageur "+std::to_string(serial);
+    newcomer.position=world_.neighbors(*camp).front();newcomer.age_days=age;newcomer.origin=std::move(origin);
+    newcomer.arrival_day=day_;newcomer.parent_ids=std::move(parents);newcomer.hunger=25;newcomer.thirst=20;newcomer.fatigue=20;
+    newcomer.personality={50,55,55,55,60};newcomer.attributes={45,50,50,45,55,55,50,55,50,50};
+    newcomer.behavior={"resident","Contribuer à la continuité du foyer",50,60,45,65,{FoodType::Roots,FoodType::Berries}};
+    newcomer.project={"join_camp","Trouver sa place dans le foyer",ProjectStatus::Active,0,0,3,"","",day_,simulation_cycle_};
+    newcomer.home_camp=*camp;newcomer.known_campfires.insert({camp->x,camp->y});agents_.push_back(std::move(newcomer));
+  };
+  if(sheltered&&day_%60==0&&residents<8&&world_.stored_food(*camp)>=residents*4+4&&consume_reserves(4)){
+    make_resident("arrival",20*360+((day_/60)%20)*360,{});++residents;logger_.message("Un nouveau voyageur rejoint le foyer.");
+  }
+  std::vector<std::string> adults;for(const auto& agent:agents_)if(agent.alive&&is_adult(agent))adults.push_back(agent.id);
+  if(sheltered&&day_%90==0&&residents<10&&adults.size()>=2&&world_.stored_food(*camp)>=residents*6+6&&consume_reserves(6)){
+    make_resident("birth",0,{adults[0],adults[1]});logger_.message("Une naissance agrandit le foyer.");
+  }
 }
 
 void Simulation::apply_climate_effects(Agent& agent,const CalendarDate& date,const ClimateState& climate) {
@@ -1323,6 +1369,7 @@ bool Simulation::run_day(IUserInterface* interface){
     }
   }
   for(auto& agent:agents_) if(agent.alive){update_needs(agent);update_health_conditions(agent);update_emotions(agent);apply_climate_effects(agent,date_,climate_);}
+  update_population();
   return true;
 }
 

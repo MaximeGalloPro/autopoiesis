@@ -69,6 +69,13 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].companion_until_day==right[index].companion_until_day);
     assert(left[index].last_help_day==right[index].last_help_day);
     assert(left[index].last_warning_day==right[index].last_warning_day);
+    assert(left[index].age_days==right[index].age_days);
+    assert(left[index].origin==right[index].origin);
+    assert(left[index].arrival_day==right[index].arrival_day);
+    assert(left[index].parent_ids==right[index].parent_ids);
+    assert(left[index].departure_day==right[index].departure_day);
+    assert(left[index].departure_reason==right[index].departure_reason);
+    assert(left[index].death_cause==right[index].death_cause);
     assert(project_json(left[index].project)==project_json(right[index].project));
     assert(relationships_json(left[index].relationships)==relationships_json(right[index].relationships));
   }

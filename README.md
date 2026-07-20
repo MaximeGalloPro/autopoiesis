@@ -182,6 +182,8 @@ Les émotions sont causales et temporaires : joie, peur, colère, tristesse, esp
 
 Les relations produisent des actes locaux : avertir partage les dangers observés, aider soulage la fatigue, accompagner maintient un personnage auprès d'un autre jusqu'au lendemain, et une colère peut devenir un conflit persistant. La réconciliation clôt ce conflit et restaure confiance et affinité. L'inspecteur signale compagnon et conflits actifs.
 
+La population vieillit chaque jour. Tous les deux mois, un foyer abrité et suffisamment approvisionné peut accueillir un voyageur ; tous les trois mois, deux adultes peuvent avoir un enfant si les réserves le permettent. Une détresse vitale durable sans soutien provoque un départ mensuel, et le grand âge une mort naturelle. Âge, origine et population vivante sont visibles et persistants.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre

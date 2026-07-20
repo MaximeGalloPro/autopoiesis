@@ -476,7 +476,10 @@ struct RaylibInterface::Impl {
     if(!agent.community_role.empty())
       DrawText(clipped("Rôle au foyer : "+agent.community_role,width-44,13).c_str(),
                x+22,cursor+52,13,secondary_text);
-    cursor+=agent.community_role.empty()?66:84;
+    const std::string life="Âge : "+std::to_string(agent.age_days/360)+" an(s) · "+
+        (agent.origin=="birth"?"né au foyer":agent.origin=="arrival"?"arrivé au foyer":"fondateur");
+    DrawText(clipped(life,width-44,13).c_str(),x+22,cursor+(agent.community_role.empty()?52:70),13,secondary_text);
+    cursor+=agent.community_role.empty()?84:102;
     DrawText("HUMEUR",x+22,cursor,13,secondary_text);
     DrawText(clipped(selected->mood,width-44,17).c_str(),x+22,cursor+20,17,primary_text);
     if(!agent.conditions.empty()){
@@ -572,8 +575,9 @@ struct RaylibInterface::Impl {
     DrawText(TextFormat("Année %d · Mois %d · Jour %d · %s",snapshot.date.year,snapshot.date.month,
                         snapshot.date.day_of_month,season_name(snapshot.date.season).c_str()),
              210,17,19,primary_text);
-    DrawText(TextFormat("%d °C · %s · jour absolu %d · cycle %d",snapshot.climate.temperature_c,
-                        snapshot.climate.condition.c_str(),snapshot.date.absolute_day,
+    const int population=static_cast<int>(std::count_if(snapshot.agents.begin(),snapshot.agents.end(),[](const UiAgent& agent){return agent.state.alive;}));
+    DrawText(TextFormat("%d °C · %s · population %d · jour absolu %d · cycle %d",snapshot.climate.temperature_c,
+                        snapshot.climate.condition.c_str(),population,snapshot.date.absolute_day,
                         snapshot.simulation_cycle),210,44,14,secondary_text);
     const int ecology_width=std::max(0,screen_width-940);
     if(ecology_width>120)DrawText(clipped(
