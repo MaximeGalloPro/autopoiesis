@@ -24,6 +24,9 @@ struct SplitReporter final : ICycleReporter {
   std::vector<CalendarDate> dates;
   std::vector<EvolutionContext> evolution_contexts;
   int delay_ms{};
+  bool active{true};
+
+  bool enabled() const override { return active; }
 
   json report_period(int simulation_cycle, int day, const Agent& agent,
                      const std::vector<std::string>&,
@@ -116,6 +119,12 @@ int main() {
 
   setenv("CYCLES_PER_DAY", "1", 1);
   setenv("REPORT_EVERY_DAYS", "1", 1);
+  SplitReporter disabled_reporter;
+  disabled_reporter.active=false;
+  Simulation api_disabled(42,decider,logger,&disabled_reporter);
+  api_disabled.run(1,0,0);
+  assert(disabled_reporter.events.empty());
+
   FailingReporter failing;
   Simulation failed(42, decider, logger, &failing);
   std::ostringstream terminal;

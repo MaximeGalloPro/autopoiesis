@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BackendEvent, ClientMessage, ConnectionState, EngineCommand, PublicState } from "../protocol";
+import type { AiServicesState, BackendEvent, ClientMessage, ConnectionState, EngineCommand, PublicState } from "../protocol";
 import { browserTransportUrl } from "../transport";
 
 const emptyState: PublicState = {
@@ -53,6 +53,7 @@ export function useSimulation() {
   const [data, setData] = useState<PublicState>(emptyState);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [services, setServices] = useState<AiServicesState | null>(null);
   const retryRef = useRef(0);
 
   useEffect(() => {
@@ -135,6 +136,23 @@ export function useSimulation() {
     };
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    const refresh = async () => {
+      try {
+        const response = await fetch(browserTransportUrl("services"));
+        if (!response.ok) return;
+        const next = await response.json() as AiServicesState;
+        if (!disposed) setServices(next);
+      } catch {
+        // Le flux principal reste l’autorité sur la santé du moteur.
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5_000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, []);
+
   const sendCommand = useCallback(async (command: EngineCommand): Promise<boolean> => {
     setCommandError(null);
     try {
@@ -154,5 +172,26 @@ export function useSimulation() {
     }
   }, []);
 
-  return { data, connection, commandError, dismissCommandError: () => setCommandError(null), sendCommand };
+  const setService = useCallback(async (service: "api" | "codex", enabled: boolean): Promise<boolean> => {
+    setCommandError(null);
+    try {
+      const response = await fetch(browserTransportUrl("services"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ service, enabled }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        error?: string;
+        services?: AiServicesState;
+      } | null;
+      if (!response.ok) throw new Error(payload?.error ?? `Commande refusée (${response.status})`);
+      if (payload?.services) setServices(payload.services);
+      return true;
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "Le service n’a pas pu être configuré.");
+      return false;
+    }
+  }, []);
+
+  return { data, services, connection, commandError, dismissCommandError: () => setCommandError(null), sendCommand, setService };
 }

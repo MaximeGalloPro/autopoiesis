@@ -24,6 +24,8 @@ export function isEngineCommand(value: unknown): value is EngineCommand {
         && Number.isInteger(command.milliseconds)
         && (command.milliseconds as number) >= 0
         && (command.milliseconds as number) <= 10_000;
+    case "service.api":
+      return hasExactKeys(command, ["type", "enabled"]) && typeof command.enabled === "boolean";
     case "validation.select":
       return hasExactKeys(command, ["type", "request_id"]) && validRequestId(command.request_id);
     case "validation.decision":

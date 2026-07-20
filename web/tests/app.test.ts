@@ -3,6 +3,7 @@ import type { BackendEvent, EngineCommand, PublicState } from "../src/protocol";
 import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { createApp, createEventRelay } from "../server/app";
 import type { BackendProcessManager } from "../server/backend-process";
+import type { AiServiceController, AiServicesState } from "../server/ai-services";
 import { worldSnapshot } from "./fixtures";
 
 class FakeManager {
@@ -20,6 +21,20 @@ class FakeManager {
   snapshot() { return this.current; }
   send(command: EngineCommand) { this.commands.push(command); return true; }
   subscribe(_subscriber: (event: BackendEvent) => void) { return () => undefined; }
+}
+
+class FakeServices implements AiServiceController {
+  current: AiServicesState = {
+    api: { available: true, enabled: false, detail: "API prête." },
+    codex: { available: true, authenticated: true, verifier_available: true, enabled: false, detail: "Codex prêt." },
+  };
+  snapshot() { return structuredClone(this.current); }
+  setEnabled(service: "api" | "codex", enabled: boolean) {
+    this.current[service].enabled = enabled;
+    return { accepted: true };
+  }
+  startConfigured() {}
+  stop() {}
 }
 
 describe("BFF Elysia", () => {
@@ -64,7 +79,7 @@ describe("BFF Elysia", () => {
 
   test("expose le transport navigateur et les alias API", async () => {
     const manager = new FakeManager();
-    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false });
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, basicAuth: false });
     for (const prefix of [BROWSER_TRANSPORT_PREFIX, "/api"]) {
       const health = await app.handle(new Request(`http://localhost${prefix}/health`));
       expect(health.status).toBe(200);
@@ -75,9 +90,34 @@ describe("BFF Elysia", () => {
     }
   });
 
+  test("expose des commandes bornées pour les services IA", async () => {
+    const manager = new FakeManager();
+    const services = new FakeServices();
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, services, basicAuth: false });
+    const endpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/services`;
+    const initial = await app.handle(new Request(endpoint));
+    expect(initial.status).toBe(200);
+    expect((await initial.json()).api.enabled).toBe(false);
+
+    const enabled = await app.handle(new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ service: "api", enabled: true }),
+    }));
+    expect(enabled.status).toBe(200);
+    expect((await enabled.json()).services.api.enabled).toBe(true);
+
+    const invalid = await app.handle(new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ service: "shell", enabled: true }),
+    }));
+    expect(invalid.status).toBe(422);
+  });
+
   test("valide strictement la forme et les bornes des commandes", async () => {
     const manager = new FakeManager();
-    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false });
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, basicAuth: false });
     const send = (body: unknown) => app.handle(new Request(`http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -97,6 +137,7 @@ describe("BFF Elysia", () => {
     const app = createApp(manager as unknown as BackendProcessManager, {
       serveStatic: false,
       safePreview: true,
+      basicAuth: false,
     });
     const response = await app.handle(new Request(`http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`, {
       method: "POST",

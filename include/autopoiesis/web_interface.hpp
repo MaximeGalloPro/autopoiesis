@@ -13,7 +13,7 @@ inline constexpr int web_protocol_version=1;
 inline constexpr std::string_view web_event_prefix="AUTOPOIESIS_EVENT ";
 
 enum class WebCommandKind {
-  Pause, Resume, TogglePause, SetSpeed, SetDelayMs, Validation, Stop
+  Pause, Resume, TogglePause, SetSpeed, SetDelayMs, SetApiEnabled, Validation, Stop
 };
 
 struct WebCommand {
@@ -22,6 +22,7 @@ struct WebCommand {
   WebCommandKind kind{WebCommandKind::Stop};
   float speed{1.0F};
   int delay_ms{};
+  bool enabled{};
   std::string validation_text;
 };
 
@@ -46,6 +47,8 @@ class WebInterface final : public IUserInterface, public IValidationInterface {
   bool paused() const { return paused_; }
   float speed_multiplier() const { return speed_; }
   bool stop_requested() const { return stop_requested_; }
+  bool api_enabled() const { return api_available_&&api_enabled_; }
+  void configure_api(bool available,bool enabled);
   void complete();
   void fail(const std::string& message);
 
@@ -60,6 +63,8 @@ class WebInterface final : public IUserInterface, public IValidationInterface {
   bool stop_requested_{};
   bool restart_requested_{};
   bool completed_{};
+  bool api_available_{};
+  bool api_enabled_{};
   std::size_t snapshot_count_{};
 
   void emit(std::string_view type,json payload);

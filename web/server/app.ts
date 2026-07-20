@@ -4,6 +4,7 @@ import { Elysia } from "elysia";
 import type { BackendEvent, EngineCommand } from "../src/protocol";
 import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { BackendProcessManager } from "./backend-process";
+import type { AiServiceController, AiServiceName } from "./ai-services";
 import { isEngineCommand } from "./command-schema";
 
 const contentTypes: Record<string, string> = {
@@ -119,6 +120,36 @@ function mountTransportRoutes(
     });
 }
 
+function mountServiceRoutes(
+  app: Elysia,
+  prefix: string,
+  services: AiServiceController,
+  safePreview: boolean,
+): void {
+  app
+    .get(`${prefix}/services`, () => services.snapshot())
+    .post(`${prefix}/services`, ({ body, set }) => {
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        set.status = 422;
+        return { accepted: false, error: "Configuration de service invalide." };
+      }
+      const candidate = body as Record<string, unknown>;
+      const service = candidate.service;
+      if (Object.keys(candidate).length !== 2 || (service !== "api" && service !== "codex")
+        || typeof candidate.enabled !== "boolean") {
+        set.status = 422;
+        return { accepted: false, error: "Service ou état inconnu." };
+      }
+      if (safePreview && service === "codex" && candidate.enabled) {
+        set.status = 403;
+        return { accepted: false, error: "Codex est désactivé par la politique de preview sûre." };
+      }
+      const result = services.setEnabled(service as AiServiceName, candidate.enabled);
+      if (!result.accepted) set.status = 409;
+      return { ...result, services: services.snapshot() };
+    });
+}
+
 export function createApp(
   manager: BackendProcessManager,
   options: {
@@ -127,6 +158,7 @@ export function createApp(
     safePreview?: boolean;
     snapshotIntervalMs?: number;
     basicAuth?: BasicAuth | false;
+    services?: AiServiceController;
   } = {},
 ) {
   const sockets = new Map<string, () => void>();
@@ -161,6 +193,10 @@ export function createApp(
   }
   mountTransportRoutes(app, BROWSER_TRANSPORT_PREFIX, manager, safePreview);
   mountTransportRoutes(app, "/api", manager, safePreview);
+  if (options.services) {
+    mountServiceRoutes(app, BROWSER_TRANSPORT_PREFIX, options.services, safePreview);
+    mountServiceRoutes(app, "/api", options.services, safePreview);
+  }
 
   return app
     .ws("/ws", {

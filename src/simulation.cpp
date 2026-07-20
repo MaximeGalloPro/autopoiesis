@@ -1445,7 +1445,7 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
     if(period_complete){
       std::cout << "\n=== FENETRE IA : " << calendar_label(date_) << " / Jour absolu " << day_ << " / Cycle elementaire "
                 << simulation_cycle_ << " ===\n" << std::flush;
-      if(!reporter_){
+      if(!reporter_||!reporter_->enabled()){
         std::cout << "API désactivée : aucun appel à effectuer.\n" << std::flush;
       } else {
         const auto total_calls=agents_.size()*2;

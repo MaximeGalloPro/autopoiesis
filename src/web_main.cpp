@@ -32,6 +32,27 @@ bool enabled_from_env(const char* name,bool fallback) {
   const char* configured=std::getenv(name);
   return configured?std::string(configured)!="0":fallback;
 }
+
+class SwitchableReporter final : public ICycleReporter {
+ public:
+  SwitchableReporter(ICycleReporter& delegate,const WebInterface& interface)
+      :delegate_(delegate),interface_(interface) {}
+  bool enabled() const override { return interface_.api_enabled(); }
+  json report_period(int cycle,int day,const Agent& agent,
+                     const std::vector<std::string>& history,
+                     const PeriodContext& context) override {
+    return delegate_.report_period(cycle,day,agent,history,context);
+  }
+  json request_evolution(int cycle,int day,const Agent& agent,
+                         const std::vector<std::string>& history,const json& report,
+                         const EvolutionContext& context) override {
+    return delegate_.request_evolution(cycle,day,agent,history,report,context);
+  }
+  std::string last_error() const override { return delegate_.last_error(); }
+ private:
+  ICycleReporter& delegate_;
+  const WebInterface& interface_;
+};
 }
 
 int main(int argc,char** argv) {
@@ -70,11 +91,14 @@ int main(int argc,char** argv) {
     std::mt19937 local_rng(seed);
     LocalDecider local(local_rng);
     std::unique_ptr<OpenAIClient> reporter;
-    if(!no_api){
-      const char* key=std::getenv("LLM_API_KEY");
-      const char* model=std::getenv("OPENAI_MODEL");
-      if(!key||!model)throw std::runtime_error(
+    std::unique_ptr<SwitchableReporter> switchable_reporter;
+    const char* key=std::getenv("LLM_API_KEY");
+    const char* model=std::getenv("OPENAI_MODEL");
+    const bool api_available=key&&*key&&model&&*model;
+    const bool api_initially_enabled=!no_api&&enabled_from_env("USE_API",true);
+    if(api_initially_enabled&&!api_available)throw std::runtime_error(
           "LLM_API_KEY and OPENAI_MODEL are required (or use --no-api)");
+    if(api_available){
       std::size_t limit=100;
       if(const char* configured=std::getenv("LIMIT_LLM_API_CALLS")){
         try{limit=std::stoull(configured);}
@@ -92,8 +116,10 @@ int main(int argc,char** argv) {
           ApiCallBudget(data_directory+"/api_budget.json",run_id,limit),
           [&logger](const std::string& diagnostic){logger.message(diagnostic);});
     }
+    interface->configure_api(api_available,api_initially_enabled);
+    if(reporter) switchable_reporter=std::make_unique<SwitchableReporter>(*reporter,*interface);
 
-    Simulation simulation(seed,local,logger,reporter.get(),checkpoint_path);
+    Simulation simulation(seed,local,logger,switchable_reporter.get(),checkpoint_path);
     Simulation::ValidationGate validation_gate;
     if(enabled_from_env("WAIT_FOR_HUMAN_VALIDATION",true)){
       auto human_validation=std::make_shared<HumanValidation>(

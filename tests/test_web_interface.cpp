@@ -83,12 +83,15 @@ int main() {
   assert(command&&command->delay_ms==0);
   command=parse_web_command(R"({"version":1,"command":"set_delay_ms","delay_ms":10000})",error);
   assert(command&&command->delay_ms==10000);
+  command=parse_web_command(R"({"version":1,"command":"set_api_enabled","enabled":true})",error);
+  assert(command&&command->kind==WebCommandKind::SetApiEnabled&&command->enabled);
   command=parse_web_command(R"({"version":1,"command":"validation","text":"a"})",error);
   assert(command&&command->validation_text=="a");
   assert(!parse_web_command(R"({"version":2,"command":"pause"})",error));
   assert(!parse_web_command(R"({"version":1,"command":"set_speed","speed":1.5})",error));
   assert(!parse_web_command(R"({"version":1,"command":"set_delay_ms","delay_ms":10001})",error));
   assert(!parse_web_command(R"({"version":1,"command":"validation","text":2})",error));
+  assert(!parse_web_command(R"({"version":1,"command":"set_api_enabled","enabled":1})",error));
   assert(!parse_web_command(R"({"version":1,"command":"pause","extra":true})",error));
   assert(!parse_web_command(R"({"version":1,"command":"unknown"})",error));
   assert(!parse_web_command("not json",error));
@@ -120,6 +123,7 @@ int main() {
   std::istringstream runtime_input(
       R"({"version":1,"command":"set_speed","speed":4})" "\n"
       R"({"version":1,"command":"set_delay_ms","delay_ms":10000})" "\n"
+      R"({"version":1,"command":"set_api_enabled","enabled":true})" "\n"
       R"({"version":1,"command":"pause"})" "\n"
       R"({"version":1,"command":"resume"})" "\n"
       R"({"version":1,"command":"toggle_pause"})" "\n"
@@ -127,10 +131,12 @@ int main() {
       R"({"version":1,"command":"set_speed","speed":3})" "\n");
   std::ostringstream runtime_output;
   WebInterface runtime(runtime_input,runtime_output,500,0);
+  runtime.configure_api(true,false);
   for(int index=0;index<4;++index)assert(runtime.present(snapshot));
   assert(runtime.speed_multiplier()==4.0F);
   assert(runtime.simulation_delay_ms(0)==10000);
   assert(!runtime.paused());
+  assert(runtime.api_enabled());
   const auto runtime_events=emitted_events(runtime_output.str());
   int snapshot_events=0;
   bool rejected_speed=false;

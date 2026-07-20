@@ -222,6 +222,8 @@ export interface RuntimeStatus {
   speed: SimulationSpeed;
   delay_ms: number;
   message: string;
+  api_available?: boolean;
+  api_enabled?: boolean;
   accepted?: boolean;
   command?: string;
 }
@@ -231,6 +233,17 @@ export interface EngineInfo {
   pid: number | null;
   restarts: number;
   last_error: string | null;
+}
+
+export interface AiServicesState {
+  api: { available: boolean; enabled: boolean; detail: string };
+  codex: {
+    available: boolean;
+    authenticated: boolean;
+    verifier_available: boolean;
+    enabled: boolean;
+    detail: string;
+  };
 }
 
 export interface PublicState {
@@ -263,6 +276,7 @@ export type EngineCommand =
   | { type: "control.pause"; paused: boolean }
   | { type: "control.speed"; multiplier: SimulationSpeed }
   | { type: "control.delay"; milliseconds: number }
+  | { type: "service.api"; enabled: boolean }
   | { type: "validation.select"; request_id: string }
   | { type: "validation.decision"; request_id: string; decision: "approve" | "reject" }
   | { type: "validation.back" }

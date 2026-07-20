@@ -131,11 +131,18 @@ approuvée, vérifiée, compilée puis activée dans la même session.
 
 [`nuagent.json`](nuagent.json) et
 [`scripts/setup-nuagent.sh`](scripts/setup-nuagent.sh) préparent automatiquement
-le backend et le bundle web. La preview utilise des données isolées dans
-`.context/preview-data`, désactive les appels LLM et le daemon d’évolution, et
-active `AUTOPOIESIS_SAFE_PREVIEW=1`. Ce dernier verrou refuse avec HTTP 403
-toute approbation réelle ; la pause, les vitesses, le délai, la reprise et
-l’arrêt restent testables contre le vrai moteur C++.
+le backend et le bundle web. Elysia détecte le CLI Codex fourni par l’hôte via
+`CODEX_BIN` ou le `PATH`, puis contrôle son authentification avant de proposer
+son activation. La preview utilise des données isolées dans
+`.context/preview-data` et hérite des politiques `USE_API`,
+`EVOLUTION_AUTOSTART` et `AUTOPOIESIS_SAFE_PREVIEW` configurées côté serveur.
+
+Le panneau « Services IA » n’expose jamais les identifiants. Il peut activer ou
+désactiver les futurs appels OpenAI à chaud, sans redémarrer le monde. Elysia
+supervise aussi Codex comme processus frère du backend C++ ; le workflow complet
+Validator → Dieu n’est activable que si le CLI est authentifié et si Docker est
+présent pour la vérification obligatoire. Une dépendance absente est affichée
+explicitement et ne peut pas être contournée par le navigateur.
 
 ## Contrat Elysia ↔ C++
 
