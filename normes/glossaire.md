@@ -302,6 +302,14 @@ L'interface normale est une application React et Three.js servie par Elysia. Ely
 
 Pendant un appel IA, le client réseau C++ travaille hors de la boucle de présentation afin que l'interface continue à recevoir les états de progression. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Une reconnexion reçoit le dernier état publié sans rejouer de cycle ni de commande.
 
+L’interface peut piloter l’activation des services IA déjà configurés sur le
+serveur. Elle ne reçoit ni clé API, ni jeton Codex, ni chemin de credential.
+Désactiver l’API empêche les fenêtres suivantes d’émettre leurs appels sans
+changer l’horloge ni le monde. Activer Codex démarre un processus frère du
+backend sous la supervision d’Elysia, uniquement si son authentification et le
+vérificateur Docker obligatoire sont disponibles. Ces contrôles de service ne
+valent jamais approbation d’une évolution et ne contournent aucune garde humaine.
+
 Elysia ingère chaque instantané autoritaire mais peut coalescer leur diffusion vers un navigateur lent en ne gardant que le plus récent. Cette optimisation de présentation ne saute aucun cycle moteur. Avant une garde, une erreur ou un changement de phase, l'instantané en attente est toujours envoyé en premier afin de préserver l'ordre observable.
 
 Le mode web est le lancement normal. Le backend C++ reste utilisable en `--terminal` pour le diagnostic et les tests. Fermer un onglet ne change pas le monde ; une commande d'arrêt explicite est revalidée par le backend et termine proprement le run. Les endpoints web n'exposent ni secrets, ni journaux bruts, ni écriture directe dans `data/`.

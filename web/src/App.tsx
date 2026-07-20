@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   CloudRain,
+  Bot,
   Flame,
   Gauge,
   HelpCircle,
@@ -9,6 +10,8 @@ import {
   Play,
   Radio,
   RotateCcw,
+  Settings2,
+  Sparkles,
   Sun,
   TimerReset,
   TriangleAlert,
@@ -27,7 +30,7 @@ import {
 import type { EntitySelection } from "./components/WorldScene";
 import { useSimulation } from "./hooks/useSimulation";
 import { seasonLabels } from "./lib/format";
-import { SIMULATION_SPEEDS, type EngineCommand, type SimulationSpeed } from "./protocol";
+import { SIMULATION_SPEEDS, type AiServicesState, type EngineCommand, type SimulationSpeed } from "./protocol";
 
 const WorldScene = lazy(() => import("./components/WorldScene").then((module) => ({
   default: module.WorldScene,
@@ -55,6 +58,57 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
   );
 }
 
+function ServiceControls({
+  services,
+  onToggle,
+  onClose,
+}: {
+  services: AiServicesState | null;
+  onToggle: (service: "api" | "codex", enabled: boolean) => void;
+  onClose: () => void;
+}) {
+  const entries = services ? [
+    {
+      key: "api" as const,
+      label: "API OpenAI",
+      icon: <Sparkles />,
+      state: services.api,
+      allowed: services.api.available,
+    },
+    {
+      key: "codex" as const,
+      label: "Codex · Validator et Dieu",
+      icon: <Bot />,
+      state: services.codex,
+      allowed: services.codex.available && services.codex.verifier_available,
+    },
+  ] : [];
+  return (
+    <section className="service-popover" role="dialog" aria-label="Services IA">
+      <header><div><Settings2 /><strong>Services IA</strong></div><button onClick={onClose} aria-label="Fermer">×</button></header>
+      {!services && <p>Lecture des capacités du serveur…</p>}
+      {entries.map((entry) => (
+        <div className="service-row" key={entry.key}>
+          <div className="service-icon">{entry.icon}</div>
+          <div className="service-copy">
+            <strong>{entry.label}</strong>
+            <small>{entry.state.detail}</small>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={entry.state.enabled}
+            disabled={!entry.allowed}
+            className={entry.state.enabled ? "service-switch active" : "service-switch"}
+            onClick={() => onToggle(entry.key, !entry.state.enabled)}
+          ><span /></button>
+        </div>
+      ))}
+      <p>Les identifiants restent exclusivement sur le serveur. Une évolution exige toujours la validation humaine et le build Docker.</p>
+    </section>
+  );
+}
+
 function EmptyInspector({ error }: { error: string | null }) {
   return (
     <aside className="inspector empty-inspector">
@@ -69,11 +123,12 @@ function EmptyInspector({ error }: { error: string | null }) {
 }
 
 export default function App() {
-  const { data, connection, commandError, dismissCommandError, sendCommand } = useSimulation();
+  const { data, services, connection, commandError, dismissCommandError, sendCommand, setService } = useSimulation();
   const snapshot = data.state;
   const [selected, setSelected] = useState<EntitySelection | null>(null);
   const [delayDraft, setDelayDraft] = useState(500);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showServices, setShowServices] = useState(false);
   const [openGuardKey, setOpenGuardKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -143,6 +198,7 @@ export default function App() {
         </div>
         <div className="connection-tools">
           <span className={`connection-pill ${connection}`}><i />{connectionLabels[connection]}</span>
+          <button className="icon-button" onClick={() => setShowServices((visible) => !visible)} aria-label="Configurer les services IA" title="Services IA"><Settings2 /></button>
           <button className="icon-button" onClick={() => setShowShortcuts((visible) => !visible)} aria-label="Afficher les raccourcis" title="Raccourcis (?)"><HelpCircle /></button>
         </div>
       </header>
@@ -227,6 +283,7 @@ export default function App() {
         ? <EvolutionCompletionOverlay completion={data.evolution_completion} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
         : <EvolutionCompletionReminder completion={data.evolution_completion} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(completionGuardKey)} />)}
       {showShortcuts && <ShortcutHelp onClose={() => setShowShortcuts(false)} />}
+      {showServices && <ServiceControls services={services} onToggle={(service, enabled) => void setService(service, enabled)} onClose={() => setShowServices(false)} />}
       {commandError && <div className="toast error" role="alert"><TriangleAlert />{commandError}<button onClick={dismissCommandError} aria-label="Fermer">×</button></div>}
     </div>
   );

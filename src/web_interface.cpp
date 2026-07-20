@@ -164,6 +164,7 @@ std::string web_command_name(WebCommandKind kind) {
     case WebCommandKind::TogglePause:return "toggle_pause";
     case WebCommandKind::SetSpeed:return "set_speed";
     case WebCommandKind::SetDelayMs:return "set_delay_ms";
+    case WebCommandKind::SetApiEnabled:return "set_api_enabled";
     case WebCommandKind::Validation:return "validation";
     case WebCommandKind::Stop:return "stop";
   }
@@ -208,6 +209,13 @@ std::optional<WebCommand> parse_web_command(std::string_view line,std::string& e
     const auto delay=value["delay_ms"].get<long long>();
     if(delay<0||delay>10000){error="delay_ms_out_of_range";return std::nullopt;}
     WebCommand result{WebCommandKind::SetDelayMs};result.delay_ms=static_cast<int>(delay);return result;
+  }
+  if(name=="set_api_enabled"){
+    if(!exact_fields(value,{"version","command","enabled"})||!value["enabled"].is_boolean()){
+      error="api_enabled_must_be_a_boolean";return std::nullopt;
+    }
+    WebCommand result{WebCommandKind::SetApiEnabled};
+    result.enabled=value["enabled"].get<bool>();return result;
   }
   if(name=="validation"){
     if(!exact_fields(value,{"version","command","text"})||!value["text"].is_string()){
@@ -278,10 +286,17 @@ void WebInterface::emit_status(std::string message,std::optional<bool> accepted,
                                std::string command) {
   std::string state=completed_?"completed":stop_requested_?"stopping":paused_?"paused":"running";
   json payload={{"state",state},{"paused",paused_},{"speed",speed_},
-                {"delay_ms",delay_ms_},{"message",std::move(message)}};
+                {"delay_ms",delay_ms_},{"api_available",api_available_},
+                {"api_enabled",api_enabled_},{"message",std::move(message)}};
   if(accepted)payload["accepted"]=*accepted;
   if(!command.empty())payload["command"]=std::move(command);
   emit("status",std::move(payload));
+}
+
+void WebInterface::configure_api(bool available,bool enabled) {
+  api_available_=available;
+  api_enabled_=available&&enabled;
+  emit_status("api_configured");
 }
 
 WebInterface::ReadResult WebInterface::read_line(bool blocking,std::string& line) {
@@ -313,6 +328,11 @@ bool WebInterface::apply_runtime_command(const WebCommand& command) {
     case WebCommandKind::TogglePause:paused_=!paused_;break;
     case WebCommandKind::SetSpeed:speed_=command.speed;break;
     case WebCommandKind::SetDelayMs:delay_ms_=command.delay_ms;break;
+    case WebCommandKind::SetApiEnabled:
+      if(command.enabled&&!api_available_){
+        emit_status("api_credentials_unavailable",false,name);return false;
+      }
+      api_enabled_=command.enabled;break;
     case WebCommandKind::Stop:stop_requested_=true;paused_=false;break;
     case WebCommandKind::Validation:
       emit_status("validation_command_unavailable",false,name);return false;

@@ -240,6 +240,8 @@ export class BackendProcessManager {
         return { version: 1, command: "set_speed", speed: command.multiplier };
       case "control.delay":
         return { version: 1, command: "set_delay_ms", delay_ms: command.milliseconds };
+      case "service.api":
+        return { version: 1, command: "set_api_enabled", enabled: command.enabled };
       case "simulation.stop":
         return { version: 1, command: "stop" };
       case "validation.select": {

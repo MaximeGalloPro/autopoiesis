@@ -6,5 +6,5 @@
  */
 export const BROWSER_TRANSPORT_PREFIX = "/bridge";
 
-export const browserTransportUrl = (resource: "state" | "commands" | "health") =>
+export const browserTransportUrl = (resource: "state" | "commands" | "health" | "services") =>
   `${BROWSER_TRANSPORT_PREFIX}/${resource}`;

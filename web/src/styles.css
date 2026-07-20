@@ -342,6 +342,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .completion-choice > p { margin: 0 0 20px; color: var(--muted); font-size: 11px; }
 
 .shortcut-popover { position: fixed; z-index: 120; top: 68px; right: 22px; width: 300px; padding: 15px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(12,20,17,.97); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+.service-popover { position: fixed; z-index: 120; top: 68px; right: 64px; width: min(390px, calc(100vw - 28px)); padding: 15px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(12,20,17,.98); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+.service-popover header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+.service-popover header > div { display: flex; align-items: center; gap: 8px; }
+.service-popover header svg { width: 16px; color: var(--accent); }
+.service-popover header button { border: 0; background: transparent; color: var(--muted); font-size: 20px; cursor: pointer; }
+.service-popover > p { margin: 12px 0 0; color: var(--faint); font-size: 9px; line-height: 1.5; }
+.service-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.service-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); }
+.service-icon svg { width: 15px; }
+.service-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.service-copy strong { font-size: 11px; }
+.service-copy small { color: var(--muted); font-size: 9px; line-height: 1.35; }
+.service-switch { position: relative; width: 38px; height: 22px; padding: 0; border: 1px solid var(--line-strong); border-radius: 12px; background: #111b17; cursor: pointer; }
+.service-switch span { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform 160ms ease, background 160ms ease; }
+.service-switch.active { border-color: rgba(117,189,137,.55); background: rgba(117,189,137,.16); }
+.service-switch.active span { transform: translateX(16px); background: #75bd89; }
+.service-switch:disabled { cursor: not-allowed; opacity: .4; }
 .shortcut-popover header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .shortcut-popover header strong { font-family: Georgia, serif; font-weight: 500; }
 .shortcut-popover header button { border: 0; background: transparent; color: var(--muted); font-size: 20px; cursor: pointer; }

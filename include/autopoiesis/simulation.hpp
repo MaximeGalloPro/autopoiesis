@@ -27,6 +27,7 @@ class IDecider {
 class ICycleReporter {
  public:
   virtual ~ICycleReporter() = default;
+  virtual bool enabled() const { return true; }
   virtual json report_period(int, int, const Agent&,
                              const std::vector<std::string>&) { return nullptr; }
   virtual json report_period(int simulation_cycle, int day, const Agent& agent,

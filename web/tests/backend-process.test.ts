@@ -21,6 +21,7 @@ describe("processus backend", () => {
     const manager = new BackendProcessManager({ autoRestart: false, spawn: () => child });
     expect(await manager.start()).toBe(true);
     expect(manager.send({ type: "control.speed", multiplier: 2 })).toBe(true);
+    expect(manager.send({ type: "service.api", enabled: false })).toBe(true);
     manager.acceptStdout(`AUTOPOIESIS_EVENT ${JSON.stringify({
       version: 1,
       type: "validation_prompt",
@@ -51,6 +52,7 @@ describe("processus backend", () => {
     expect(manager.send({ type: "validation.decision", request_id: "request-1", decision: "approve" })).toBe(true);
     expect(writes).toEqual([
       "{\"version\":1,\"command\":\"set_speed\",\"speed\":2}\n",
+      "{\"version\":1,\"command\":\"set_api_enabled\",\"enabled\":false}\n",
       "{\"version\":1,\"command\":\"validation\",\"text\":\"1\"}\n",
       "{\"version\":1,\"command\":\"validation\",\"text\":\"a\"}\n",
     ]);

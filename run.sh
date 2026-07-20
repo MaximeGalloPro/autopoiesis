@@ -86,19 +86,8 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$ROOT/data"
-if [[ "$evolution_autostart" == "1" ]]; then
-  request_offset=0
-  if [[ -f "$ROOT/data/feature_requests.jsonl" ]]; then
-    request_offset="$(wc -l < "$ROOT/data/feature_requests.jsonl")"
-  fi
-  printf '%s\n' "$request_offset" > "$ROOT/data/evolution-session-request-offset"
-  touch "$ROOT/data/evolution-session-started"
-  (
-    while true; do
-      "$ROOT/scripts/evolution-daemon.sh" >> "$ROOT/data/evolution-daemon.log" 2>&1 || true
-      sleep 2
-    done
-  ) &
+if [[ "$ui_mode" == "terminal" && "$evolution_autostart" == "1" ]]; then
+  AUTOPOIESIS_DATA_DIR="$ROOT/data" "$ROOT/scripts/run-evolution-daemon-loop.sh" &
   daemon_pid=$!
 fi
 
