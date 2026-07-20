@@ -23,6 +23,29 @@ class FakeManager {
 }
 
 describe("BFF Elysia", () => {
+  test("protège toute la surface web par Basic Auth", async () => {
+    const manager = new FakeManager();
+    const app = createApp(manager as unknown as BackendProcessManager, {
+      serveStatic: false,
+      basicAuth: { username: "test-user", password: "test-password" },
+    });
+    const healthUrl = `http://localhost${BROWSER_TRANSPORT_PREFIX}/health`;
+
+    const anonymous = await app.handle(new Request(healthUrl));
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.headers.get("www-authenticate")).toBe('Basic realm="Autopoiesis", charset="UTF-8"');
+
+    const rejected = await app.handle(new Request(healthUrl, {
+      headers: { authorization: `Basic ${btoa("test-user:incorrect")}` },
+    }));
+    expect(rejected.status).toBe(401);
+
+    const accepted = await app.handle(new Request(healthUrl, {
+      headers: { authorization: `Basic ${btoa("test-user:test-password")}` },
+    }));
+    expect(accepted.status).toBe(200);
+  });
+
   test("coalesce les instantanés sans retarder une garde", async () => {
     const events: BackendEvent[] = [];
     const relay = createEventRelay((event) => events.push(event), 5);
