@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { extname, resolve, sep } from "node:path";
 import { Elysia } from "elysia";
 import type { BackendEvent, EngineCommand } from "../src/protocol";
@@ -16,6 +17,31 @@ const contentTypes: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
+
+type BasicAuth = {
+  username: string;
+  password: string;
+};
+
+function sameCredential(candidate: string, expected: string): boolean {
+  const candidateDigest = createHash("sha256").update(candidate).digest();
+  const expectedDigest = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(candidateDigest, expectedDigest);
+}
+
+function hasValidBasicAuth(request: Request, credentials: BasicAuth): boolean {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Basic ")) return false;
+  try {
+    const decoded = Buffer.from(authorization.slice(6), "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    if (separator < 0) return false;
+    return sameCredential(decoded.slice(0, separator), credentials.username)
+      && sameCredential(decoded.slice(separator + 1), credentials.password);
+  } catch {
+    return false;
+  }
+}
 
 export function createEventRelay(
   send: (event: BackendEvent) => void,
@@ -100,6 +126,7 @@ export function createApp(
     distDirectory?: string;
     safePreview?: boolean;
     snapshotIntervalMs?: number;
+    basicAuth?: BasicAuth | false;
   } = {},
 ) {
   const sockets = new Map<string, () => void>();
@@ -109,8 +136,29 @@ export function createApp(
   const configuredInterval = Number.parseInt(process.env.AUTOPOIESIS_WEB_SNAPSHOT_MS ?? "100", 10);
   const snapshotIntervalMs = options.snapshotIntervalMs
     ?? (Number.isFinite(configuredInterval) ? Math.max(16, Math.min(1_000, configuredInterval)) : 100);
+  const configuredPassword = process.env.BASIC_AUTH_PASSWORD;
+  const basicAuth = options.basicAuth === undefined
+    ? configuredPassword
+      ? {
+          username: process.env.BASIC_AUTH_USERNAME || "autopoiesis",
+          password: configuredPassword,
+        }
+      : false
+    : options.basicAuth;
 
   const app = new Elysia();
+  if (basicAuth) {
+    app.onRequest(({ request }) => {
+      if (hasValidBasicAuth(request, basicAuth)) return;
+      return new Response("Authentification requise.", {
+        status: 401,
+        headers: {
+          "cache-control": "no-store",
+          "www-authenticate": 'Basic realm="Autopoiesis", charset="UTF-8"',
+        },
+      });
+    });
+  }
   mountTransportRoutes(app, BROWSER_TRANSPORT_PREFIX, manager, safePreview);
   mountTransportRoutes(app, "/api", manager, safePreview);
 
