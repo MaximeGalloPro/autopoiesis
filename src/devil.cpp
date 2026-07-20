@@ -92,7 +92,56 @@ std::vector<json> catalog(const World& world,const std::vector<Agent>& agents){
       "Une blessure demande du repos et peut continuer à limiter l’organisme avant sa guérison.",
       {"Se reposer","Dormir","Éviter temporairement chasse et prédateurs"},
       "Les blessures répétées font émerger bandages, médecine, plantes et entraide."));
+  values.push_back(constraint(
+      "winter_exposure","climat","Le froid saisonnier menace les résidents exposés","Rendre l'abri utile pendant les périodes froides.",
+      "Le froid ne produit pas encore de crise collective annoncée.","Annoncer trois jours froids et augmenter fatigue et faim hors abri.",
+      "Vague de froid",{"température","abri","combustible"},{"annoncer","s'abriter","chauffer"},{"température sous zéro"},
+      {"l'alerte précède l'effet","un abri annule la fatigue supplémentaire"},{"une alerte apparaît","un résident abrité est protégé"},
+      "Le froid augmente les besoins énergétiques et le risque d'hypothermie.",{"Construire un abri","Conserver du combustible"},"Le froid fait émerger vêtements et chauffage."));
+  values.push_back(constraint(
+      "contagious_outbreak","santé","Une maladie contagieuse atteint le foyer","Mettre à l'épreuve les soins et la proximité sociale.",
+      "Les maladies individuelles ne se propagent pas.","Une maladie grave non isolée peut contaminer un compagnon du même foyer.",
+      "Contagion locale",{"maladie","proximité","résistance"},{"détecter","contaminer","isoler"},{"affection non traitée"},
+      {"une seule transmission quotidienne","la résistance réduit la sévérité"},{"la contagion exige une proximité","un personnage isolé est protégé"},
+      "Les infections transmissibles se diffusent par contacts rapprochés.",{"Soigner","Convalescer à distance"},"La contagion fait émerger hygiène et infirmerie."));
+  values.push_back(constraint(
+      "infrastructure_decay","construction","Les bâtiments s'usent sous le climat","Créer un coût d'entretien après la construction.",
+      "Les structures achevées restent parfaites sans entretien.","Tempêtes et gel réduisent une durabilité persistante des bâtiments.",
+      "Usure des infrastructures",{"durabilité","bâtiment","climat"},{"inspecter","réparer"},{"bâtiment achevé"},
+      {"l'usure est bornée","une réparation consomme des matériaux"},{"une tempête use un mur","une réparation restaure la durabilité"},
+      "Les structures se dégradent sous les intempéries et les usages.",{"Stocker du bois","Réparer avant rupture"},"L'usure fait émerger maintenance et architecture robuste."));
+  values.push_back(constraint(
+      "social_fragmentation","société","Une crise divise les rôles du foyer","Tester la cohésion d'un groupe devenu stable.",
+      "Les désaccords n'affectent pas l'organisation collective.","Une pénurie prolongée augmente les conflits entre rôles incompatibles jusqu'à médiation.",
+      "Crise de cohésion",{"rôles","pénurie","relations"},{"contester","médiatiser","réorganiser"},{"pénurie active","groupe d'au moins quatre"},
+      {"les conflits nomment leur cause","une médiation peut les résoudre"},{"la pénurie crée une tension","la réconciliation restaure la coopération"},
+      "Les groupes sous pression renégocient ressources, autorité et responsabilités.",{"Partager les réserves","Réconcilier","Réattribuer les rôles"},"La crise fait émerger gouvernance et règles communes."));
+  values.push_back(constraint(
+      "compound_ecological_crisis","écosystème","Sécheresse et épuisement se renforcent","Mettre un foyer avancé face à une crise écologique composée.",
+      "Chaque pression environnementale reste isolée.","Une saison sèche ralentit simultanément eau, repousses et reproduction pendant une durée annoncée.",
+      "Crise écologique composée",{"eau","repousse","faune","saison"},{"annoncer","ralentir","restaurer"},{"foyer stable","pression avancée"},
+      {"la durée est déterministe","les capacités ne deviennent jamais négatives"},{"l'alerte précède la crise","la fin restaure les rythmes normaux"},
+      "Les crises réelles combinent souvent sécheresse, rendement végétal et dynamique animale.",{"Diversifier les stocks","Préserver plusieurs sources"},"La crise fait émerger irrigation et gestion des écosystèmes."));
+  const std::map<std::string,int> difficulties{{"perishable_fresh_food",1},{"dry_period_water_pressure",2},
+      {"untreated_wound_recovery",2},{"territorial_predators",3},{"winter_exposure",2},
+      {"contagious_outbreak",3},{"infrastructure_decay",4},{"social_fragmentation",5},
+      {"compound_ecological_crisis",5}};
+  for(auto& value:values)value["difficulty"]=difficulties.at(value.value("evolution_key",""));
   return values;
+}
+
+int stability_score(const World& world,const std::vector<Agent>& agents){
+  if(agents.empty())return 0;
+  int living=0,health=0,needs=0,tools=0;
+  for(const auto& agent:agents)if(agent.alive){++living;health+=agent.health;needs+=200-agent.hunger-agent.thirst;if(agent.equipped_tool)++tools;}
+  if(living==0)return 0;
+  int score=(health/living)*35/100+std::max(0,needs/living)*25/200+(tools*10/living);
+  if(const auto camp=world.primary_campfire()){
+    score+=10;score+=std::min(10,world.stored_food(*camp)*2/living);
+    bool shelter=world.shelter_level(*camp)>0;for(const auto position:world.neighbors(*camp))shelter=shelter||world.shelter_level(position)>0;
+    if(shelter||world.has_completed_building(BuildingType::Bed))score+=10;
+  }
+  return std::clamp(score,0,100);
 }
 }
 
@@ -113,14 +162,18 @@ std::optional<json> Devil::draw(int day,int simulation_cycle,const World& world,
   if(std::uniform_int_distribution<int>(1,one_in_)(rng_)!=1)return std::nullopt;
   auto candidates=catalog(world,agents);
   if(candidates.empty())return std::nullopt;
-  const auto first=std::uniform_int_distribution<std::size_t>(0,candidates.size()-1)(rng_);
-  for(std::size_t offset=0;offset<candidates.size();++offset){
-    auto proposal=candidates[(first+offset)%candidates.size()];
-    if(known_evolution_keys.contains(proposal.value("evolution_key","")))continue;
-    proposal["day"]=day;
-    proposal["simulation_cycle"]=simulation_cycle;
-    return proposal;
-  }
-  return std::nullopt;
+  const int stability=stability_score(world,agents);
+  const int pressure_level=std::clamp(1+day/90+static_cast<int>(known_evolution_keys.size())+(stability>=70?1:0),1,5);
+  std::vector<json> eligible;for(auto& candidate:candidates)if(!known_evolution_keys.contains(candidate.value("evolution_key",""))&&candidate.value("difficulty",1)<=pressure_level)eligible.push_back(candidate);
+  if(eligible.empty())for(auto& candidate:candidates)if(!known_evolution_keys.contains(candidate.value("evolution_key","")))eligible.push_back(candidate);
+  if(eligible.empty())return std::nullopt;
+  const int target_difficulty=std::max_element(eligible.begin(),eligible.end(),[](const json& left,const json& right){return left.value("difficulty",1)<right.value("difficulty",1);})->value("difficulty",1);
+  std::vector<json> tier;for(const auto& candidate:eligible)if(candidate.value("difficulty",1)==target_difficulty)tier.push_back(candidate);
+  auto proposal=tier[std::uniform_int_distribution<std::size_t>(0,tier.size()-1)(rng_)];
+  proposal["day"]=day;proposal["simulation_cycle"]=simulation_cycle;
+  proposal["adaptation"]={{"stability_score",stability},{"pressure_level",pressure_level},
+      {"historical_pressures",known_evolution_keys.size()},
+      {"rationale","Difficulté "+std::to_string(target_difficulty)+" choisie pour une stabilité de "+std::to_string(stability)+"/100 et un niveau de pression "+std::to_string(pressure_level)+"."}};
+  return proposal;
 }
 }

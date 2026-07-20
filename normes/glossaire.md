@@ -132,6 +132,10 @@ Chaque résident conserve son âge en jours, son origine, son jour d'arrivée, s
 
 Un danger conserve type, position, sévérité, jour d'avertissement, durée, cause, texte d'alerte et mitigation. Les types initiaux sont prédateur, tempête, départ de feu, accident de travail et pénurie. La détection crée uniquement l'alerte ; aucun effet ne s'applique avant le lendemain. Les effets sont localisés sauf tempête et pénurie, et un abri ou lit situé sur la case protège des dangers climatiques. Les blessures, peurs et décès produits nomment le danger causal. L'alerte reste persistante, perceptible par les décideurs et visible sur la carte jusqu'à expiration.
 
+### Diable adaptatif
+
+À chaque tirage réussi, le Diable calcule un score de stabilité borné sur la santé, la satisfaction des besoins, les outils, le foyer, ses réserves et ses abris. Le niveau de pression combine ce score, le jour absolu et le nombre de contraintes historiques. Chaque entrée du catalogue porte une difficulté de 1 à 5. Le Diable exclut les clés déjà vécues, choisit la difficulté maximale inférieure ou égale au niveau courant, puis départage de façon pseudo-aléatoire reproductible au sein de ce palier. La proposition expose score, niveau, difficulté, historique et justification avant toute validation.
+
 ### Mois, année et saison
 
 Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. Les mois 1 à 3 forment le printemps, 4 à 6 l'été, 7 à 9 l'automne et 10 à 12 l'hiver. Le jour absolu est monotone pendant tout le run actif : une fenêtre IA ne remet à zéro ni le jour, ni le mois, ni l'année.
@@ -210,6 +214,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 37. Une interaction relationnelle nomme une cible vivante adjacente et valide ses propres préconditions. Conflit et réconciliation sont réciproques ; avertissement et entraide sont bornés à une fois par journée.
 38. Toute variation de population est déterministe, persistante et conditionnée par la capacité réelle du foyer. Une arrivée ou naissance consomme ses réserves et ne dépasse jamais les plafonds définis.
 39. Un danger avertit toujours au moins une journée avant son premier effet. Sa zone, sa durée et sa mitigation sont déterministes ; il ne contourne ni la santé détaillée ni la persistance.
+40. Le Diable ne répète pas une clé historique et ne dépasse pas son niveau de pression calculé tant qu'une proposition admissible existe. Son adaptation reste inspectable et reproductible depuis le checkpoint RNG.
 
 ## Patterns
 

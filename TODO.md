@@ -46,7 +46,7 @@ relations et les décisions d'au moins deux personnages.
 
 ### Phase 4 - Donner une trajectoire au joueur
 
-- [ ] **G17 - Diable adaptatif** : choisir une pression selon stabilité, historique et capacités avec difficulté croissante.
+- [x] **G17 - Diable adaptatif** : score de stabilité, temps, historique et capacités choisissent une pression non répétée de difficulté croissante et justifiée.
 - [ ] **G18 - Objectifs mesurables** : afficher des objectifs collectifs comme survivre à l'hiver ou constituer une réserve.
 - [ ] **G19 - Lisibilité décisionnelle** : montrer objectif, destination, chemin, priorité et cause des changements.
 - [ ] **G20 - Mise en scène vivante** : cycle lumineux, météo, animations, sons et chronologie des événements majeurs.
@@ -81,7 +81,7 @@ tente et comment son choix d'évolution a changé la trajectoire du monde.
 - [x] Donner à l'IA demandeuse le catalogue actif et une mémoire bornée des évolutions pour éviter les propositions rebaptisées.
 - [x] Présenter les trois propositions sous forme de cartes et intégrer leur sélection à la fenêtre graphique.
 - [x] Afficher le suivi détaillé de Dieu directement dans la fenêtre graphique.
-- [ ] Étendre progressivement le catalogue du Diable avec **G17**.
+- [x] Étendre progressivement le catalogue du Diable avec **G17**.
 
 ## Garde-fous
 

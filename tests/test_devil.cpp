@@ -22,8 +22,9 @@ int main() {
 
   Devil forced(42, 1);
   std::set<std::string> known_keys;
+  int previous_difficulty=0;
   for (int window = 1; window <= 4; ++window) {
-    const auto proposal = forced.draw(window * 3, window * 720, world, agents,
+    const auto proposal = forced.draw(window * 90, window * 720, world, agents,
                                       known_keys);
     assert(proposal.has_value());
     std::string error;
@@ -32,6 +33,11 @@ int main() {
     assert((*proposal)["real_world_basis"].is_string());
     assert(!(*proposal)["current_mitigations"].empty());
     assert((*proposal)["future_pressure"].is_string());
+    assert((*proposal)["adaptation"]["stability_score"].is_number_integer());
+    assert((*proposal)["adaptation"]["pressure_level"].is_number_integer());
+    assert((*proposal)["adaptation"]["rationale"].is_string());
+    assert((*proposal)["difficulty"].get<int>()>=previous_difficulty);
+    previous_difficulty=(*proposal)["difficulty"].get<int>();
     assert(known_keys.insert((*proposal)["evolution_key"].get<std::string>()).second);
   }
 
@@ -48,6 +54,19 @@ int main() {
     }
   }
   assert(appearances >= 4 && appearances <= 20);
+
+  World stable_world(42);
+  const Position camp{13,2};assert(stable_world.place_campfire(camp));assert(stable_world.create_shelter({14,2}));
+  for(int index=0;index<20;++index)assert(stable_world.store_food(camp,FoodItem{FoodType::Roots,25,false,0,5}));
+  for(auto& agent:agents){agent.health=100;agent.hunger=10;agent.thirst=10;agent.equipped_tool=Tool{};}
+  Devil fragile_devil(9,1),stable_devil(9,1);
+  std::vector<Agent> fragile=agents;for(auto& agent:fragile){agent.health=35;agent.hunger=85;agent.thirst=85;agent.equipped_tool.reset();}
+  const auto fragile_pressure=fragile_devil.draw(3,720,world,fragile,{});
+  const auto stable_pressure=stable_devil.draw(360,86400,stable_world,agents,{"past-1","past-2","past-3"});
+  assert(fragile_pressure&&stable_pressure);
+  assert((*stable_pressure)["adaptation"]["stability_score"].get<int>()>
+         (*fragile_pressure)["adaptation"]["stability_score"].get<int>());
+  assert((*stable_pressure)["difficulty"].get<int>()>(*fragile_pressure)["difficulty"].get<int>());
 
   const std::filesystem::path directory = "/tmp/autopoiesis-devil-tests";
   std::filesystem::remove_all(directory);

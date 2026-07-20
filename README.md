@@ -186,6 +186,8 @@ La population vieillit chaque jour. Tous les deux mois, un foyer abrité et suff
 
 Les dangers actifs sont annoncés avant de frapper. Loup territorial, tempête, départ de feu, accident lié à l'épuisement et pénurie conservent position, sévérité, cause et mitigation. L'alerte apparaît dans la perception et sur la carte ; les effets ne commencent que le lendemain et un abri protège des dangers climatiques locaux.
 
+Le Diable adapte ses contraintes à la trajectoire du foyer. Il calcule une stabilité sur la santé, les besoins, les réserves, les abris et les outils, puis combine ce score au temps et aux pressions déjà rencontrées. Il choisit la difficulté la plus haute encore admissible parmi les clés inédites et affiche son raisonnement avant validation.
+
 Les bilans sont dans `data/ai_reports.jsonl` et les demandes dans
 `data/feature_requests.jsonl`. Chaque événement structuré conserve aussi sa date
 calendaire et son climat. Le jour absolu, le mois et l'année continuent entre
