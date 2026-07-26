@@ -1,5 +1,6 @@
 #pragma once
 #include "calendar.hpp"
+#include "capability_registry.hpp"
 #include "types.hpp"
 #include <random>
 
@@ -59,10 +60,12 @@ class World {
   int stored_iron_ore(Position campfire_position) const;
   bool consume_stored_wood(Position campfire_position, int amount);
   int stored_item(Position campfire_position, CraftItem item) const;
+  int stored_item(Position campfire_position, const std::string& item) const;
   int stored_crafted_items(Position campfire_position) const;
   std::vector<std::string> craftable_recipes(Position campfire_position) const;
   bool craft(Position campfire_position, const std::string& recipe_key);
   bool take_stored_item(Position campfire_position, CraftItem item);
+  bool take_stored_item(Position campfire_position, const std::string& item);
   bool can_designate_building(Position site, Position campfire_position, BuildingType type) const;
   bool designate_building(Position site, Position campfire_position, BuildingType type);
   std::optional<Building> building(Position site) const;
@@ -93,7 +96,7 @@ class World {
     int wood_stockpile{};
     int branch_stockpile{};
     int iron_ore_stockpile{};
-    std::map<CraftItem,int> crafted_stockpile;
+    std::map<std::string,int> crafted_stockpile;
     std::vector<FoodItem> food_stockpile;
   };
   std::map<std::pair<int,int>, ConstructionCell> construction_cells_;

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "recipes": [
+    {"id":"wooden_handle","cost":{"wood":1,"branches":0,"iron_ore":0,"items":{}},"output":{"item":"wooden_handle","quantity":1}},
+    {"id":"charcoal","cost":{"wood":2,"branches":0,"iron_ore":0,"items":{}},"output":{"item":"charcoal","quantity":1}},
+    {"id":"rope","cost":{"wood":0,"branches":3,"iron_ore":0,"items":{}},"output":{"item":"rope","quantity":1}},
+    {"id":"iron_ingot","cost":{"wood":0,"branches":0,"iron_ore":2,"items":{"charcoal":1}},"output":{"item":"iron_ingot","quantity":1}},
+    {"id":"axe","cost":{"wood":0,"branches":0,"iron_ore":0,"items":{"wooden_handle":1,"iron_ingot":1}},"output":{"item":"axe","quantity":1}}
+  ]
+}

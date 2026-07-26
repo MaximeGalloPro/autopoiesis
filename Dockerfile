@@ -37,10 +37,12 @@ COPY --from=web-build --chown=bun:bun /web/node_modules /app/web/node_modules
 COPY --from=web-build --chown=bun:bun /web/dist /app/web/dist
 COPY --from=web-build --chown=bun:bun /web/server /app/web/server
 COPY --from=web-build --chown=bun:bun /web/src /app/web/src
+COPY --from=cpp-build --chown=bun:bun /src/capabilities /app/capabilities
 
 ENV PORT=3000 \
     AUTOPOIESIS_BACKEND_PATH=/app/build/autopoiesis_backend \
-    AUTOPOIESIS_DATA_DIR=/data
+    AUTOPOIESIS_DATA_DIR=/data \
+    AUTOPOIESIS_CAPABILITY_ROOT=/app/capabilities
 USER bun
 EXPOSE 3000
 CMD ["bun", "run", "--cwd", "/app/web", "start"]

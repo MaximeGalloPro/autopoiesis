@@ -46,6 +46,14 @@ Une contrainte du Diable doit être compatible avec les capacités déjà active
 
 Ensemble cohérent de règles déterministes ajoutées au moteur : nouvelle ressource, nouvel objet, nouvelle action, nouveau besoin, transformation du monde ou interaction entre personnages. Un mécanisme doit être livré avec ses tests avant d'être considéré actif.
 
+### Paquet de capacité
+
+Définition déclarative versionnée d'une capacité, de ses coûts, préconditions
+et effets. Le registre du moteur convertit le paquet vers des types fermés et
+refuse toute clé, référence ou quantité inconnue. Un paquet ne peut jamais
+exécuter du code, accéder au réseau ou modifier directement le monde ; il
+reste candidat jusqu'à validation, vérification et activation au checkpoint.
+
 ### Capacité
 
 Action ou aptitude disponible pour un personnage lorsque ses préconditions locales sont satisfaites. Une capacité peut dépendre d'un mécanisme, d'un outil, d'une ressource, d'un état interne ou d'une connaissance acquise.

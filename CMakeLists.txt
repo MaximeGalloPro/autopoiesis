@@ -22,8 +22,9 @@ add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
     src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
     src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp
-    src/web_interface.cpp)
+    src/web_interface.cpp src/capability_registry.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
+target_compile_definitions(autopoiesis_core PRIVATE AUTOPOIESIS_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_options(autopoiesis_core PRIVATE -Wall -Wextra -Wpedantic)
 

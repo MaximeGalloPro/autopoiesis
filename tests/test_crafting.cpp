@@ -1,7 +1,11 @@
 #include "autopoiesis/simulation.hpp"
+#include "autopoiesis/capability_registry.hpp"
 
 #include <algorithm>
 #include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
 
 using namespace apo;
 
@@ -21,6 +25,26 @@ static Decision craft(std::string recipe) {
 }
 
 int main() {
+  const auto registry_path=std::filesystem::temp_directory_path()/"autopoiesis-capabilities-test.json";
+  {
+    std::ofstream output(registry_path);
+    output << R"({"schema_version":1,"recipes":[{"id":"woven_mat","cost":{"wood":0,"branches":2,"iron_ore":0,"items":{}},"output":{"item":"woven_mat","quantity":1}}]})";
+  }
+  const auto custom=CapabilityRegistry::load(registry_path);
+  assert(custom.recipes().size()==1&&custom.recipes().front().output=="woven_mat");
+  assert(custom.recipe("woven_mat")!=nullptr);
+  assert(custom.manifest()["recipes"].size()==1);
+  std::filesystem::remove(registry_path);
+  bool invalid_rejected=false;
+  {
+    std::ofstream output(registry_path);
+    output << R"({"schema_version":1,"recipes":[{"id":"same","cost":{"items":{},"wood":0,"branches":0,"iron_ore":0},"output":{"item":"one","quantity":1}},{"id":"same","cost":{"items":{},"wood":0,"branches":0,"iron_ore":0},"output":{"item":"two","quantity":1}}]})";
+  }
+  try { static_cast<void>(CapabilityRegistry::load(registry_path)); }
+  catch (const std::runtime_error&) { invalid_rejected=true; }
+  std::filesystem::remove(registry_path);
+  assert(invalid_rejected);
+
   const auto& recipes=crafting_recipes();
   assert(std::ranges::any_of(recipes,[](const CraftingRecipe& recipe){return recipe.key=="wooden_handle";}));
   assert(std::ranges::any_of(recipes,[](const CraftingRecipe& recipe){return recipe.key=="charcoal";}));
@@ -68,4 +92,12 @@ int main() {
   assert(restored.stored_item(fire,CraftItem::WoodenHandle)==1);
   assert(restored.stored_item(fire,CraftItem::Charcoal)==1);
   assert(restored.stored_item(fire,CraftItem::Rope)==1);
+
+  auto legacy_checkpoint=world.checkpoint();
+  for(auto& cell:legacy_checkpoint["construction"])
+    for(auto& item:cell["crafted_stockpile"])
+      if(item["item"]=="wooden_handle")item["item"]=static_cast<int>(CraftItem::WoodenHandle);
+  World legacy_restored(8);
+  legacy_restored.restore_checkpoint(legacy_checkpoint);
+  assert(legacy_restored.stored_item(fire,CraftItem::WoodenHandle)==1);
 }

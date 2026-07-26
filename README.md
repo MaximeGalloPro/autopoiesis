@@ -62,6 +62,29 @@ survie, la carte connue, les relations et les générateurs pseudo-aléatoires
 dans `data/simulation-state.json`. Les bilans sont journalisés dans
 `data/ai_reports.jsonl` et les demandes dans `data/feature_requests.jsonl`.
 
+Les recettes de fabrication sont stockées dans
+[`capabilities/core/recipes.json`](capabilities/core/recipes.json). Le registre
+C++ les valide au démarrage, accepte les identifiants d’objets déclaratifs et
+conserve la lecture des anciens checkpoints où les objets étaient encodés par
+enum. Le chemin peut être remplacé par `AUTOPOIESIS_CAPABILITY_ROOT`. Les
+actions et leurs invariants restent exécutés par le moteur ; le fichier de
+capacités ne contient aucune logique arbitraire.
+
+## Monde et vie collective
+
+Le monde torique `40 × 24` fait évoluer localement le climat, les ressources,
+la faune et les dangers annoncés. Le foyer collectif centralise nourriture et
+matériaux, permet cuisine, fabrication, réparation et chantiers, et soutient les
+activités sociales. Les personnages transportent un inventaire borné, acquièrent
+des compétences transmissibles, développent des relations et des émotions
+causales, et conservent blessures, maladies et convalescence.
+
+La population vieillit et peut connaître arrivées, naissances, départs et morts.
+Le Diable adapte ses contraintes à la stabilité observée du foyer, au temps et
+aux pressions déjà rencontrées, sans contourner la validation humaine ni les
+gardes déterministes du moteur. Tous ces états restent persistants et sont
+projetés en lecture seule dans l’observatoire web.
+
 ## Démarrage normal
 
 Prérequis : Docker avec Compose, CMake, un compilateur C++20 et Bun 1.3 ou plus
