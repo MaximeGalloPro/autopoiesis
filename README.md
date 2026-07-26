@@ -62,6 +62,14 @@ survie, la carte connue, les relations et les générateurs pseudo-aléatoires
 dans `data/simulation-state.json`. Les bilans sont journalisés dans
 `data/ai_reports.jsonl` et les demandes dans `data/feature_requests.jsonl`.
 
+Les recettes de fabrication sont stockées dans
+[`capabilities/core/recipes.json`](capabilities/core/recipes.json). Le registre
+C++ les valide au démarrage, accepte les identifiants d’objets déclaratifs et
+conserve la lecture des anciens checkpoints où les objets étaient encodés par
+enum. Le chemin peut être remplacé par `AUTOPOIESIS_CAPABILITY_ROOT`. Les
+actions et leurs invariants restent exécutés par le moteur ; le fichier de
+capacités ne contient aucune logique arbitraire.
+
 ## Monde et vie collective
 
 Le monde torique `40 × 24` fait évoluer localement le climat, les ressources,

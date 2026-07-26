@@ -32,24 +32,6 @@ struct SkillProgress {
   int level{};
   friend bool operator==(const SkillProgress&,const SkillProgress&)=default;
 };
-struct CraftingRecipe {
-  std::string key;
-  int wood{};
-  int branches{};
-  int iron_ore{};
-  std::vector<std::pair<CraftItem,int>> items;
-  CraftItem output{CraftItem::WoodenHandle};
-  int output_count{1};
-};
-inline const std::vector<CraftingRecipe>& crafting_recipes() {
-  static const std::vector<CraftingRecipe> recipes{
-      {"wooden_handle",1,0,0,{},CraftItem::WoodenHandle,1},
-      {"charcoal",2,0,0,{},CraftItem::Charcoal,1},
-      {"rope",0,3,0,{},CraftItem::Rope,1},
-      {"iron_ingot",0,0,2,{{CraftItem::Charcoal,1}},CraftItem::IronIngot,1},
-      {"axe",0,0,0,{{CraftItem::WoodenHandle,1},{CraftItem::IronIngot,1}},CraftItem::Axe,1}};
-  return recipes;
-}
 inline std::string craft_item_name(CraftItem item) { switch(item){case CraftItem::WoodenHandle:return "wooden_handle";case CraftItem::Charcoal:return "charcoal";case CraftItem::Rope:return "rope";case CraftItem::IronIngot:return "iron_ingot";case CraftItem::Axe:return "axe";}return "unknown"; }
 enum class AnimalType { Rabbit, Deer, Boar, Wolf, Fish };
 enum class DecisionType { Action, Blocked };
