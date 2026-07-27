@@ -66,6 +66,15 @@ std::filesystem::path default_path() {
   return std::filesystem::path("capabilities/core/recipes.json");
 #endif
 }
+std::filesystem::path action_path() {
+  if (const char* configured = std::getenv("AUTOPOIESIS_CAPABILITY_ROOT"); configured && *configured)
+    return std::filesystem::path(configured) / "core/actions.json";
+#ifdef AUTOPOIESIS_SOURCE_ROOT
+  return std::filesystem::path(AUTOPOIESIS_SOURCE_ROOT) / "capabilities/core/actions.json";
+#else
+  return std::filesystem::path("capabilities/core/actions.json");
+#endif
+}
 }
 
 CapabilityRegistry CapabilityRegistry::load(const std::filesystem::path& path) {
@@ -103,5 +112,38 @@ json CapabilityRegistry::manifest() const {
 
 const std::vector<CraftingRecipe>& crafting_recipes() {
   return CapabilityRegistry::defaults().recipes();
+}
+
+ActionRegistry ActionRegistry::load(const std::filesystem::path& path) {
+  std::ifstream input(path);
+  if (!input) throw std::runtime_error("cannot open capability action registry: " + path.string());
+  json document; input >> document;
+  if (!document.is_object() || document.value("schema_version", 0) != 1 ||
+      !document.contains("actions") || !document["actions"].is_array() || document["actions"].empty())
+    throw std::runtime_error("invalid capability action document");
+  std::vector<ActionDefinition> actions;
+  for (const auto& value : document["actions"]) {
+    if (!value.is_object() || !positive_identifier(value.value("id", json{})) ||
+        !value.value("operation", json{}).is_string())
+      throw std::runtime_error("invalid capability action entry");
+    const auto id = value["id"].get<std::string>();
+    const auto operation = value["operation"].get<std::string>();
+    if (operation != "craft_recipe") throw std::runtime_error("unknown capability action operation " + operation);
+    if (std::any_of(actions.begin(), actions.end(), [&](const auto& candidate) { return candidate.id == id; }))
+      throw std::runtime_error("duplicate capability action " + id);
+    actions.push_back({id, operation});
+  }
+  return ActionRegistry(std::move(actions));
+}
+
+const ActionRegistry& ActionRegistry::defaults() {
+  static const ActionRegistry registry = ActionRegistry::load(action_path());
+  return registry;
+}
+
+const ActionDefinition* ActionRegistry::action(const std::string& id) const {
+  const auto found = std::find_if(actions_.begin(), actions_.end(),
+                                  [&](const auto& candidate) { return candidate.id == id; });
+  return found == actions_.end() ? nullptr : &*found;
 }
 }

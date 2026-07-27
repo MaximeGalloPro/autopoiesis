@@ -17,6 +17,22 @@ struct CraftingRecipe {
   int output_count{1};
 };
 
+struct ActionDefinition {
+  std::string id;
+  std::string operation;
+};
+
+class ActionRegistry {
+ public:
+  static ActionRegistry load(const std::filesystem::path& path);
+  static const ActionRegistry& defaults();
+  explicit ActionRegistry(std::vector<ActionDefinition> actions) : actions_(std::move(actions)) {}
+  const ActionDefinition* action(const std::string& id) const;
+
+ private:
+  std::vector<ActionDefinition> actions_;
+};
+
 class CapabilityRegistry {
  public:
   static CapabilityRegistry load(const std::filesystem::path& path);
