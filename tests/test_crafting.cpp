@@ -29,6 +29,10 @@ int main() {
   const auto registry_path=registry_root/"core/recipes.json";
   std::filesystem::create_directories(registry_path.parent_path());
   {
+    std::ofstream output(registry_root/"core/actions.json");
+    output << R"({"schema_version":1,"actions":[{"id":"craft_camp_item","operation":"craft_recipe"}]})";
+  }
+  {
     std::ofstream output(registry_path);
     output << R"({"schema_version":1,"recipes":[
       {"id":"wooden_handle","cost":{"wood":1,"branches":0,"iron_ore":0,"items":{}},"output":{"item":"wooden_handle","quantity":1}},
@@ -41,6 +45,7 @@ int main() {
   }
   setenv("AUTOPOIESIS_CAPABILITY_ROOT",registry_root.c_str(),1);
   const auto custom=CapabilityRegistry::load(registry_path);
+  assert(ActionRegistry::load(registry_root/"core/actions.json").action("craft_camp_item") != nullptr);
   assert(custom.recipes().size()==6&&custom.recipe("woven_mat")!=nullptr);
   assert(custom.recipes().back().output=="woven_mat");
   assert(custom.manifest()["recipes"].size()==6);

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "actions": [
+    {"id": "craft_camp_item", "operation": "craft_recipe"}
+  ]
+}
