@@ -39,32 +39,36 @@ class FakeServices implements AiServiceController {
 }
 
 describe("BFF Elysia", () => {
-  test("protège toute la surface web par Basic Auth", async () => {
+  test("protège toute la surface web par une session à mot de passe seul", async () => {
     const manager = new FakeManager();
     const app = createApp(manager as unknown as BackendProcessManager, {
       serveStatic: false,
-      basicAuth: { password: "test-password" },
+      passwordAuth: { password: "test-password" },
     });
     const healthUrl = `http://localhost${BROWSER_TRANSPORT_PREFIX}/health`;
 
     const anonymous = await app.handle(new Request(healthUrl));
     expect(anonymous.status).toBe(401);
-    expect(anonymous.headers.get("www-authenticate")).toBe('Basic realm="Autopoiesis", charset="UTF-8"');
+    expect(anonymous.headers.get("www-authenticate")).toBeNull();
 
     const rejected = await app.handle(new Request(healthUrl, {
       headers: { authorization: `Basic ${btoa(":incorrect")}` },
     }));
     expect(rejected.status).toBe(401);
 
+    const login = await app.handle(new Request(`http://localhost/__auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "password=test-password",
+    }));
+    expect(login.status).toBe(303);
+    const session = login.headers.get("set-cookie");
+    expect(session).toContain("autopoiesis_session=");
+
     const accepted = await app.handle(new Request(healthUrl, {
-      headers: { authorization: `Basic ${btoa(":test-password")}` },
+      headers: { cookie: session?.split(";")[0] ?? "" },
     }));
     expect(accepted.status).toBe(200);
-
-    const arbitraryUser = await app.handle(new Request(healthUrl, {
-      headers: { authorization: `Basic ${btoa("ignored:test-password")}` },
-    }));
-    expect(arbitraryUser.status).toBe(200);
   });
 
   test("coalesce les instantanés sans retarder une garde", async () => {
@@ -85,7 +89,7 @@ describe("BFF Elysia", () => {
 
   test("expose le transport navigateur et les alias API", async () => {
     const manager = new FakeManager();
-    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, basicAuth: false });
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, passwordAuth: false });
     for (const prefix of [BROWSER_TRANSPORT_PREFIX, "/api"]) {
       const health = await app.handle(new Request(`http://localhost${prefix}/health`));
       expect(health.status).toBe(200);
@@ -99,7 +103,7 @@ describe("BFF Elysia", () => {
   test("expose des commandes bornées pour les services IA", async () => {
     const manager = new FakeManager();
     const services = new FakeServices();
-    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, services, basicAuth: false });
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, services, passwordAuth: false });
     const endpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/services`;
     const initial = await app.handle(new Request(endpoint));
     expect(initial.status).toBe(200);
@@ -123,7 +127,7 @@ describe("BFF Elysia", () => {
 
   test("valide strictement la forme et les bornes des commandes", async () => {
     const manager = new FakeManager();
-    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, basicAuth: false });
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, passwordAuth: false });
     const send = (body: unknown) => app.handle(new Request(`http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -143,7 +147,7 @@ describe("BFF Elysia", () => {
     const app = createApp(manager as unknown as BackendProcessManager, {
       serveStatic: false,
       safePreview: true,
-      basicAuth: false,
+      passwordAuth: false,
     });
     const response = await app.handle(new Request(`http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`, {
       method: "POST",
