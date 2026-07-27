@@ -20,7 +20,6 @@ const contentTypes: Record<string, string> = {
 };
 
 type BasicAuth = {
-  username: string;
   password: string;
 };
 
@@ -36,9 +35,10 @@ function hasValidBasicAuth(request: Request, credentials: BasicAuth): boolean {
   try {
     const decoded = Buffer.from(authorization.slice(6), "base64").toString("utf8");
     const separator = decoded.indexOf(":");
-    if (separator < 0) return false;
-    return sameCredential(decoded.slice(0, separator), credentials.username)
-      && sameCredential(decoded.slice(separator + 1), credentials.password);
+    // Basic Auth still transports a username field, but it is deliberately
+    // ignored: the password is the sole credential for this private preview.
+    const password = separator < 0 ? decoded : decoded.slice(separator + 1);
+    return sameCredential(password, credentials.password);
   } catch {
     return false;
   }
@@ -172,7 +172,6 @@ export function createApp(
   const basicAuth = options.basicAuth === undefined
     ? configuredPassword
       ? {
-          username: process.env.BASIC_AUTH_USERNAME || "raclette",
           password: configuredPassword,
         }
       : false

@@ -193,9 +193,9 @@ Les variables principales sont documentées dans [`.env.example`](.env.example).
 jamais envoyé au navigateur, écrit dans les logs ou incorporé dans une image.
 
 Lorsque `BASIC_AUTH_PASSWORD` est défini, Elysia protège l’intégralité de
-l’observatoire, y compris les routes HTTP et l’ouverture WebSocket. L’identifiant
-vient de `BASIC_AUTH_USERNAME` et vaut `raclette` par défaut. Ces identifiants
-doivent rester dans `.env` ou dans le gestionnaire de secrets du déploiement.
+l’observatoire, y compris les routes HTTP et l’ouverture WebSocket. Le nom
+utilisateur Basic Auth est ignoré : seul le mot de passe est vérifié. Le mot de
+passe doit rester dans `.env` ou dans le gestionnaire de secrets du déploiement.
 
 ## Développement et vérification
 

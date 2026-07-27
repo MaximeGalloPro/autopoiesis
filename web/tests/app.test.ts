@@ -43,7 +43,7 @@ describe("BFF Elysia", () => {
     const manager = new FakeManager();
     const app = createApp(manager as unknown as BackendProcessManager, {
       serveStatic: false,
-      basicAuth: { username: "test-user", password: "test-password" },
+      basicAuth: { password: "test-password" },
     });
     const healthUrl = `http://localhost${BROWSER_TRANSPORT_PREFIX}/health`;
 
@@ -52,14 +52,19 @@ describe("BFF Elysia", () => {
     expect(anonymous.headers.get("www-authenticate")).toBe('Basic realm="Autopoiesis", charset="UTF-8"');
 
     const rejected = await app.handle(new Request(healthUrl, {
-      headers: { authorization: `Basic ${btoa("test-user:incorrect")}` },
+      headers: { authorization: `Basic ${btoa(":incorrect")}` },
     }));
     expect(rejected.status).toBe(401);
 
     const accepted = await app.handle(new Request(healthUrl, {
-      headers: { authorization: `Basic ${btoa("test-user:test-password")}` },
+      headers: { authorization: `Basic ${btoa(":test-password")}` },
     }));
     expect(accepted.status).toBe(200);
+
+    const arbitraryUser = await app.handle(new Request(healthUrl, {
+      headers: { authorization: `Basic ${btoa("ignored:test-password")}` },
+    }));
+    expect(arbitraryUser.status).toBe(200);
   });
 
   test("coalesce les instantanés sans retarder une garde", async () => {
