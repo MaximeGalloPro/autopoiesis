@@ -236,15 +236,17 @@ function EmptyWorld() {
 
 export function WorldScene({
   snapshot,
+  awaitingDawn = false,
   selected,
   onSelect,
 }: {
   snapshot: WorldSnapshot | null;
+  awaitingDawn?: boolean;
   selected: EntitySelection | null;
   onSelect: (selection: EntitySelection) => void;
 }) {
   const cells = snapshot?.cells ?? [];
-  const isNight = snapshot?.phase === "night";
+  const isNight = snapshot?.phase === "night" && !awaitingDawn;
   const cameraPosition = useMemo<[number, number, number]>(() => [0, 27, 25], []);
   return (
     <div className="world-canvas" role="img" aria-label="Vue tridimensionnelle du monde torique 40 par 24">

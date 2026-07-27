@@ -10,6 +10,7 @@ class FakeManager {
   commands: EngineCommand[] = [];
   current: PublicState = {
     state: worldSnapshot(),
+    awaiting_dawn: false,
     activity: null,
     validation: null,
     evolution: null,

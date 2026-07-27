@@ -184,7 +184,7 @@ export default function App() {
     : null;
 
   return (
-    <div className={`app-shell ${snapshot?.phase === "night" ? "night" : "day"}`}>
+    <div className={`app-shell ${snapshot?.phase === "night" && !data.awaiting_dawn ? "night" : "day"}`}>
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>
@@ -192,7 +192,7 @@ export default function App() {
         </div>
         <div className="world-facts">
           <div className="fact date-fact"><CalendarDays /><span><small>Calendrier</small><strong>{snapshot ? `An ${snapshot.date.year} · Mois ${snapshot.date.month} · Jour ${snapshot.date.day_of_month}` : "En attente"}</strong></span></div>
-          <div className="fact"><Sun /><span><small>Phase · {snapshot ? seasonLabels[snapshot.date.season] : "—"}</small><strong>{snapshot?.phase === "night" ? "Nuit" : snapshot ? "Jour" : "—"}</strong></span></div>
+          <div className="fact"><Sun /><span><small>Phase · {snapshot ? seasonLabels[snapshot.date.season] : "—"}</small><strong>{data.awaiting_dawn ? "Aube" : snapshot?.phase === "night" ? "Nuit" : snapshot ? "Jour" : "—"}</strong></span></div>
           <div className="fact"><CloudRain /><span><small>Climat</small><strong>{snapshot ? `${snapshot.climate.temperature_c} °C · ${snapshot.climate.condition}` : "—"}</strong></span></div>
           <div className="fact compact"><Warehouse /><span><small>Réserve</small><strong>{campFood}</strong></span></div>
         </div>
@@ -208,14 +208,14 @@ export default function App() {
           <div className="world-overlay top-left">
             <span className="eyebrow">Monde torique · 40 × 24</span>
             <strong>{snapshot ? `Jour absolu ${snapshot.date.absolute_day}` : "Connexion au moteur"}</strong>
-            <span>Cycle {snapshot?.simulation_cycle.toLocaleString("fr-FR") ?? "—"}</span>
+            <span>{data.awaiting_dawn ? "Aube prochaine" : `Cycle ${snapshot?.simulation_cycle.toLocaleString("fr-FR") ?? "—"}`}</span>
           </div>
           <div className="world-overlay top-right phase-orb" aria-label={`Progression de la journée ${Math.round(dayProgress)} %`}>
-            <div style={{ "--progress": `${dayProgress * 3.6}deg` } as React.CSSProperties}><span>{snapshot?.phase === "night" ? "☾" : "☀"}</span></div>
-            <p><strong>{Math.round(dayProgress)}%</strong><small>de la journée</small></p>
+            <div style={{ "--progress": `${dayProgress * 3.6}deg` } as React.CSSProperties}><span>{data.awaiting_dawn ? "☀" : snapshot?.phase === "night" ? "☾" : "☀"}</span></div>
+            <p><strong>{data.awaiting_dawn ? "Aube" : `${Math.round(dayProgress)}%`}</strong><small>{data.awaiting_dawn ? "prochaine" : "de la journée"}</small></p>
           </div>
           <Suspense fallback={<div className="world-canvas" aria-label="Chargement de la scène tridimensionnelle" />}>
-            <WorldScene snapshot={snapshot} selected={selected} onSelect={setSelected} />
+            <WorldScene snapshot={snapshot} awaitingDawn={data.awaiting_dawn} selected={selected} onSelect={setSelected} />
           </Suspense>
           <div className="world-legend" aria-label="Légende du monde">
             <span><i className="food" />Nourriture</span><span><i className="wood" />Bois</span><span><i className="fiber" />Fibres</span><span><i className="shelter" />Abri</span><span><i className="fire" /><Flame />Feu</span><span><i className="stock" />Réserve commune</span>

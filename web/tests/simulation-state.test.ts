@@ -5,6 +5,7 @@ import { worldSnapshot } from "./fixtures";
 
 const staleState = (): PublicState => ({
   state: worldSnapshot({ simulation_cycle: 719 }),
+  awaiting_dawn: false,
   activity: {
     kind: "evolution_request",
     agent_id: "ada",
@@ -64,5 +65,14 @@ describe("projection temps réel", () => {
     expect(projected.state).toBe(current.state);
     expect(projected.validation).toBe(prompt);
     expect(projected.activity).toBeNull();
+  });
+
+  test("présente l'attente jusqu'à l'aube sans modifier l'instantané", () => {
+    const current = staleState();
+    const projected = applyEvent(current, { type: "dawn_wait", payload: { active: true } });
+    expect(projected.awaiting_dawn).toBe(true);
+    expect(projected.state).toBe(current.state);
+    const resumed = applyEvent(projected, { type: "state", payload: worldSnapshot({ simulation_cycle: 720 }) });
+    expect(resumed.awaiting_dawn).toBe(false);
   });
 });

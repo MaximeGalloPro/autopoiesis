@@ -102,6 +102,7 @@ export class BackendProcessManager {
   private stopping = false;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private state: WorldSnapshot | null = null;
+  private awaitingDawn = false;
   private activity: AiActivity | null = null;
   private validation: ValidationPrompt | null = null;
   private evolution: EvolutionProgress | null = null;
@@ -179,6 +180,7 @@ export class BackendProcessManager {
   snapshot(): PublicState {
     return {
       state: this.state,
+      awaiting_dawn: this.awaitingDawn,
       activity: this.activity,
       validation: this.validation,
       evolution: this.evolution,
@@ -204,12 +206,14 @@ export class BackendProcessManager {
         break;
       case "state":
         this.state = event.payload;
+        this.awaitingDawn = false;
         this.activity = null;
         this.validation = null;
         this.evolution = null;
         this.evolutionCompletion = null;
         this.recompilation = null;
         break;
+      case "dawn_wait": this.awaitingDawn = event.payload.active; break;
       case "activity": this.activity = event.payload; break;
       case "validation":
         this.validation = event.payload;

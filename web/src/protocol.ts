@@ -248,6 +248,7 @@ export interface AiServicesState {
 
 export interface PublicState {
   state: WorldSnapshot | null;
+  awaiting_dawn: boolean;
   activity: AiActivity | null;
   validation: ValidationPrompt | null;
   evolution: EvolutionProgress | null;
@@ -259,6 +260,7 @@ export interface PublicState {
 
 export type BackendEvent =
   | { type: "state"; payload: WorldSnapshot }
+  | { type: "dawn_wait"; payload: { active: boolean } }
   | { type: "runtime"; payload: RuntimeStatus }
   | { type: "activity"; payload: AiActivity | null }
   | { type: "validation"; payload: ValidationPrompt | null }
@@ -462,6 +464,10 @@ function isNotice(value: unknown): value is Extract<BackendEvent, { type: "notic
     && typeof value.message === "string";
 }
 
+function isDawnWait(value: unknown): value is { active: boolean } {
+  return isRecord(value) && typeof value.active === "boolean";
+}
+
 export function parseBackendEvent(
   line: string,
   runtime: RuntimeStatus = DEFAULT_RUNTIME_STATUS,
@@ -481,6 +487,8 @@ export function parseBackendEvent(
         const snapshot = normalizeSnapshot(parsed.payload, runtime);
         return snapshot ? { type: "state", payload: snapshot } : null;
       }
+      case "dawn_wait": return isDawnWait(parsed.payload)
+        ? { type: "dawn_wait", payload: parsed.payload } : null;
       case "activity": return isActivity(parsed.payload)
         ? { type: "activity", payload: parsed.payload } : null;
       case "validation_prompt": {
