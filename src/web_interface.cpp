@@ -384,6 +384,9 @@ bool WebInterface::present(const UiSnapshot& snapshot) {
 }
 
 bool WebInterface::idle_for(int milliseconds) {
+  // Keep the authoritative end-of-day snapshot intact. The browser can show
+  // this waiting interval as a transition toward dawn without advancing time.
+  emit("dawn_wait",{{"active",true}});
   const auto deadline=std::chrono::steady_clock::now()+
       std::chrono::milliseconds(std::max(0,milliseconds));
   do{

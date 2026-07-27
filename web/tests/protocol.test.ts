@@ -53,4 +53,10 @@ describe("protocole du moteur", () => {
     expect(toricDistance({ x: 4, y: 0 }, { x: 4, y: 23 })).toBe(1);
     expect(toricDistance({ x: 2, y: 2 }, { x: 7, y: 8 })).toBe(11);
   });
+
+  test("accepte le signal d'attente jusqu'à l'aube", () => {
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "dawn_wait", payload: { active: true } })}`))
+      .toEqual({ type: "dawn_wait", payload: { active: true } });
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "dawn_wait", payload: { active: "true" } })}`)).toBeNull();
+  });
 });

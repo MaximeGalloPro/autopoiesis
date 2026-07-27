@@ -4,6 +4,7 @@ import { browserTransportUrl } from "../transport";
 
 const emptyState: PublicState = {
   state: null,
+  awaiting_dawn: false,
   activity: null,
   validation: null,
   evolution: null,
@@ -19,12 +20,14 @@ export function applyEvent(current: PublicState, event: BackendEvent): PublicSta
     case "state": return {
       ...base,
       state: event.payload,
+      awaiting_dawn: false,
       activity: null,
       validation: null,
       evolution: null,
       evolution_completion: null,
       recompilation: null,
     };
+    case "dawn_wait": return { ...base, awaiting_dawn: event.payload.active };
     case "runtime": return {
       ...base,
       state: current.state ? {

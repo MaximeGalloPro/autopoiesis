@@ -137,15 +137,19 @@ int main() {
   assert(runtime.simulation_delay_ms(0)==10000);
   assert(!runtime.paused());
   assert(runtime.api_enabled());
+  assert(runtime.idle_for(0));
   const auto runtime_events=emitted_events(runtime_output.str());
   int snapshot_events=0;
+  bool saw_dawn_wait=false;
   bool rejected_speed=false;
   for(const auto& event:runtime_events){
     if(event.at("type")=="snapshot")++snapshot_events;
+    if(event.at("type")=="dawn_wait"&&event.at("payload").value("active",false))saw_dawn_wait=true;
     if(event.at("type")=="status"&&!event.at("payload").value("accepted",true))
       rejected_speed=event.at("payload").value("message","")=="unsupported_speed";
   }
   assert(snapshot_events==1);
+  assert(saw_dawn_wait);
   assert(rejected_speed);
 
   std::istringstream validation_input(
