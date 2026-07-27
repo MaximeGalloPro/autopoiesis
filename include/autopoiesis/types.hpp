@@ -138,6 +138,8 @@ struct EcologyState {
 };
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};
+  // Absolute simulation tick at which this character may choose its next action.
+  int next_action_cycle{};
   Personality personality; Attributes attributes; int thirst{20}; std::deque<std::string> memories; bool alive{true}; int sleeping_days{0}; int critical_hunger_days{0}; int critical_thirst_days{0};
   void remember(const std::string& s) { memories.push_back(s); const auto maximum=static_cast<std::size_t>(5+attributes.memory/10); while (memories.size() > maximum) memories.pop_front(); }
   std::map<std::pair<int,int>, Terrain> map_memory;

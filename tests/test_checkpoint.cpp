@@ -41,6 +41,7 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].hunger==right[index].hunger);
     assert(left[index].thirst==right[index].thirst);
     assert(left[index].fatigue==right[index].fatigue);
+    assert(left[index].next_action_cycle==right[index].next_action_cycle);
     assert(left[index].memories==right[index].memories);
     assert(left[index].map_memory==right[index].map_memory);
     assert(left[index].map_visit_counts==right[index].map_visit_counts);
