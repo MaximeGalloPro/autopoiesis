@@ -1,5 +1,6 @@
 #pragma once
 #include "calendar.hpp"
+#include "capability_registry.hpp"
 #include "decision.hpp"
 #include "devil.hpp"
 #include "logger.hpp"
@@ -77,6 +78,9 @@ class Simulation {
   const ClimateState& climate() const { return climate_; }
   int simulation_cycle() const { return simulation_cycle_; }
   bool restored_checkpoint() const { return restored_checkpoint_; }
+  const std::vector<ActiveFeature>& active_features() const { return active_features_; }
+  bool feature_active(const std::string& key, int version = 0) const;
+  bool activate_feature(const std::string& key, int version = 0);
   void save_checkpoint() const;
   friend struct SimulationTestAccess;
  private:
@@ -91,6 +95,7 @@ class Simulation {
   std::map<std::string,std::vector<std::string>> action_history_;
   std::map<std::string,json> planning_history_;
   std::string checkpoint_path_;
+  std::vector<ActiveFeature> active_features_;
   bool restored_checkpoint_{};
   bool run_day(IUserInterface* interface);
   void load_checkpoint();
