@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { extname, resolve, sep } from "node:path";
 import { Elysia } from "elysia";
 import type { BackendEvent, EngineCommand } from "../src/protocol";
@@ -19,9 +19,14 @@ const contentTypes: Record<string, string> = {
   ".webp": "image/webp",
 };
 
-type BasicAuth = {
+type PasswordAuth = {
   password: string;
 };
+
+const AUTH_LOGIN_PATH = "/__auth/login";
+const AUTH_LOGOUT_PATH = "/__auth/logout";
+const AUTH_COOKIE = "autopoiesis_session";
+const AUTH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 function sameCredential(candidate: string, expected: string): boolean {
   const candidateDigest = createHash("sha256").update(candidate).digest();
@@ -29,19 +34,32 @@ function sameCredential(candidate: string, expected: string): boolean {
   return timingSafeEqual(candidateDigest, expectedDigest);
 }
 
-function hasValidBasicAuth(request: Request, credentials: BasicAuth): boolean {
-  const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Basic ")) return false;
-  try {
-    const decoded = Buffer.from(authorization.slice(6), "base64").toString("utf8");
-    const separator = decoded.indexOf(":");
-    // Basic Auth still transports a username field, but it is deliberately
-    // ignored: the password is the sole credential for this private preview.
-    const password = separator < 0 ? decoded : decoded.slice(separator + 1);
-    return sameCredential(password, credentials.password);
-  } catch {
-    return false;
+function cookieValue(request: Request, name: string): string | null {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const key = part.slice(0, separator).trim();
+    if (key === name) return part.slice(separator + 1).trim();
   }
+  return null;
+}
+
+function hasValidSession(request: Request, sessions: Set<string>): boolean {
+  const token = cookieValue(request, AUTH_COOKIE);
+  return token !== null && sessions.has(token);
+}
+
+function loginPage(error = ""): Response {
+  const message = error ? `<p class="error">${error}</p>` : "";
+  return new Response(`<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Autopoiesis · Accès</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08120f;color:#f1ead8;font:16px system-ui,sans-serif}main{width:min(360px,calc(100% - 40px));padding:28px;border:1px solid #30483c;border-radius:14px;background:#101f19;box-sizing:border-box}h1{margin:0 0 8px;font:28px Georgia,serif}p{color:#afc1b3}label{display:block;margin:20px 0 7px;font-size:13px;color:#dcb35c}input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #536b5d;border-radius:8px;background:#07110d;color:#fff;font-size:16px}button{width:100%;margin-top:16px;padding:12px;border:0;border-radius:8px;background:#dcb35c;color:#101810;font-weight:700;font-size:16px}.error{color:#f1a39a}</style></head>
+<body><main><h1>Autopoiesis</h1><p>Entrez le mot de passe pour accéder à l’observatoire.</p>${message}<form method="post" action="${AUTH_LOGIN_PATH}"><label for="password">Mot de passe</label><input id="password" name="password" type="password" autocomplete="current-password" autofocus required><button type="submit">Accéder</button></form></main></body></html>`, {
+    status: error ? 401 : 200,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
 }
 
 export function createEventRelay(
@@ -157,7 +175,7 @@ export function createApp(
     distDirectory?: string;
     safePreview?: boolean;
     snapshotIntervalMs?: number;
-    basicAuth?: BasicAuth | false;
+    passwordAuth?: PasswordAuth | false;
     services?: AiServiceController;
   } = {},
 ) {
@@ -169,24 +187,47 @@ export function createApp(
   const snapshotIntervalMs = options.snapshotIntervalMs
     ?? (Number.isFinite(configuredInterval) ? Math.max(16, Math.min(1_000, configuredInterval)) : 100);
   const configuredPassword = process.env.BASIC_AUTH_PASSWORD;
-  const basicAuth = options.basicAuth === undefined
+  const passwordAuth = options.passwordAuth === undefined
     ? configuredPassword
       ? {
           password: configuredPassword,
         }
       : false
-    : options.basicAuth;
+    : options.passwordAuth;
+  const sessions = new Set<string>();
 
   const app = new Elysia();
-  if (basicAuth) {
+  if (passwordAuth) {
+    app.post(AUTH_LOGIN_PATH, async ({ request, set }) => {
+      const form = await request.formData().catch(() => null);
+      const password = form?.get("password");
+      if (typeof password !== "string" || !sameCredential(password, passwordAuth.password)) {
+        set.status = 401;
+        return loginPage("Mot de passe incorrect.");
+      }
+      const token = randomBytes(32).toString("hex");
+      sessions.add(token);
+      set.status = 303;
+      set.headers.location = "/";
+      set.headers["set-cookie"] = `${AUTH_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_MAX_AGE_SECONDS}`;
+      return "";
+    });
+    app.get(AUTH_LOGOUT_PATH, ({ request, set }) => {
+      const token = cookieValue(request, AUTH_COOKIE);
+      if (token) sessions.delete(token);
+      set.status = 303;
+      set.headers.location = AUTH_LOGIN_PATH;
+      set.headers["set-cookie"] = `${AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+      return "";
+    });
     app.onRequest(({ request }) => {
-      if (hasValidBasicAuth(request, basicAuth)) return;
+      const path = new URL(request.url).pathname;
+      if (path === AUTH_LOGIN_PATH || path === AUTH_LOGOUT_PATH) return;
+      if (hasValidSession(request, sessions)) return;
+      if (request.method === "GET" && path === "/") return loginPage();
       return new Response("Authentification requise.", {
         status: 401,
-        headers: {
-          "cache-control": "no-store",
-          "www-authenticate": 'Basic realm="Autopoiesis", charset="UTF-8"',
-        },
+        headers: { "cache-control": "no-store" },
       });
     });
   }
