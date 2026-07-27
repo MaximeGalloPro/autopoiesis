@@ -33,6 +33,14 @@ int main() {
     output << R"({"schema_version":1,"actions":[{"id":"craft_camp_item","operation":"craft_recipe"}]})";
   }
   {
+    std::ofstream output(registry_root/"features.json");
+    output << R"({"schema_version":1,"features":[
+      {"id":"core_survival","version":1,"title":"Survie","default_active":true,"dependencies":[],"cards":[
+        {"id":"craft_camp_item","type":"action","title":"Fabriquer","action":"craft_camp_item"}]},
+      {"id":"camp_cooking","version":1,"title":"Cuisine","default_active":false,"dependencies":["core_survival"],"cards":[]}
+    ]})";
+  }
+  {
     std::ofstream output(registry_path);
     output << R"({"schema_version":1,"recipes":[
       {"id":"wooden_handle","cost":{"wood":1,"branches":0,"iron_ore":0,"items":{}},"output":{"item":"wooden_handle","quantity":1}},
@@ -45,6 +53,11 @@ int main() {
   }
   setenv("AUTOPOIESIS_CAPABILITY_ROOT",registry_root.c_str(),1);
   const auto custom=CapabilityRegistry::load(registry_path);
+  const auto features=FeatureRegistry::load(registry_root/"features.json");
+  assert(features.feature("core_survival",1)!=nullptr);
+  assert(features.card("craft_camp_item")!=nullptr);
+  assert(features.default_activations().size()==1);
+  assert(features.manifest()["features"].size()==2);
   assert(ActionRegistry::load(registry_root/"core/actions.json").action("craft_camp_item") != nullptr);
   assert(custom.recipes().size()==6&&custom.recipe("woven_mat")!=nullptr);
   assert(custom.recipes().back().output=="woven_mat");
@@ -70,7 +83,12 @@ int main() {
   Logger logger("/tmp/autopoiesis-crafting-tests");
   std::mt19937 rng(42);
   LocalDecider decider(rng);
-  Simulation simulation(42,decider,logger);
+  Simulation simulation(42,decider,logger,nullptr,registry_root/"checkpoint.json");
+  assert(simulation.feature_active("core_survival",1));
+  assert(!simulation.feature_active("camp_cooking"));
+  assert(simulation.activate_feature("camp_cooking"));
+  assert(simulation.feature_active("camp_cooking",1));
+  assert(!simulation.activate_feature("camp_cooking",1));
   auto& world=SimulationTestAccess::world(simulation);
   auto& crafter=SimulationTestAccess::agent(simulation);
   const Position fire{13,2};
@@ -125,6 +143,14 @@ int main() {
   World legacy_restored(8);
   legacy_restored.restore_checkpoint(legacy_checkpoint);
   assert(legacy_restored.stored_item(fire,CraftItem::WoodenHandle)==1);
+  simulation.save_checkpoint();
+  std::mt19937 restored_rng(7);
+  LocalDecider restored_decider(restored_rng);
+  Logger restored_logger("/tmp/autopoiesis-crafting-restored");
+  Simulation restored_simulation(7,restored_decider,restored_logger,nullptr,registry_root/"checkpoint.json");
+  assert(restored_simulation.restored_checkpoint());
+  assert(restored_simulation.feature_active("core_survival",1));
+  assert(restored_simulation.feature_active("camp_cooking",1));
   unsetenv("AUTOPOIESIS_CAPABILITY_ROOT");
   std::filesystem::remove_all(registry_root);
 }

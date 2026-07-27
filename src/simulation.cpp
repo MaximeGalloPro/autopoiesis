@@ -812,6 +812,7 @@ static Agent initial_agent(std::string id,std::string name,Position position,int
 
 Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter,
                        std::string checkpoint_path):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",2400)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)),checkpoint_path_(std::move(checkpoint_path)){
+  active_features_=FeatureRegistry::defaults().default_activations();
   agents_={initial_agent("a1","Ada",{3,2},45,20,{90,20,30,30,40},{55,65,50,45,50,45,70,60,75,80},25,
                          {"builder","Créer un foyer sûr et organisé",95,45,55,70,{FoodType::Berries,FoodType::Mushrooms}},
                          {"build_shelter","Préparer un abri durable",ProjectStatus::Active,0,0,2,"","",1,0}),
@@ -839,6 +840,15 @@ void Simulation::load_checkpoint() {
   action_history_=state.value("action_history",decltype(action_history_){});
   planning_history_=state.value("planning_history",decltype(planning_history_){});
   next_agent_id_=state.value("next_agent_id",static_cast<int>(agents_.size())+1);
+  if (state.contains("active_features")) {
+    active_features_.clear();
+    for (const auto& value : state["active_features"]) {
+      const ActiveFeature activation{value.at("id").get<std::string>(), value.value("version", 1)};
+      if (!FeatureRegistry::defaults().valid_activation(activation, active_features_))
+        throw std::runtime_error("invalid active feature in simulation checkpoint: " + activation.key);
+      active_features_.push_back(activation);
+    }
+  }
   for(const auto& danger:state.value("dangers",json::array()))dangers_.push_back({
       danger.at("id").get<std::string>(),static_cast<DangerType>(danger.at("type").get<int>()),
       {danger.value("x",0),danger.value("y",0)},danger.value("severity",1),danger.value("warning_day",day_),
@@ -855,12 +865,16 @@ void Simulation::load_checkpoint() {
 void Simulation::save_checkpoint() const {
   if(checkpoint_path_.empty())return;
   json agents=json::array();for(const auto& agent:agents_)agents.push_back(agent_checkpoint(agent));
+  json active_features=json::array();
+  for(const auto& feature:active_features_)
+    active_features.push_back({{"id",feature.key},{"version",feature.version}});
   json dangers=json::array();for(const auto& danger:dangers_)dangers.push_back({
       {"id",danger.id},{"type",static_cast<int>(danger.type)},{"x",danger.position.x},{"y",danger.position.y},
       {"severity",danger.severity},{"warning_day",danger.warning_day},{"remaining_days",danger.remaining_days},
       {"cause",danger.cause},{"warning",danger.warning},{"mitigation",danger.mitigation}});
   const json state={{"version",1},{"day",day_},{"simulation_cycle",simulation_cycle_},
       {"world",world_.checkpoint()},{"agents",std::move(agents)},
+      {"active_features",std::move(active_features)},
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
       {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_},
@@ -876,6 +890,21 @@ void Simulation::save_checkpoint() const {
     if(!output)throw std::runtime_error("cannot flush simulation checkpoint");
   }
   std::filesystem::rename(temporary,target);
+}
+
+bool Simulation::feature_active(const std::string& key, int version) const {
+  return std::any_of(active_features_.begin(), active_features_.end(), [&](const auto& feature) {
+    return feature.key == key && (version == 0 || feature.version == version);
+  });
+}
+
+bool Simulation::activate_feature(const std::string& key, int version) {
+  const auto* definition=FeatureRegistry::defaults().feature(key,version);
+  if (!definition) return false;
+  const ActiveFeature activation{definition->key,definition->version};
+  if (!FeatureRegistry::defaults().valid_activation(activation,active_features_)) return false;
+  active_features_.push_back(activation);
+  return true;
 }
 
 Perception Simulation::perceive(Agent& a) {
@@ -927,6 +956,19 @@ Perception Simulation::perceive(Agent& a) {
   json home=nullptr;if(a.home_camp)home={{"x",a.home_camp->x},{"y",a.home_camp->y}};
   json rest_position=nullptr;if(a.camp_rest_position)rest_position={{"x",a.camp_rest_position->x},{"y",a.camp_rest_position->y}};
   json craftable=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& recipe:world_.craftable_recipes(*fire))craftable.push_back(recipe);
+  json active_features=json::array();
+  json active_cards=json::array();
+  for(const auto& activation:active_features_){
+    const auto* feature=FeatureRegistry::defaults().feature(activation.key,activation.version);
+    if(!feature)continue;
+    active_features.push_back({{"id",feature->key},{"version",feature->version},{"title",feature->title}});
+    for(const auto& card:feature->cards){
+      json value={{"id",card.id},{"type",card.type},{"title",card.title},{"feature",feature->key}};
+      if(card.type=="action")value["action"]=card.action;
+      else value["target_feature"]=card.target_feature;
+      active_cards.push_back(std::move(value));
+    }
+  }
   json camp_inventory=json::object();if(const auto fire=world_.nearby_campfire(a.position))camp_inventory={{"wood",world_.stored_wood(*fire)},{"branches",world_.stored_branches(*fire)},{"iron_ore",world_.stored_iron_ore(*fire)},{"wooden_handles",world_.stored_item(*fire,CraftItem::WoodenHandle)},{"charcoal",world_.stored_item(*fire,CraftItem::Charcoal)},{"ropes",world_.stored_item(*fire,CraftItem::Rope)},{"iron_ingots",world_.stored_item(*fire,CraftItem::IronIngot)},{"axes",world_.stored_item(*fire,CraftItem::Axe)}};
   json lessons=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& learner:agents_)if(learner.alive&&learner.id!=a.id&&world_.nearby_campfire(learner.position)==fire)if(const auto skill=teachable_skill(a,learner))lessons.push_back({{"target_id",learner.id},{"target_name",learner.name},{"skill",skill_name(*skill)}});
   json care=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& patient:agents_)if(patient.alive&&patient.id!=a.id&&world_.nearby_campfire(patient.position)==fire){const HealthCondition* selected=nullptr;for(const auto& condition:patient.conditions)if(!condition.treated&&(!selected||condition.severity>selected->severity))selected=&condition;if(selected)care.push_back({{"target_id",patient.id},{"target_name",patient.name},{"condition_id",selected->id},{"type",health_condition_name(selected->type)},{"severity",selected->severity}});}
