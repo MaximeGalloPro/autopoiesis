@@ -1280,7 +1280,7 @@ std::string Simulation::execute(Agent&a,const Decision&d){
     if(!world_.create_shelter(a.position)){--a.shelter_construction->progress;++a.wood_inventory;return "assemblage impossible";}
     a.shelter_construction.reset();a.remember("J'ai construit un abri en bois.");return "construit un abri";
   }
-  if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=world_.step(a.position,dir);if(world_.passable(p)){a.position=p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace vers "+dir+".");return "se deplace vers "+dir;}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement vers "+dir+" a ete bloque par un obstacle.");return "deplacement bloque";}
+  if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=world_.step(a.position,dir);if(world_.passable(p)){a.position=p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace.");return "se deplace";}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement a ete bloque par un obstacle.");return "deplacement bloque";}
   if(d.action=="warn_danger"||d.action=="help_companion"||d.action=="accompany"||d.action=="confront"||d.action=="reconcile"){
     Agent* target=nullptr;for(auto& other:agents_)if(other.alive&&other.id!=a.id&&other.id==d.parameters.value("target_id","")&&world_.adjacent(a.position,other.position))target=&other;
     if(!target)return "interaction relationnelle indisponible";
@@ -1434,6 +1434,7 @@ bool Simulation::run_day(IUserInterface* interface){
         decision.reason="invalid decision";
         logger_.message("Jour "+std::to_string(day_)+" / cycle elementaire "+std::to_string(simulation_cycle_)+" — "+agent.name+" decision invalide : "+error);
       }
+      logger_.action_started(simulation_cycle_,day_,agent,decision);
       const auto result=execute(agent,decision);
       const bool succeeded=action_succeeded(decision,result);
       update_behavior_after_action(agent,before,decision,result,succeeded);
@@ -1441,21 +1442,11 @@ bool Simulation::run_day(IUserInterface* interface){
       planning.push_back({{"action",decision.type==DecisionType::Blocked?"blocked":decision.action},{"outcome",succeeded?"success":"failure"},{"reason",decision.reason},{"parameters",decision.parameters},{"x",agent.position.x},{"y",agent.position.y},{"project",agent.project.key},{"project_status",project_status_name(agent.project.status)},{"boredom",agent.boredom}});
       while(planning.size()>20) planning.erase(planning.begin());
       auto& history=action_history_[agent.id];
-      std::string entry="day="+std::to_string(day_)+" simulation_cycle="+std::to_string(simulation_cycle_)+
-                        " cycle_in_day="+std::to_string(cycle_in_day_)+
-                        " phase="+day_phase_name(day_phase_for(cycle_in_day_,cycles_per_day_))+
-                        " action="+(decision.type==DecisionType::Blocked?"blocked":decision.action)+
-                        " outcome="+(succeeded?"success":"failure")+" result="+result;
-      if(!decision.reason.empty()) entry+=" reason="+decision.reason;
-      if(!decision.need.empty()) entry+=" need="+decision.need;
-      if(!decision.obstacle.empty()) entry+=" obstacle="+decision.obstacle;
-      if(!decision.desired_result.empty()) entry+=" desired_result="+decision.desired_result;
-      entry+=" project="+agent.project.key+" project_status="+project_status_name(agent.project.status)+" project_progress="+std::to_string(agent.project.progress)+"/"+std::to_string(agent.project.target)+" boredom="+std::to_string(agent.boredom);
-      entry+=" calendar="+calendar_label(date_)+" temperature_c="+std::to_string(climate_.temperature_c)+" climate="+climate_.condition;
-      if(!agent.project.missing_capability.empty())entry+=" missing_capability="+agent.project.missing_capability;
+      std::string entry="raison="+(decision.reason.empty()?"action sans justification":decision.reason)+
+                        " resultat="+(succeeded?"reussite":"echec")+" — "+result;
       history.push_back(entry);
       if(history.size()>1200) history.erase(history.begin());
-      logger_.event(simulation_cycle_,day_,before,decision,result,agent,date_,climate_);
+      logger_.event(simulation_cycle_,day_,before,decision,result,succeeded);
     }
     if(interface){
       const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,
