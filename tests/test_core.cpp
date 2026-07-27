@@ -67,8 +67,17 @@ int main() {
   assert(reporter.calls == 6);
   assert(reporter.simulation_cycles[0] == 2400);
   assert(reporter.simulation_cycles[3] == 4800);
-  assert(reporter.histories[0].find("reason=I need rest") != std::string::npos);
-  assert(reporter.histories[0].find("outcome=success") != std::string::npos);
+  assert(reporter.histories[0].find("raison=I need rest") != std::string::npos);
+  assert(reporter.histories[0].find("resultat=reussite") != std::string::npos);
+  const auto& recent_events = logger.recent();
+  assert(std::any_of(recent_events.begin(), recent_events.end(),
+                     [](const std::string& line) { return line.find("I need rest") != std::string::npos; }));
+  assert(std::any_of(recent_events.begin(), recent_events.end(),
+                     [](const std::string& line) { return line.find("réussite") != std::string::npos; }));
+  assert(std::none_of(recent_events.begin(), recent_events.end(), [](const std::string& line) {
+    return line.find("north") != std::string::npos || line.find("south") != std::string::npos ||
+           line.find("east") != std::string::npos || line.find("west") != std::string::npos;
+  }));
   unsetenv("REPORT_EVERY_DAYS");
 
   setenv("REPORT_EVERY_DAYS", "3", 1);

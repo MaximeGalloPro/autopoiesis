@@ -9,9 +9,10 @@ namespace apo {
 class Logger {
  public:
   explicit Logger(const std::string& directory = "/data");
+  void action_started(int simulation_cycle, int day, const Agent& agent,
+                      const Decision& decision);
   void event(int simulation_cycle, int day, const Agent& before, const Decision& decision,
-             const std::string& result, const Agent& after, const CalendarDate& date,
-             const ClimateState& climate);
+             const std::string& result, bool succeeded);
   void feature_request(int simulation_cycle, int day, const Agent& agent, const Decision& decision);
   void ai_report(int simulation_cycle, int day, const Agent& agent, const json& report,
                  const CalendarDate& date, const ClimateState& climate);

@@ -14,6 +14,14 @@ Logger::Logger(const std::string& directory) : directory_(directory) {
   std::error_code ec; std::filesystem::create_directories(directory,ec); readable_.open(directory+"/simulation.log",std::ios::app); structured_.open(directory+"/events.jsonl",std::ios::app);
 }
 void Logger::message(const std::string& line) { if(readable_) readable_<<line<<'\n'; recent_.push_back(line); if(recent_.size()>5) recent_.erase(recent_.begin()); }
+void Logger::action_started(int simulation_cycle, int day, const Agent& agent,
+                            const Decision& decision) {
+  std::string reason=decision.reason;
+  if(decision.type==DecisionType::Blocked) reason=decision.need+" : "+decision.obstacle;
+  if(reason.empty()) reason="action "+(decision.type==DecisionType::Blocked?"bloquée":decision.action);
+  message("Jour "+std::to_string(day)+" / cycle élémentaire "+std::to_string(simulation_cycle)+
+          " — "+agent.name+" : "+reason);
+}
 void Logger::feature_request(int simulation_cycle,int day,const Agent& agent,const Decision& decision) {
   std::string id=request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-"+agent.id+"-"+std::to_string(++request_counter_);
   json request={{"id",id},{"status","pending"},{"day",day},{"simulation_cycle",simulation_cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"need",decision.need},{"obstacle",decision.obstacle},{"desired_result",decision.desired_result}};
@@ -140,5 +148,16 @@ std::string Logger::devil_constraint(int simulation_cycle,int day,const json& re
   message("Le Diable propose "+id+" : "+pending.value("title","contrainte sans titre"));
   return id;
 }
-void Logger::event(int simulation_cycle,int day,const Agent& before,const Decision& d,const std::string& result,const Agent& after,const CalendarDate& date,const ClimateState& climate) { json j={{"day",day},{"simulation_cycle",simulation_cycle},{"calendar",calendar_json(date)},{"climate",climate_json(climate)},{"type","agent_action"},{"agent_id",before.id},{"state_before",{{"health",before.health},{"hunger",before.hunger},{"thirst",before.thirst},{"fatigue",before.fatigue},{"x",before.position.x},{"y",before.position.y}}},{"decision",decision_json(d)},{"result",result},{"state_after",{{"health",after.health},{"hunger",after.hunger},{"thirst",after.thirst},{"fatigue",after.fatigue},{"x",after.position.x},{"y",after.position.y},{"alive",after.alive}}}}; if(structured_) structured_<<j.dump()<<'\n'; std::string detail=d.reason; if(d.type==DecisionType::Blocked) detail=d.need+" : "+d.obstacle; message("Jour "+std::to_string(day)+" / cycle elementaire "+std::to_string(simulation_cycle)+" — "+before.name+" "+result+(detail.empty()?"":" ["+detail+"]")); }
+void Logger::event(int simulation_cycle,int day,const Agent& before,const Decision& d,
+                   const std::string& result, bool succeeded) {
+  std::string reason=d.reason;
+  if(d.type==DecisionType::Blocked) reason=d.need+" : "+d.obstacle;
+  json j={{"day",day},{"simulation_cycle",simulation_cycle},{"type","agent_action"},
+         {"agent_id",before.id},{"action",d.type==DecisionType::Blocked?"blocked":d.action},
+         {"reason",reason},{"outcome",succeeded?"success":"failure"},{"result",result}};
+  if(structured_) structured_<<j.dump()<<'\n';
+  message("Jour "+std::to_string(day)+" / cycle élémentaire "+std::to_string(simulation_cycle)+
+          " — "+before.name+" : "+(succeeded?"réussite":"échec")+
+          (result.empty()?"":" — "+result));
+}
 }
