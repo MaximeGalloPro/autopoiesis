@@ -172,7 +172,7 @@ export function createApp(
   const basicAuth = options.basicAuth === undefined
     ? configuredPassword
       ? {
-          username: process.env.BASIC_AUTH_USERNAME || "autopoiesis",
+          username: process.env.BASIC_AUTH_USERNAME || "raclette",
           password: configuredPassword,
         }
       : false
