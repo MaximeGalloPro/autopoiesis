@@ -7,7 +7,9 @@
 using namespace apo;
 
 struct TimingDecider final : IDecider {
-  Decision decide(const Perception&) override {
+  std::map<std::string, int> calls;
+  Decision decide(const Perception& perception) override {
+    ++calls[perception.value.at("self").at("id").get<std::string>()];
     return {DecisionType::Action, "wait", json::object(), "rest"};
   }
 };
@@ -46,9 +48,15 @@ int main() {
 
   simulation.run(2, 0, 0);
   assert(reporter.events.empty());
+  assert(decider.calls["a1"] == 120);
+  assert(decider.calls["a2"] == 120);
+  assert(decider.calls["a3"] == 120);
 
   simulation.run(1, 0, 0);
   assert(reporter.events.size() == 6);
+  assert(decider.calls["a1"] == 180);
+  assert(decider.calls["a2"] == 180);
+  assert(decider.calls["a3"] == 180);
   assert(reporter.events[0] == "report:a1:3:720");
   assert(reporter.events[1] == "request:a1:3:720");
   assert(reporter.events[2] == "report:a2:3:720");

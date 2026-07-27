@@ -92,6 +92,7 @@ json agent_checkpoint(const Agent& agent) {
           {"thirst",agent.thirst},{"personality",personality_json(agent.personality)},
           {"attributes",attributes_json(agent.attributes)},{"memories",std::move(memories)},
           {"alive",agent.alive},{"sleeping_days",agent.sleeping_days},
+          {"next_action_cycle",agent.next_action_cycle},
           {"critical_hunger_days",agent.critical_hunger_days},
           {"critical_thirst_days",agent.critical_thirst_days},
           {"map_memory",std::move(map_memory)},{"map_visit_counts",std::move(visits)},
@@ -153,6 +154,7 @@ Agent restore_agent(const json& state) {
       attributes.at("memory").get<int>(),attributes.at("spatial_sense").get<int>()};
   for(const auto& memory:state.at("memories"))agent.memories.push_back(memory.get<std::string>());
   agent.alive=state.at("alive").get<bool>();agent.sleeping_days=state.at("sleeping_days").get<int>();
+  agent.next_action_cycle=state.value("next_action_cycle",0);
   agent.critical_hunger_days=state.at("critical_hunger_days").get<int>();
   agent.critical_thirst_days=state.at("critical_thirst_days").get<int>();
   for(const auto& value:state.at("map_memory"))agent.map_memory[
@@ -799,6 +801,28 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   return true;
 }
 
+// World time advances every tick, but a character is not forced to choose an
+// action on every tick. The duration belongs to the action, which keeps the
+// world alive while making decisions asynchronous and event-like.
+static int action_duration_cycles(const Decision& decision) {
+  if (decision.type == DecisionType::Blocked) return 2;
+  if (decision.action == "move") return 1;
+  if (decision.action == "observe" || decision.action == "wait") return 4;
+  if (decision.action == "drink" || decision.action == "eat_food" ||
+      decision.action == "eat_berries" || decision.action == "eat_carried_food" ||
+      decision.action == "eat_camp_food" || decision.action == "rest") return 3;
+  if (decision.action == "sleep") return 8;
+  if (decision.action == "collect_branch" || decision.action == "collect_food" ||
+      decision.action == "collect_iron_ore" || decision.action == "harvest_wood" ||
+      decision.action == "hunt_rabbit" || decision.action == "hunt_animal") return 6;
+  if (decision.action == "craft_camp_item" || decision.action == "build_shelter" ||
+      decision.action == "assemble_shelter" || decision.action == "work_on_building") return 12;
+  if (decision.action == "talk" || decision.action == "share_camp_meal" ||
+      decision.action == "hold_vigil" || decision.action == "celebrate" ||
+      decision.action == "mourn" || decision.action == "teach_skill") return 5;
+  return 3;
+}
+
 static Agent initial_agent(std::string id,std::string name,Position position,int hunger,int fatigue,
                            Personality personality,Attributes attributes,int thirst,
                            BehaviorProfile behavior,Project project){
@@ -1422,9 +1446,10 @@ bool Simulation::run_day(IUserInterface* interface){
   for(int action_index=0;action_index<cycles_per_day_;++action_index){
     cycle_in_day_=action_index+1;
     ++simulation_cycle_;
+    for(auto& agent:agents_)
+      if(agent.alive&&agent.sleeping_days==0) advance_action_needs(agent,action_index);
     for(auto& agent:agents_){
-      if(!agent.alive||agent.sleeping_days!=0) continue;
-      advance_action_needs(agent,action_index);
+      if(!agent.alive||agent.sleeping_days!=0||simulation_cycle_<agent.next_action_cycle) continue;
       Agent before=agent;
       Decision decision=decider_.decide(perceive(agent));
       std::string error;
@@ -1437,6 +1462,7 @@ bool Simulation::run_day(IUserInterface* interface){
       logger_.action_started(simulation_cycle_,day_,agent,decision);
       const auto result=execute(agent,decision);
       const bool succeeded=action_succeeded(decision,result);
+      agent.next_action_cycle=simulation_cycle_+action_duration_cycles(decision);
       update_behavior_after_action(agent,before,decision,result,succeeded);
       auto& planning=planning_history_[agent.id];
       planning.push_back({{"action",decision.type==DecisionType::Blocked?"blocked":decision.action},{"outcome",succeeded?"success":"failure"},{"reason",decision.reason},{"parameters",decision.parameters},{"x",agent.position.x},{"y",agent.position.y},{"project",agent.project.key},{"project_status",project_status_name(agent.project.status)},{"boredom",agent.boredom}});
