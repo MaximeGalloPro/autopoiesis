@@ -113,12 +113,12 @@ static json french_string_array(){
 
 static json feature_request_schema(){
   return {{"type","object"},{"additionalProperties",false},{"properties",{
-    {"requested",{{"type","boolean"}}},{"evolution_key",{{"type","string"},{"description","Cle technique stable en snake_case pour dedupliquer le mecanisme."}}},{"domain",{{"type","string"},{"enum",{"survie","construction","production","exploration","social","connaissance"}}}},{"title",french_string()},{"need",french_string()},{"obstacle",french_string()},{"proposed_change",french_string()},
+    {"requested",{{"type","boolean"}}},{"request_mode",{{"type","string"},{"enum",{"propose","insist"}}}},{"parent_request_id",{{"type",json::array({"string","null"})}}},{"insistence_reason",french_string()},{"evidence",french_string_array()},{"evolution_key",{{"type","string"},{"description","Cle technique stable en snake_case pour dedupliquer le mecanisme."}}},{"domain",{{"type","string"},{"enum",{"survie","construction","production","exploration","social","connaissance"}}}},{"title",french_string()},{"need",french_string()},{"obstacle",french_string()},{"proposed_change",french_string()},
     {"mechanism",{{"type","object"},{"additionalProperties",false},{"properties",{
       {"name",french_string()},{"summary",french_string()},{"resources",french_string_array()},{"actions",french_string_array()},{"preconditions",french_string_array()},{"deterministic_effects",french_string_array()}
     }},{"required",{"name","summary","resources","actions","preconditions","deterministic_effects"}}}},
     {"acceptance_tests",french_string_array()}
-  }},{"required",{"requested","evolution_key","domain","title","need","obstacle","proposed_change","mechanism","acceptance_tests"}}};
+  }},{"required",{"requested","request_mode","parent_request_id","insistence_reason","evidence","evolution_key","domain","title","need","obstacle","proposed_change","mechanism","acceptance_tests"}}};
 }
 
 std::string period_report_instructions(){
@@ -140,7 +140,11 @@ std::string evolution_request_instructions(){
          "need, obstacle, proposed_change, les champs de mechanism et chaque element de acceptance_tests. "
          "Priorise la capacite manquante qui bloque le projet durable ou l'aspiration du personnage. Utilise evolution_key "
          "comme cle technique stable et choisis un domain. La proposition doit etre distincte des cles deja proposees "
-         "dans cette fenetre. Examine d'abord active_world_mechanisms et evolution_history. Ne redemande jamais un mecanisme "
+         "dans cette fenetre. Utilise request_mode=propose et parent_request_id=null pour une nouvelle proposition. "
+         "Si evolution_history contient une demande pending qui exprime le meme besoin, ne cree pas une nouvelle proposition : "
+         "utilise request_mode=insist, recopie son parent_request_id exact, conserve sa evolution_key et renseigne "
+         "insistence_reason et evidence avec des faits propres a ce personnage. Une insistance soutient la demande ouverte, "
+         "ne modifie jamais sa proposition et ne cree aucun doublon. Examine d'abord active_world_mechanisms et evolution_history. Ne redemande jamais un mecanisme "
          "deja actif, pending, approved ou activated, meme sous un autre titre ou une nouvelle cle evolution_key. Si une "
          "capacite active ne suffit pas, demande uniquement l'integration manquante precise et prouvee par l'historique, "
          "sans recreer cette capacite. Ne propose pas une simple optimisation de navigation, anti-boucle, repos ou seuil numerique, "

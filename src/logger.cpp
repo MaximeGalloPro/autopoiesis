@@ -86,6 +86,15 @@ json Logger::evolution_memory(std::size_t maximum) const {
   read_decisions("approved_feature_requests.jsonl","approved");
   read_decisions("rejected_feature_requests.jsonl","rejected");
 
+  std::map<std::string,std::size_t> endorsement_counts;
+  std::ifstream endorsements(directory_+"/feature_endorsements.jsonl");
+  std::string endorsement_line;
+  while(std::getline(endorsements,endorsement_line))try{
+    const auto item=json::parse(endorsement_line);
+    const auto parent=item.value("parent_request_id","");
+    if(!parent.empty())++endorsement_counts[parent];
+  }catch(const json::exception&){}
+
   std::vector<json> evolutions;std::map<std::string,std::size_t> indexes;
   std::ifstream input(directory_+"/feature_requests.jsonl");std::string line;
   while(std::getline(input,line))try{
@@ -97,7 +106,8 @@ json Logger::evolution_memory(std::size_t maximum) const {
     if(status=="rejected")continue;
     const auto summary=bounded(request.value("mechanism",json::object()).value("summary",""),280);
     json compact={{"id",id},{"status",status},{"evolution_key",request.value("evolution_key","")},
-                  {"title",bounded(request.value("title",""),180)},{"mechanism_summary",summary}};
+                  {"title",bounded(request.value("title",""),180)},{"mechanism_summary",summary},
+                  {"support_count",endorsement_counts[id]}};
     if(indexes.contains(id))evolutions[indexes[id]]=std::move(compact);
     else{indexes[id]=evolutions.size();evolutions.push_back(std::move(compact));}
   }catch(const json::exception&){}
@@ -118,7 +128,54 @@ void Logger::ai_feature_request(int simulation_cycle,int day,const Agent& agent,
   if(!validate_feature_request(request,error)) { message("Demande IA rejetee : "+error); return; }
   if(evolution_window_cycle_!=simulation_cycle){evolution_window_cycle_=simulation_cycle;evolution_keys_.clear();}
   const auto evolution_key=request.value("evolution_key","");
+  const auto request_mode=request.value("request_mode","propose");
+  if(request_mode=="insist"){
+    const auto parent_id=request.value("parent_request_id","");
+    if(parent_id.empty()){message("Insistance IA ignoree : identifiant de demande parent absent.");return;}
+    std::string line;
+    std::set<std::string> closed_requests;
+    for(const auto& filename: {"approved_feature_requests.jsonl","rejected_feature_requests.jsonl"}){
+      std::ifstream decisions_input(directory_+"/"+filename);
+      while(std::getline(decisions_input,line))try{
+        const auto decision=json::parse(line); const auto id=decision.value("id","");
+        if(!id.empty())closed_requests.insert(id);
+      }catch(const json::exception&){}
+    }
+    bool open=false;
+    std::ifstream requests_input(directory_+"/feature_requests.jsonl");
+    while(std::getline(requests_input,line))try{
+      const auto existing=json::parse(line);
+      if(existing.value("id","")==parent_id&&existing.value("status","pending")=="pending"&&
+         existing.value("evolution_key","")==evolution_key&&!closed_requests.contains(parent_id)){open=true;break;}
+    }catch(const json::exception&){}
+    if(!open){message("Insistance IA ignoree : la demande n'est plus ouverte ("+parent_id+").");return;}
+
+    std::ifstream endorsements_input(directory_+"/feature_endorsements.jsonl");
+    while(std::getline(endorsements_input,line))try{
+      const auto existing=json::parse(line);
+      if(existing.value("parent_request_id","")==parent_id&&existing.value("agent_id","")==agent.id&&
+         existing.value("simulation_cycle",-1)==simulation_cycle){
+        message("Insistance IA ignoree : personnage deja inscrit pour cette fenetre ("+agent.id+").");return;
+      }
+    }catch(const json::exception&){}
+    json endorsement={{"parent_request_id",parent_id},{"evolution_key",evolution_key},
+      {"agent_id",agent.id},{"agent_name",agent.name},{"day",day},{"simulation_cycle",simulation_cycle},
+      {"reason",request.value("insistence_reason",request.value("need",""))},
+      {"evidence",request.value("evidence",json::array())}};
+    std::ofstream output(directory_+"/feature_endorsements.jsonl",std::ios::app);
+    if(output)output<<endorsement.dump()<<'\n';
+    message("Insistance IA enregistree pour "+parent_id+" par "+agent.name);
+    return;
+  }
   if(!evolution_keys_.insert(evolution_key).second){message("Demande IA ignoree : mecanisme deja propose dans cette fenetre ("+evolution_key+").");return;}
+  std::ifstream existing_requests(directory_+"/feature_requests.jsonl");
+  std::string existing_line;
+  while(std::getline(existing_requests,existing_line))try{
+    const auto existing=json::parse(existing_line);
+    if(existing.value("status","pending")=="pending"&&existing.value("evolution_key","")==evolution_key){
+      message("Demande IA ignoree : une demande ouverte existe deja pour "+evolution_key+".");return;
+    }
+  }catch(const json::exception&){}
   json pending={{"id",request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-"+agent.id+"-ai-"+std::to_string(++request_counter_)},{"status","pending"},{"source","ai_period_report"},{"day",day},{"simulation_cycle",simulation_cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"report",report},{"evolution_key",evolution_key},{"domain",request.value("domain","")},{"title",request.value("title","")},{"need",request.value("need","")},{"obstacle",request.value("obstacle","")},{"proposed_change",request.value("proposed_change","")},{"mechanism",request.value("mechanism",json::object())},{"acceptance_tests",request.value("acceptance_tests",json::array())}};
   std::ofstream requests(directory_+"/feature_requests.jsonl",std::ios::app); if(requests) requests<<pending.dump()<<'\n';
   message("Demande à Dieu à valider "+pending["id"].get<std::string>()+" : "+pending["title"].get<std::string>());
