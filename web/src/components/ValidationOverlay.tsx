@@ -188,19 +188,25 @@ export function EvolutionCompletionReminder({ completion, sendCommand, onOpen }:
   onOpen: () => void;
 }) {
   const successful = completion.stage === "complete" && completion.successful;
-  const canResume = successful && completion.allowed_commands.includes("o");
+  const timedOut = completion.stage === "timed_out";
+  const canResume = (successful || timedOut) && completion.allowed_commands.includes("o");
+  const title = successful
+    ? "Nouvelle évolution prête"
+    : timedOut
+      ? "Suivi de l’évolution expiré"
+      : "Évolution non activée";
   return (
     <section className="guard-reminder" role="status" aria-label="Confirmation de transfert en attente">
       <div className="guard-reminder-icon">{successful ? <Check /> : <OctagonX />}</div>
       <div className="guard-reminder-copy">
         <span>Simulation en attente</span>
-        <strong>{successful ? "Nouvelle évolution prête" : "Évolution inactive"}</strong>
-        <small>Le monde reste entièrement consultable.</small>
+        <strong>{title}</strong>
+        <small>{timedOut ? "La partie reste sur la version actuelle." : "Le monde reste entièrement consultable."}</small>
       </div>
       <div className="guard-reminder-actions">
         {canResume && (
           <button className="guard-resume" onClick={() => void sendCommand({ type: "simulation.resume" })}>
-            <Play /> Reprendre
+            <Play /> {successful ? "Recompiler et reprendre" : "Reprendre la partie"}
           </button>
         )}
         <button className="guard-open" onClick={onOpen} aria-haspopup="dialog"><ChevronUp /> Détails</button>
@@ -215,15 +221,31 @@ export function EvolutionCompletionOverlay({ completion, sendCommand, onMinimize
   onMinimize: () => void;
 }) {
   const successful = completion.stage === "complete" && completion.successful;
+  const timedOut = completion.stage === "timed_out";
+  const title = successful
+    ? "La nouvelle évolution est prête"
+    : timedOut
+      ? "L’évolution n’a pas été activée"
+      : "L’évolution a échoué";
+  const message = successful
+    ? completion.message
+    : timedOut
+      ? "Le suivi a expiré avant la fin du traitement."
+      : completion.message;
+  const detail = successful
+    ? completion.detail || "Une nouvelle version a été vérifiée et attend votre confirmation."
+    : timedOut
+      ? "Aucun changement n’est actif. Vous pouvez reprendre la partie avec la version actuelle."
+      : completion.detail || "La partie reste sur la version actuelle. Aucun changement n’est actif.";
   return (
     <div className="guard-layer">
       <section className="validation-modal" role="dialog" aria-labelledby="evolution-completion-title">
         <header className="validation-heading">
           <div className="validation-icon">{successful ? <Check /> : <OctagonX />}</div>
           <div className="validation-heading-copy">
-            <span className="eyebrow">Garde humaine · transfert de version</span>
-            <h2 id="evolution-completion-title">{successful ? "La nouvelle évolution est prête" : "L’évolution reste inactive"}</h2>
-            <p>{completion.message}</p>
+            <span className="eyebrow">Garde humaine · résultat de l’évolution</span>
+            <h2 id="evolution-completion-title">{title}</h2>
+            <p>{message}</p>
           </div>
           <button className="guard-minimize" onClick={onMinimize} aria-label="Réduire la fenêtre de décision">
             <Minimize2 /><span>Observer le monde</span>
@@ -231,16 +253,21 @@ export function EvolutionCompletionOverlay({ completion, sendCommand, onMinimize
         </header>
         <div className="completion-choice">
           <PauseCircle size={42} />
-          <h3>Voulez-vous passer à l’étape suivante&nbsp;?</h3>
-          <p>{completion.detail || "Le moteur attend une confirmation explicite."}</p>
+          <h3>{successful ? "Que voulez-vous faire ?" : "La partie peut-elle reprendre ?"}</h3>
+          <p>{detail}</p>
           <div className="modal-actions">
             {successful && completion.allowed_commands.includes("o") && (
               <button className="approve-button" onClick={() => void sendCommand({ type: "simulation.resume" })}>
                 <Check size={18} /> Recompiler et reprendre
               </button>
             )}
+            {timedOut && completion.allowed_commands.includes("o") && (
+              <button className="approve-button" onClick={() => void sendCommand({ type: "simulation.resume" })}>
+                <Play size={18} /> Reprendre la partie
+              </button>
+            )}
             <button className="danger-ghost" onClick={() => void sendCommand({ type: "simulation.stop" })}>
-              <Square size={15} /> Arrêter proprement
+              <Square size={15} /> Arrêter la partie
             </button>
           </div>
         </div>
