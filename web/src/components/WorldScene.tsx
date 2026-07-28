@@ -1,9 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import {
   AdaptiveDpr,
-  Float,
   Grid,
-  Html,
   Instance,
   Instances,
   OrbitControls,
@@ -12,11 +10,10 @@ import {
   Stars,
 } from "@react-three/drei";
 import { memo, useMemo } from "react";
-import type { AnimalState, Position, Terrain, WorldCell, WorldSnapshot } from "../protocol";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "../protocol";
-import { animalLabels } from "../lib/format";
+import type { Position, Terrain, WorldCell, WorldSnapshot } from "../protocol";
+import { WorldEntities, worldPosition, type EntitySelection } from "./entities/WorldEntities";
 
-export type EntitySelection = { kind: "agent" | "animal"; id: string };
+export type { EntitySelection } from "./entities/WorldEntities";
 
 const terrainColors: Record<Terrain, readonly string[]> = {
   ground: ["#7fbd5a", "#75b253", "#8ac563"],
@@ -34,15 +31,10 @@ const nightTerrainColors: Record<Terrain, readonly string[]> = {
   bush: ["#5a9b59", "#508e50", "#65a765"],
 };
 
-function worldPosition(position: Position, y = 0): [number, number, number] {
-  return [position.x - WORLD_WIDTH / 2 + 0.5, y, position.y - WORLD_HEIGHT / 2 + 0.5];
-}
-
 function tileColor(terrain: Terrain, position: Position, isNight: boolean) {
   const colors = (isNight ? nightTerrainColors : terrainColors)[terrain];
   return colors[Math.abs(position.x * 17 + position.y * 31) % colors.length] ?? colors[0];
 }
-
 interface TileInstancesProps {
   cells: WorldCell[];
   terrain: Terrain;
@@ -75,40 +67,9 @@ const TileInstances = memo(function TileInstances({ cells, terrain, isNight }: T
   );
 });
 
-interface MarkerInstancesProps {
-  cells: WorldCell[];
-  field: "food" | "wood" | "fibers" | "branches" | "stored_food";
-  color: string;
-  y: number;
-  shape?: "berry" | "crate" | "sprout" | "branch" | "stock";
-}
-
-function MarkerInstances({ cells, field, color, y, shape = "berry" }: MarkerInstancesProps) {
-  const selected = cells.filter((cell) => cell[field] > 0);
-  return (
-    <Instances limit={Math.max(1, selected.length)} range={selected.length}>
-      {shape === "crate" ? <boxGeometry args={[0.26, 0.2, 0.26]} />
-        : shape === "sprout" ? <coneGeometry args={[0.15, 0.36, 5]} />
-          : shape === "branch" ? <boxGeometry args={[0.35, 0.065, 0.1]} />
-            : shape === "stock" ? <dodecahedronGeometry args={[0.17, 0]} />
-              : <sphereGeometry args={[0.15, 8, 6]} />}
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.18} roughness={0.64} />
-      {selected.map((cell) => (
-        <Instance
-          key={`${field}-${cell.position.x}-${cell.position.y}`}
-          position={worldPosition(cell.position, y)}
-          rotation={shape === "branch" ? [0, (cell.position.x * 0.8 + cell.position.y * 0.45) % Math.PI, 0] : undefined}
-          scale={Math.min(1.55, 0.74 + Math.sqrt(cell[field]) * 0.16)}
-        />
-      ))}
-    </Instances>
-  );
-}
-
 function Nature({ cells }: { cells: WorldCell[] }) {
   const trees = cells.filter((cell) => cell.terrain === "tree");
   const bushes = cells.filter((cell) => cell.terrain === "bush");
-  const shelters = cells.filter((cell) => cell.shelter_level > 0);
   return (
     <>
       <Instances limit={Math.max(1, trees.length)} range={trees.length}>
@@ -126,130 +87,8 @@ function Nature({ cells }: { cells: WorldCell[] }) {
         <meshStandardMaterial color="#4e9347" roughness={1} />
         {bushes.map((cell) => <Instance key={`bush-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.38)} />)}
       </Instances>
-      <Instances limit={Math.max(1, shelters.length)} range={shelters.length}>
-        <coneGeometry args={[0.42, 0.72, 4]} />
-        <meshStandardMaterial color="#b78b52" roughness={0.86} />
-        {shelters.map((cell) => (
-          <Instance
-            key={`shelter-${cell.position.x}-${cell.position.y}`}
-            position={worldPosition(cell.position, 0.55)}
-            rotation={[0, Math.PI / 4, 0]}
-            scale={0.8 + cell.shelter_level * 0.1}
-          />
-        ))}
-      </Instances>
     </>
   );
-}
-
-function Campfires({ cells, isNight }: { cells: WorldCell[]; isNight: boolean }) {
-  return cells.filter((cell) => cell.campfire).map((cell) => (
-    <group key={`fire-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.24)}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.17, 0]}>
-        <circleGeometry args={[isNight ? 0.62 : 0.44, 24]} />
-        <meshBasicMaterial color="#ffae54" transparent opacity={isNight ? 0.22 : 0.12} depthWrite={false} toneMapped={false} />
-      </mesh>
-      <mesh rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.06, 0.06, 0.46, 6]} />
-        <meshStandardMaterial color="#5a3827" />
-      </mesh>
-      <Float speed={3.5} rotationIntensity={0.1} floatIntensity={0.12}>
-        <mesh position={[0, 0.25, 0]}>
-          <coneGeometry args={[0.16, 0.42, 7]} />
-          <meshBasicMaterial color="#ff9d45" toneMapped={false} />
-        </mesh>
-      </Float>
-      <pointLight color="#ffb45d" intensity={isNight ? 2.25 : 1.1} distance={isNight ? 4.8 : 3.2} decay={2} />
-    </group>
-  ));
-}
-
-function AgentMeshes({
-  snapshot,
-  selected,
-  onSelect,
-}: {
-  snapshot: WorldSnapshot;
-  selected: EntitySelection | null;
-  onSelect: (selection: EntitySelection) => void;
-}) {
-  return snapshot.agents.filter((agent) => agent.alive).map((agent, index) => {
-    const isSelected = selected?.kind === "agent" && selected.id === agent.id;
-    return (
-      <group
-        key={agent.id}
-        position={worldPosition(agent.position, 0.78)}
-        onClick={(event) => { event.stopPropagation(); onSelect({ kind: "agent", id: agent.id }); }}
-      >
-        <Float speed={1.8} rotationIntensity={0.04} floatIntensity={0.1}>
-          <mesh castShadow>
-            <capsuleGeometry args={[0.18, 0.38, 5, 8]} />
-            <meshStandardMaterial color={["#efbe62", "#d67d5e", "#91c7b1", "#a88bd4"][index % 4]} roughness={0.58} />
-          </mesh>
-          <mesh position={[0, 0.39, 0]}>
-            <sphereGeometry args={[0.19, 12, 10]} />
-            <meshStandardMaterial color="#e4b992" roughness={0.7} />
-          </mesh>
-        </Float>
-        {isSelected && (
-          <>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}>
-              <ringGeometry args={[0.37, 0.45, 32]} />
-              <meshBasicMaterial color="#ffd66e" toneMapped={false} />
-            </mesh>
-            <Html center position={[0, 0.95, 0]} distanceFactor={1} className="world-label">
-              {agent.name}
-            </Html>
-          </>
-        )}
-      </group>
-    );
-  });
-}
-
-function animalGeometry(animal: AnimalState) {
-  if (animal.type === "fish") return <coneGeometry args={[0.16, 0.42, 6]} />;
-  if (animal.type === "deer") return <capsuleGeometry args={[0.16, 0.34, 4, 6]} />;
-  if (animal.type === "wolf") return <dodecahedronGeometry args={[0.25, 0]} />;
-  if (animal.type === "boar") return <sphereGeometry args={[0.26, 8, 6]} />;
-  return <sphereGeometry args={[0.18, 8, 6]} />;
-}
-
-function AnimalMeshes({
-  animals,
-  selected,
-  onSelect,
-}: {
-  animals: AnimalState[];
-  selected: EntitySelection | null;
-  onSelect: (selection: EntitySelection) => void;
-}) {
-  return animals.filter((animal) => animal.alive).map((animal) => {
-    const isSelected = selected?.kind === "animal" && selected.id === animal.id;
-    return (
-      <group
-        key={animal.id}
-        position={worldPosition(animal.position, animal.type === "fish" ? 0.2 : 0.48)}
-        onClick={(event) => { event.stopPropagation(); onSelect({ kind: "animal", id: animal.id }); }}
-      >
-        <mesh castShadow rotation={animal.type === "fish" ? [0, 0, Math.PI / 2] : [0, 0, 0]}>
-          {animalGeometry(animal)}
-          <meshStandardMaterial color={animal.danger >= 60 ? "#a85a50" : "#9b8b6e"} roughness={0.86} />
-        </mesh>
-        {isSelected && (
-          <>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.25, 0]}>
-              <ringGeometry args={[0.3, 0.38, 28]} />
-              <meshBasicMaterial color="#ffca76" toneMapped={false} />
-            </mesh>
-              <Html center position={[0, 0.66, 0]} distanceFactor={1} className="world-label">
-              {animalLabels[animal.type] ?? animal.type}
-            </Html>
-          </>
-        )}
-      </group>
-    );
-  });
 }
 
 function EmptyWorld() {
@@ -307,14 +146,7 @@ export function WorldScene({
               <TileInstances key={terrain} cells={cells} terrain={terrain} isNight={isNight} />
             ))}
             <Nature cells={cells} />
-            <MarkerInstances cells={cells} field="food" color="#f35f62" y={0.32} shape="berry" />
-            <MarkerInstances cells={cells} field="wood" color="#a86d3d" y={0.3} shape="crate" />
-            <MarkerInstances cells={cells} field="fibers" color="#f0d466" y={0.34} shape="sprout" />
-            <MarkerInstances cells={cells} field="branches" color="#e6a45a" y={0.3} shape="branch" />
-            <MarkerInstances cells={cells} field="stored_food" color="#ffd45c" y={0.52} shape="stock" />
-            <Campfires cells={cells} isNight={isNight} />
-            <AgentMeshes snapshot={snapshot} selected={selected} onSelect={onSelect} />
-            <AnimalMeshes animals={snapshot.animals} selected={selected} onSelect={onSelect} />
+            <WorldEntities snapshot={snapshot} selected={selected} onSelect={onSelect} />
             <Grid
               args={[40, 24]}
               position={[0, 0.205, 0]}
