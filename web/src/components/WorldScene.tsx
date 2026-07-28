@@ -7,7 +7,7 @@ import {
   Instance,
   Instances,
   OrbitControls,
-  PerspectiveCamera,
+  OrthographicCamera,
   Sparkles,
   Stars,
 } from "@react-three/drei";
@@ -247,19 +247,28 @@ export function WorldScene({
 }) {
   const cells = snapshot?.cells ?? [];
   const isNight = snapshot?.phase === "night" && !awaitingDawn;
-  const cameraPosition = useMemo<[number, number, number]>(() => [0, 27, 25], []);
+  const cameraPosition = useMemo<[number, number, number]>(() => [0, 40, 0], []);
   return (
-    <div className="world-canvas" role="img" aria-label="Vue tridimensionnelle du monde torique 40 par 24">
+    <div className="world-canvas" role="img" aria-label="Vue du dessus du monde torique 40 par 24">
       <Canvas shadows="basic" dpr={[1, 1.75]} gl={{ antialias: true, alpha: false }}>
-        <color attach="background" args={[isNight ? "#070d15" : "#b5c7b0"]} />
-        <fog attach="fog" args={[isNight ? "#070d15" : "#9db5a0", 24, 55]} />
-        <PerspectiveCamera makeDefault position={cameraPosition} fov={42} near={0.1} far={100} />
-        <ambientLight intensity={isNight ? 0.3 : 1.1} color={isNight ? "#7082aa" : "#fff1d1"} />
+        <color attach="background" args={[isNight ? "#1a2735" : "#b5c7b0"]} />
+        <fog attach="fog" args={[isNight ? "#26394a" : "#9db5a0", 32, 70]} />
+        <OrthographicCamera
+          makeDefault
+          position={cameraPosition}
+          left={-24}
+          right={24}
+          top={18}
+          bottom={-18}
+          near={0.1}
+          far={100}
+        />
+        <ambientLight intensity={isNight ? 0.78 : 1.1} color={isNight ? "#a3bad8" : "#fff1d1"} />
         <directionalLight
           castShadow
-          position={[-12, 24, 8]}
-          intensity={isNight ? 0.35 : 2.1}
-          color={isNight ? "#6e8ac0" : "#ffe1a8"}
+          position={[-12, 32, 8]}
+          intensity={isNight ? 0.72 : 2.1}
+          color={isNight ? "#91aedd" : "#ffe1a8"}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
         />
@@ -295,9 +304,10 @@ export function WorldScene({
         <OrbitControls
           makeDefault
           target={[0, 0, 0]}
-          minDistance={12}
-          maxDistance={48}
-          maxPolarAngle={Math.PI / 2.15}
+          minZoom={0.72}
+          maxZoom={1.8}
+          minPolarAngle={0}
+          maxPolarAngle={0}
           enableDamping
           dampingFactor={0.08}
         />
