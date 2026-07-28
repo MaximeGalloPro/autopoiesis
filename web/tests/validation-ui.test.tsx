@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ValidationOverlay, ValidationReminder } from "../src/components/ValidationOverlay";
-import type { ValidationPrompt } from "../src/protocol";
+import { EvolutionCompletionOverlay, EvolutionCompletionReminder, ValidationOverlay, ValidationReminder } from "../src/components/ValidationOverlay";
+import type { EvolutionCompletion, ValidationPrompt } from "../src/protocol";
 
 const request = {
   request_id: "request-1",
@@ -68,5 +68,43 @@ describe("interface de validation", () => {
     expect(html).toContain("Reprendre");
     expect(html).toContain("Détails");
     expect(html).not.toContain("role=\"dialog\"");
+  });
+
+  test("explique clairement un délai dépassé sans présenter une évolution comme active", () => {
+    const completion: EvolutionCompletion = {
+      stage: "timed_out",
+      request_id: "request-1",
+      message: "Le délai de suivi est dépassé",
+      detail: "Dieu peut encore démarrer dans le daemon.",
+      elapsed_seconds: 900,
+      successful: false,
+      allowed_commands: ["o", "q"],
+    };
+    const html = renderToStaticMarkup(
+      <EvolutionCompletionOverlay completion={completion} sendCommand={async () => true} onMinimize={() => undefined} />,
+    );
+    expect(html).toContain("L’évolution n’a pas été activée");
+    expect(html).toContain("Aucun changement n’est actif");
+    expect(html).toContain("Reprendre la partie");
+    expect(html).toContain("Arrêter la partie");
+    expect(html).not.toContain("Recompiler et reprendre");
+    expect(html).not.toContain("Voulez-vous passer à l’étape suivante");
+  });
+
+  test("réserve la recompilation au transfert réellement réussi", () => {
+    const completion: EvolutionCompletion = {
+      stage: "complete",
+      request_id: "request-1",
+      message: "La nouvelle évolution est active",
+      detail: "Une version vérifiée est prête.",
+      elapsed_seconds: 12,
+      successful: true,
+      allowed_commands: ["o", "q"],
+    };
+    const html = renderToStaticMarkup(
+      <EvolutionCompletionReminder completion={completion} sendCommand={async () => true} onOpen={() => undefined} />,
+    );
+    expect(html).toContain("Recompiler et reprendre");
+    expect(html).toContain("Nouvelle évolution prête");
   });
 });
