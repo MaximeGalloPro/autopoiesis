@@ -18,38 +18,58 @@ import { animalLabels } from "../lib/format";
 
 export type EntitySelection = { kind: "agent" | "animal"; id: string };
 
-const terrainColors: Record<Terrain, string> = {
-  ground: "#567057",
-  wall: "#77766d",
-  water: "#297385",
-  tree: "#385d3c",
-  bush: "#466d43",
+const terrainColors: Record<Terrain, readonly string[]> = {
+  ground: ["#7fbd5a", "#75b253", "#8ac563"],
+  wall: ["#9aa3a1", "#879592", "#a6afaa"],
+  water: ["#3b9ed0", "#3293c8", "#49abd9"],
+  tree: ["#418a54", "#367c4c", "#4b975b"],
+  bush: ["#71af4e", "#659f46", "#7db85a"],
+};
+
+const nightTerrainColors: Record<Terrain, readonly string[]> = {
+  ground: ["#5d9668", "#548c61", "#68a173"],
+  wall: ["#718996", "#66808e", "#7c95a1"],
+  water: ["#2f79b8", "#286fae", "#3988c4"],
+  tree: ["#397a5e", "#306f54", "#448666"],
+  bush: ["#5a9b59", "#508e50", "#65a765"],
 };
 
 function worldPosition(position: Position, y = 0): [number, number, number] {
   return [position.x - WORLD_WIDTH / 2 + 0.5, y, position.y - WORLD_HEIGHT / 2 + 0.5];
 }
 
+function tileColor(terrain: Terrain, position: Position, isNight: boolean) {
+  const colors = (isNight ? nightTerrainColors : terrainColors)[terrain];
+  return colors[Math.abs(position.x * 17 + position.y * 31) % colors.length] ?? colors[0];
+}
+
 interface TileInstancesProps {
   cells: WorldCell[];
   terrain: Terrain;
+  isNight: boolean;
 }
 
-const TileInstances = memo(function TileInstances({ cells, terrain }: TileInstancesProps) {
+const TileInstances = memo(function TileInstances({ cells, terrain, isNight }: TileInstancesProps) {
   const selected = cells.filter((cell) => cell.terrain === terrain);
-  const height = terrain === "wall" ? 0.75 : terrain === "water" ? 0.08 : 0.18;
+  const height = terrain === "wall" ? 0.58 : terrain === "water" ? 0.055 : terrain === "tree" ? 0.16 : 0.12;
   return (
     <Instances limit={Math.max(1, selected.length)} range={selected.length}>
-      <boxGeometry args={[0.94, height, 0.94]} />
+      <boxGeometry args={[0.978, height, 0.978]} />
       <meshStandardMaterial
-        color={terrainColors[terrain]}
+        color="#ffffff"
         roughness={terrain === "water" ? 0.28 : 0.9}
         metalness={terrain === "water" ? 0.12 : 0}
+        emissive={terrain === "water" ? (isNight ? "#0c4f91" : "#1374af") : "#000000"}
+        emissiveIntensity={terrain === "water" ? (isNight ? 0.42 : 0.15) : 0}
         transparent={terrain === "water"}
-        opacity={terrain === "water" ? 0.86 : 1}
+        opacity={terrain === "water" ? 0.94 : 1}
       />
       {selected.map((cell) => (
-        <Instance key={`${terrain}-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, height / 2)} />
+        <Instance
+          key={`${terrain}-${cell.position.x}-${cell.position.y}`}
+          color={tileColor(terrain, cell.position, isNight)}
+          position={worldPosition(cell.position, height / 2)}
+        />
       ))}
     </Instances>
   );
@@ -60,22 +80,25 @@ interface MarkerInstancesProps {
   field: "food" | "wood" | "fibers" | "branches" | "stored_food";
   color: string;
   y: number;
-  shape?: "sphere" | "box" | "cone";
+  shape?: "berry" | "crate" | "sprout" | "branch" | "stock";
 }
 
-function MarkerInstances({ cells, field, color, y, shape = "sphere" }: MarkerInstancesProps) {
+function MarkerInstances({ cells, field, color, y, shape = "berry" }: MarkerInstancesProps) {
   const selected = cells.filter((cell) => cell[field] > 0);
   return (
     <Instances limit={Math.max(1, selected.length)} range={selected.length}>
-      {shape === "box" ? <boxGeometry args={[0.24, 0.22, 0.24]} />
-        : shape === "cone" ? <coneGeometry args={[0.14, 0.34, 5]} />
-          : <sphereGeometry args={[0.14, 8, 6]} />}
-      <meshStandardMaterial color={color} roughness={0.68} />
+      {shape === "crate" ? <boxGeometry args={[0.26, 0.2, 0.26]} />
+        : shape === "sprout" ? <coneGeometry args={[0.15, 0.36, 5]} />
+          : shape === "branch" ? <boxGeometry args={[0.35, 0.065, 0.1]} />
+            : shape === "stock" ? <dodecahedronGeometry args={[0.17, 0]} />
+              : <sphereGeometry args={[0.15, 8, 6]} />}
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.18} roughness={0.64} />
       {selected.map((cell) => (
         <Instance
           key={`${field}-${cell.position.x}-${cell.position.y}`}
           position={worldPosition(cell.position, y)}
-          scale={Math.min(1.6, 0.76 + cell[field] * 0.08)}
+          rotation={shape === "branch" ? [0, (cell.position.x * 0.8 + cell.position.y * 0.45) % Math.PI, 0] : undefined}
+          scale={Math.min(1.55, 0.74 + Math.sqrt(cell[field]) * 0.16)}
         />
       ))}
     </Instances>
@@ -89,19 +112,19 @@ function Nature({ cells }: { cells: WorldCell[] }) {
   return (
     <>
       <Instances limit={Math.max(1, trees.length)} range={trees.length}>
-        <cylinderGeometry args={[0.1, 0.15, 0.65, 6]} />
-        <meshStandardMaterial color="#614936" roughness={1} />
-        {trees.map((cell) => <Instance key={`trunk-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.48)} />)}
+        <cylinderGeometry args={[0.085, 0.13, 0.52, 6]} />
+        <meshStandardMaterial color="#80563b" roughness={1} />
+        {trees.map((cell) => <Instance key={`trunk-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.42)} />)}
       </Instances>
       <Instances limit={Math.max(1, trees.length)} range={trees.length}>
-        <coneGeometry args={[0.38, 0.86, 7]} />
-        <meshStandardMaterial color="#244d37" roughness={0.94} />
-        {trees.map((cell) => <Instance key={`crown-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 1.1)} />)}
+        <dodecahedronGeometry args={[0.43, 0]} />
+        <meshStandardMaterial color="#246e43" roughness={0.94} />
+        {trees.map((cell) => <Instance key={`crown-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.86)} />)}
       </Instances>
       <Instances limit={Math.max(1, bushes.length)} range={bushes.length}>
-        <dodecahedronGeometry args={[0.3, 0]} />
-        <meshStandardMaterial color="#3f744a" roughness={1} />
-        {bushes.map((cell) => <Instance key={`bush-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.42)} />)}
+        <dodecahedronGeometry args={[0.32, 0]} />
+        <meshStandardMaterial color="#4e9347" roughness={1} />
+        {bushes.map((cell) => <Instance key={`bush-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.38)} />)}
       </Instances>
       <Instances limit={Math.max(1, shelters.length)} range={shelters.length}>
         <coneGeometry args={[0.42, 0.72, 4]} />
@@ -119,9 +142,13 @@ function Nature({ cells }: { cells: WorldCell[] }) {
   );
 }
 
-function Campfires({ cells }: { cells: WorldCell[] }) {
+function Campfires({ cells, isNight }: { cells: WorldCell[]; isNight: boolean }) {
   return cells.filter((cell) => cell.campfire).map((cell) => (
     <group key={`fire-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.24)}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.17, 0]}>
+        <circleGeometry args={[isNight ? 0.62 : 0.44, 24]} />
+        <meshBasicMaterial color="#ffae54" transparent opacity={isNight ? 0.22 : 0.12} depthWrite={false} toneMapped={false} />
+      </mesh>
       <mesh rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.06, 0.06, 0.46, 6]} />
         <meshStandardMaterial color="#5a3827" />
@@ -132,7 +159,7 @@ function Campfires({ cells }: { cells: WorldCell[] }) {
           <meshBasicMaterial color="#ff9d45" toneMapped={false} />
         </mesh>
       </Float>
-      <pointLight color="#ff8b42" intensity={1.5} distance={4} decay={2} />
+      <pointLight color="#ffb45d" intensity={isNight ? 2.25 : 1.1} distance={isNight ? 4.8 : 3.2} decay={2} />
     </group>
   ));
 }
@@ -228,8 +255,8 @@ function AnimalMeshes({
 function EmptyWorld() {
   return (
     <>
-      <Grid args={[40, 24]} cellSize={1} cellThickness={0.5} cellColor="#345047" sectionSize={4} sectionColor="#527667" fadeDistance={45} />
-      <Sparkles count={45} scale={[36, 3, 20]} size={1.4} speed={0.25} color="#8dbda8" />
+      <Grid args={[40, 24]} cellSize={1} cellThickness={0.15} cellColor="#47786e" sectionSize={8} sectionColor="#8cbf88" fadeDistance={45} />
+      <Sparkles count={45} scale={[36, 3, 20]} size={1.4} speed={0.25} color="#b8dc8a" />
     </>
   );
 }
@@ -251,24 +278,25 @@ export function WorldScene({
   return (
     <div className="world-canvas" role="img" aria-label="Vue du dessus du monde torique 40 par 24">
       <Canvas shadows="basic" dpr={[1, 1.75]} gl={{ antialias: true, alpha: false }}>
-        <color attach="background" args={[isNight ? "#24384b" : "#b5c7b0"]} />
-        <fog attach="fog" args={[isNight ? "#304a60" : "#9db5a0", 36, 80]} />
+        <color attach="background" args={[isNight ? "#1c3853" : "#bde2b0"]} />
+        <fog attach="fog" args={[isNight ? "#274d71" : "#a9d09d", 36, 80]} />
         <OrthographicCamera
           makeDefault
           position={cameraPosition}
-          left={-21}
-          right={21}
-          top={13}
-          bottom={-13}
+          left={-20.6}
+          right={20.6}
+          top={12.45}
+          bottom={-12.45}
           near={0.1}
           far={100}
         />
-        <ambientLight intensity={isNight ? 1.12 : 1.1} color={isNight ? "#b8cbe5" : "#fff1d1"} />
+        <ambientLight intensity={isNight ? 1.2 : 1.18} color={isNight ? "#bbd5f1" : "#fff4cb"} />
+        <hemisphereLight args={[isNight ? "#b5d5f7" : "#e2f3bf", isNight ? "#1a4b54" : "#5f8743", isNight ? 0.52 : 0.32]} />
         <directionalLight
           castShadow
           position={[-12, 32, 8]}
-          intensity={isNight ? 0.95 : 2.1}
-          color={isNight ? "#a5bce4" : "#ffe1a8"}
+          intensity={isNight ? 1.05 : 2.25}
+          color={isNight ? "#b6d2fb" : "#ffe0a5"}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
         />
@@ -276,26 +304,26 @@ export function WorldScene({
         {snapshot ? (
           <>
             {(["ground", "wall", "water", "tree", "bush"] as Terrain[]).map((terrain) => (
-              <TileInstances key={terrain} cells={cells} terrain={terrain} />
+              <TileInstances key={terrain} cells={cells} terrain={terrain} isNight={isNight} />
             ))}
             <Nature cells={cells} />
-            <MarkerInstances cells={cells} field="food" color="#d25752" y={0.34} />
-            <MarkerInstances cells={cells} field="wood" color="#704c32" y={0.36} shape="box" />
-            <MarkerInstances cells={cells} field="fibers" color="#d8c47b" y={0.38} shape="cone" />
-            <MarkerInstances cells={cells} field="branches" color="#a4764d" y={0.38} shape="box" />
-            <MarkerInstances cells={cells} field="stored_food" color="#f0bf55" y={0.58} />
-            <Campfires cells={cells} />
+            <MarkerInstances cells={cells} field="food" color="#f35f62" y={0.32} shape="berry" />
+            <MarkerInstances cells={cells} field="wood" color="#a86d3d" y={0.3} shape="crate" />
+            <MarkerInstances cells={cells} field="fibers" color="#f0d466" y={0.34} shape="sprout" />
+            <MarkerInstances cells={cells} field="branches" color="#e6a45a" y={0.3} shape="branch" />
+            <MarkerInstances cells={cells} field="stored_food" color="#ffd45c" y={0.52} shape="stock" />
+            <Campfires cells={cells} isNight={isNight} />
             <AgentMeshes snapshot={snapshot} selected={selected} onSelect={onSelect} />
             <AnimalMeshes animals={snapshot.animals} selected={selected} onSelect={onSelect} />
             <Grid
               args={[40, 24]}
-              position={[0, 0.105, 0]}
+              position={[0, 0.205, 0]}
               cellSize={1}
-              cellThickness={0.25}
-              cellColor="#1c352d"
+              cellThickness={0.13}
+              cellColor={isNight ? "#75a8d1" : "#416a57"}
               sectionSize={8}
-              sectionThickness={0.7}
-              sectionColor="#1a473a"
+              sectionThickness={0.36}
+              sectionColor={isNight ? "#91c5e8" : "#79a96f"}
               fadeDistance={60}
               infiniteGrid={false}
             />
@@ -304,10 +332,11 @@ export function WorldScene({
         <OrbitControls
           makeDefault
           target={[0, 0, 0]}
-          minZoom={0.72}
-          maxZoom={1.8}
+          minZoom={0.88}
+          maxZoom={2.25}
           minPolarAngle={0}
           maxPolarAngle={0}
+          enableRotate={false}
           enableDamping
           dampingFactor={0.08}
         />

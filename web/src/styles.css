@@ -90,8 +90,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .workspace { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 1px; background: var(--line); }
 .world-panel { position: relative; min-width: 0; overflow: hidden; background: #101914; }
 .app-shell.night .world-panel { background: #1a2937; }
-.world-canvas { position: absolute; inset: 0; }
-.world-canvas canvas { display: block; }
+.world-canvas { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(ellipse at center, #c5e9ae 0%, #94c997 100%); }
+.app-shell.night .world-canvas { background: radial-gradient(ellipse at center, #315979 0%, #172e46 100%); }
+.world-canvas::after { content: ""; position: absolute; z-index: 1; inset: 0; border: 1px solid rgba(228, 255, 202, 0.16); box-shadow: inset 0 0 72px rgba(21, 69, 54, 0.24); pointer-events: none; }
+.app-shell.night .world-canvas::after { border-color: rgba(176, 220, 255, 0.22); box-shadow: inset 0 0 86px rgba(5, 18, 40, 0.42); }
+.world-canvas canvas { display: block; cursor: grab; touch-action: none; }
+.world-canvas canvas:active { cursor: grabbing; }
 .world-label { padding: 4px 9px; border: 1px solid rgba(247, 218, 150, 0.3); border-radius: 999px; background: rgba(9, 15, 13, 0.88); color: #fff2cb; font-size: 11px; font-weight: 750; white-space: nowrap; pointer-events: none; backdrop-filter: blur(7px); }
 .torus-hint { position: absolute; right: 18px; bottom: 48px; display: flex; flex-direction: column; align-items: flex-end; color: rgba(223,235,226,0.45); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; pointer-events: none; }
 .torus-hint span:last-child { margin-top: 4px; color: rgba(240,202,120,0.7); font-size: 10px; }
