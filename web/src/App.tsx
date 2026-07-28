@@ -275,7 +275,12 @@ export default function App() {
         <div className="population"><Users /><span><small>Population</small><strong>{snapshot?.agents.filter((agent) => agent.alive).length ?? 0} humains · {snapshot?.animals.filter((animal) => animal.alive).length ?? 0} animaux</strong></span></div>
       </footer>
 
-      <ProgressDock activity={data.activity} evolution={data.evolution} recompilation={data.recompilation} />
+      <ProgressDock
+        activity={data.activity}
+        evolution={data.evolution}
+        recompilation={data.recompilation}
+        recentEvents={snapshot?.recent_events ?? []}
+      />
       {data.validation && validationGuardKey && (openGuardKey === validationGuardKey
         ? <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
         : <ValidationReminder prompt={data.validation} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(validationGuardKey)} />)}

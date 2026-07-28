@@ -264,6 +264,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .god-progress li.active, .god-progress li.done { color: var(--accent-bright); }
 .god-progress li.active svg, .god-progress li.done svg { color: var(--accent); }
 .god-progress > p { display: flex; gap: 7px; margin: 10px 0 0; padding-top: 9px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
+.workflow-detail { align-items: flex-start; line-height: 1.45; }
+.workflow-detail > span { flex: 0 0 auto; color: var(--faint); font-size: 7px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .god-progress.failed { border-color: rgba(211,111,99,.35); }
 .recompile-progress { gap: 11px; padding: 13px 14px; }
 .recompile-progress > svg { color: var(--accent); }
@@ -272,6 +274,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .recompile-progress p { margin: 3px 0 0; color: var(--muted); font-size: 9px; }
 .recompile-progress.ready > svg { color: var(--green); }
 .recompile-progress.failed > svg { color: var(--red); }
+.recent-events { padding: 12px 14px; }
+.recent-events header { display: flex; align-items: baseline; gap: 8px; }
+.recent-events header strong { font-size: 11px; }
+.recent-events ol { display: flex; flex-direction: column; gap: 7px; max-height: 184px; margin: 10px 0 0; padding: 0; overflow-y: auto; list-style: none; }
+.recent-event-card { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; background: rgba(255,255,255,.018); }
+.recent-event-card > svg { flex: 0 0 auto; width: 13px; height: 13px; margin-top: 1px; color: var(--faint); }
+.recent-event-card > div { min-width: 0; }
+.recent-event-card span { display: block; color: var(--faint); font-size: 7px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.recent-event-card p { margin: 3px 0 0; color: #b6bdb8; font-size: 9px; line-height: 1.4; }
+.recent-event-card.request { border-color: rgba(216,175,97,.24); }
+.recent-event-card.request > svg, .recent-event-card.request span { color: var(--accent); }
+.recent-event-card.support { border-color: rgba(117,189,137,.27); }
+.recent-event-card.support > svg, .recent-event-card.support span { color: var(--green); }
+.recent-event-card.warning { border-color: rgba(211,111,99,.3); }
+.recent-event-card.warning > svg, .recent-event-card.warning span { color: #e49a8d; }
 
 .guard-reminder { position: fixed; z-index: 80; right: 24px; bottom: 105px; display: flex; align-items: center; gap: 12px; width: min(620px, calc(100vw - 48px)); padding: 12px 14px; border: 1px solid rgba(216,175,97,.35); border-radius: 12px; background: rgba(12,21,17,.97); box-shadow: 0 18px 55px rgba(0,0,0,.5); backdrop-filter: blur(16px); }
 .guard-reminder.devil { border-color: rgba(210,94,61,.4); background: rgba(31,20,16,.97); }
@@ -301,16 +318,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .validation-heading h2 { margin: 5px 0 5px; font-family: Georgia, serif; font-size: clamp(24px, 3vw, 34px); font-weight: 500; }
 .validation-heading p { margin: 0; color: var(--muted); font-size: 11px; }
 .request-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; margin: 21px 0; }
-.request-card { min-height: 260px; display: flex; flex-direction: column; align-items: flex-start; padding: 19px; border: 1px solid var(--line-strong); border-radius: 11px; background: rgba(255,255,255,.025); text-align: left; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, background 180ms ease; }
+.request-card { min-height: 276px; display: flex; flex-direction: column; align-items: flex-start; padding: 19px; border: 1px solid var(--line-strong); border-radius: 11px; background: rgba(255,255,255,.025); text-align: left; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, background 180ms ease; }
 .request-card:hover { transform: translateY(-3px); border-color: rgba(216,175,97,.55); background: rgba(216,175,97,.055); }
 .request-card.devil:hover { border-color: rgba(218,111,77,.6); background: rgba(157,64,44,.08); }
 .request-source { gap: 6px; color: var(--accent); font-size: 8px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
 .request-card.devil .request-source { color: #dc765c; }
 .request-card h3 { margin: 18px 0 10px; font-family: Georgia, serif; font-size: 20px; font-weight: 500; line-height: 1.15; }
 .request-card > p { margin: 0 0 16px; color: #aeb7b1; font-size: 11px; line-height: 1.5; }
-.request-obstacle { padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; line-height: 1.45; }
-.request-obstacle span { display: block; margin-bottom: 4px; color: var(--faint); font-size: 7px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.inspect-request { margin-top: auto; padding-top: 16px; color: var(--accent-bright); font-size: 9px; font-weight: 750; }
+.request-facts { display: flex; width: 100%; flex-direction: column; gap: 8px; margin: 0; }
+.request-facts > div { padding-top: 9px; border-top: 1px solid var(--line); }
+.request-facts dt { margin-bottom: 3px; color: var(--faint); font-size: 7px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.request-facts dd { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.inspect-request { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 16px; color: var(--accent-bright); font-size: 9px; font-weight: 750; }
+.inspect-request svg { width: 13px; }
 .devil-context { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
 .devil-context p { margin: 0; padding: 12px; border: 1px solid rgba(205,100,69,.18); color: #bcaaa3; font-size: 10px; line-height: 1.45; }
 .devil-context span { display: block; margin-bottom: 4px; color: #d9785f; font-size: 8px; font-weight: 800; text-transform: uppercase; }
@@ -429,7 +449,7 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .speed-controls button { font-size: 9px; }
   .delay-control { grid-template-columns: 125px 1fr; }
   .request-grid { grid-template-columns: 1fr; }
-  .request-card { min-height: 230px; }
+  .request-card { min-height: 0; }
   .guard-reminder { right: 12px; bottom: 155px; gap: 9px; width: calc(100vw - 24px); padding: 10px; }
   .guard-reminder-icon { flex-basis: 34px; height: 34px; }
   .guard-reminder-copy small { display: none; }
