@@ -474,6 +474,135 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .toast { right: 12px; bottom: 155px; max-width: calc(100vw - 24px); }
 }
 
+/* Le monde reste toujours visible : les informations secondaires vivent dans
+   un tiroir latéral, jamais dans une page qui défile. */
+html, body, #root { height: 100%; overflow: hidden; }
+.app-shell:not(.observation-mode) {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: 68px minmax(0, 1fr) 76px;
+  overflow: hidden;
+}
+.workspace { position: relative; min-height: 0; overflow: hidden; }
+.world-panel { width: 100%; height: 100%; }
+.side-panel {
+  position: absolute;
+  z-index: 15;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
+  transform: translateX(0);
+  transition: transform 220ms ease, box-shadow 220ms ease;
+  box-shadow: -18px 0 42px rgba(0,0,0,.28);
+}
+.side-panel.collapsed {
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
+  transform: translateX(100%);
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.side-panel-content { overflow: hidden; }
+.panel-toggle,
+.side-panel.collapsed .panel-toggle {
+  top: 16px;
+  right: calc(100% + 12px);
+  left: auto;
+  pointer-events: auto;
+}
+.side-panel.collapsed .panel-toggle {
+  position: fixed;
+  top: 84px;
+  right: 16px;
+  width: auto;
+  padding: 0 12px;
+}
+.side-panel.collapsed .panel-toggle span { display: inline; }
+.control-deck { min-height: 76px; overflow: hidden; }
+
+@media (max-width: 900px) {
+  .app-shell:not(.observation-mode) {
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: 68px minmax(0, 1fr) 76px;
+  }
+  .topbar { position: relative; min-height: 68px; }
+  .workspace { display: block; }
+  .world-panel { height: 100%; min-height: 0; }
+  .side-panel, .side-panel.collapsed {
+    top: 0;
+    bottom: 0;
+    width: min(390px, calc(100vw - 18px));
+    min-width: 0;
+    min-height: 0;
+  }
+  .inspector { min-height: 0; }
+  .control-deck { position: relative; bottom: auto; flex-wrap: nowrap; padding: 0 12px; }
+  .delay-control { flex: 1 1 280px; margin-top: 0; padding: 0 12px; border-top: 0; border-left: 1px solid var(--line); }
+}
+
+@media (max-width: 620px) {
+  .app-shell:not(.observation-mode) { grid-template-rows: 62px minmax(0, 1fr) 62px; }
+  .topbar { min-height: 62px; }
+  .side-panel.collapsed .panel-toggle { top: 74px; right: 12px; }
+  .control-deck { min-height: 62px; padding: 0 8px; }
+  .delay-control { display: none; }
+}
+
+/* Specificity guard: these rules intentionally win over the legacy responsive
+   rules above, which used a flowing document on small screens. */
+.app-shell:not(.observation-mode) {
+  height: 100dvh !important;
+  min-height: 0 !important;
+  grid-template-rows: 68px minmax(0, 1fr) 76px !important;
+  overflow: hidden !important;
+}
+.app-shell:not(.observation-mode) .topbar {
+  position: relative !important;
+  min-height: 0 !important;
+}
+.app-shell:not(.observation-mode) .workspace {
+  position: relative !important;
+  display: block !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.app-shell:not(.observation-mode) .world-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.app-shell:not(.observation-mode) .side-panel {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: min(390px, calc(100vw - 18px)) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+.app-shell:not(.observation-mode) .side-panel.collapsed {
+  transform: translateX(100%) !important;
+  pointer-events: none !important;
+  background: transparent !important;
+}
+.app-shell:not(.observation-mode) .side-panel-content { height: 100% !important; min-height: 0 !important; overflow: hidden !important; }
+.app-shell:not(.observation-mode) .control-deck {
+  position: relative !important;
+  bottom: auto !important;
+  min-height: 76px !important;
+  max-height: 76px !important;
+  overflow: hidden !important;
+  flex-wrap: nowrap !important;
+}
+@media (max-width: 620px) {
+  .app-shell:not(.observation-mode) { grid-template-rows: 62px minmax(0, 1fr) 62px !important; }
+  .app-shell:not(.observation-mode) .control-deck { min-height: 62px !important; max-height: 62px !important; padding: 0 8px !important; }
+  .app-shell:not(.observation-mode) .delay-control { display: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
@@ -761,4 +890,98 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .observation-mode .brand-block > div:last-child { display: none; }
   .observation-mode .connection-tools .icon-button { display: none; }
   .observation-mode .pause-control { flex-basis: 50px; }
+}
+
+/* Final viewport contract: secondary information is a drawer, never document flow. */
+@media (min-width: 621px) {
+  .app-shell:not(.observation-mode) .side-panel { position: absolute !important; top: 0 !important; right: 0 !important; bottom: 0 !important; width: min(380px, calc(100vw - 24px)) !important; min-width: 0 !important; }
+}
+@media (max-width: 620px) {
+  .app-shell:not(.observation-mode) { height: 100dvh !important; min-height: 0 !important; grid-template-rows: 62px minmax(0, 1fr) 62px !important; overflow: hidden !important; }
+  .app-shell:not(.observation-mode) .topbar { position: relative !important; min-height: 62px !important; }
+  .app-shell:not(.observation-mode) .workspace { position: relative !important; display: block !important; height: auto !important; min-height: 0 !important; overflow: hidden !important; }
+  .app-shell:not(.observation-mode) .world-panel { height: 100% !important; min-height: 0 !important; }
+  .app-shell:not(.observation-mode) .side-panel { position: absolute !important; top: 0 !important; right: 0 !important; bottom: 0 !important; width: min(390px, calc(100vw - 18px)) !important; min-width: 0 !important; min-height: 0 !important; }
+  .app-shell:not(.observation-mode) .side-panel.collapsed { transform: translateX(100%) !important; pointer-events: none !important; background: transparent !important; }
+  .app-shell:not(.observation-mode) .side-panel-content { height: 100% !important; min-height: 0 !important; overflow: hidden !important; }
+  .app-shell:not(.observation-mode) .control-deck { position: relative !important; bottom: auto !important; min-height: 62px !important; max-height: 62px !important; padding: 0 8px !important; overflow: hidden !important; flex-wrap: nowrap !important; }
+  .app-shell:not(.observation-mode) .delay-control { display: none !important; }
+}
+
+/* Final layout contract: the map owns the viewport; secondary information is
+   opened as a drawer and never expands the document vertically. */
+html, body, #root { height: 100%; overflow: hidden; }
+.app-shell:not(.observation-mode) {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: 68px minmax(0, 1fr) 76px;
+  overflow: hidden;
+}
+.workspace { position: relative; min-height: 0; overflow: hidden; }
+.world-panel { width: 100%; height: 100%; }
+.side-panel {
+  position: absolute;
+  z-index: 15;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
+  transform: translateX(0);
+  transition: transform 220ms ease, box-shadow 220ms ease;
+  box-shadow: -18px 0 42px rgba(0,0,0,.28);
+}
+.side-panel.collapsed {
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
+  transform: translateX(100%);
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.side-panel-content { overflow: hidden; }
+.panel-toggle,
+.side-panel.collapsed .panel-toggle {
+  top: 16px;
+  right: calc(100% + 12px);
+  left: auto;
+  pointer-events: auto;
+}
+.side-panel.collapsed .panel-toggle {
+  position: fixed;
+  top: 84px;
+  right: 16px;
+  width: auto;
+  padding: 0 12px;
+}
+.side-panel.collapsed .panel-toggle span { display: inline; }
+.control-deck { min-height: 76px; overflow: hidden; }
+
+@media (max-width: 900px) {
+  .app-shell:not(.observation-mode) {
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: 68px minmax(0, 1fr) 76px;
+  }
+  .topbar { position: relative; min-height: 68px; }
+  .workspace { display: block; }
+  .world-panel { height: 100%; min-height: 0; }
+  .side-panel, .side-panel.collapsed {
+    top: 0;
+    bottom: 0;
+    width: min(390px, calc(100vw - 18px));
+    min-width: 0;
+    min-height: 0;
+  }
+  .inspector { min-height: 0; }
+  .control-deck { position: relative; bottom: auto; flex-wrap: nowrap; padding: 0 12px; }
+  .delay-control { flex: 1 1 280px; margin-top: 0; padding: 0 12px; border-top: 0; border-left: 1px solid var(--line); }
+}
+
+@media (max-width: 620px) {
+  .app-shell:not(.observation-mode) { grid-template-rows: 62px minmax(0, 1fr) 62px; }
+  .topbar { min-height: 62px; }
+  .side-panel.collapsed .panel-toggle { top: 74px; right: 12px; }
+  .control-deck { min-height: 62px; padding: 0 8px; }
+  .delay-control { display: none; }
 }

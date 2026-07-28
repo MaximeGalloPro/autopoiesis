@@ -136,7 +136,9 @@ export default function App() {
   const [showServices, setShowServices] = useState(false);
   const [openGuardKey, setOpenGuardKey] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ObservatoryView>("characters");
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  // La carte est le plan principal. Les informations secondaires ne prennent
+  // de la place qu'après une demande explicite via la navigation ou une entité.
+  const [panelCollapsed, setPanelCollapsed] = useState(true);
   const [observationMode, setObservationMode] = useState(false);
 
   useEffect(() => {
