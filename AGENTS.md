@@ -39,6 +39,9 @@ rester intégrable sans dépendre d'un état caché d'un autre lot.
   console avant de considérer la fonctionnalité livrée.
 - Ne jamais considérer le simple succès d'un sous-agent comme une validation :
   seul le workspace principal peut conclure, après intégration, tests et push.
+- Dès qu'un sous-workspace n'a plus de tâche utile, arrêter puis archiver son
+  workspace Nuagent. Ne pas laisser de sous-agents ou de previews actifs après
+  la fin de leur lot ; l'archive reste restaurable si une reprise est nécessaire.
 - Pour une refonte visuelle, préserver la séparation entre observation et état
   autoritaire : l'interface peut être découpée en lots parallèles, mais le
   moteur C++ reste la source de vérité.
