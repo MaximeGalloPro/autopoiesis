@@ -175,11 +175,9 @@ function HistoryView({ snapshot }: { snapshot: WorldSnapshot }) {
     <div className="panel-stack section-view">
       <section className="inspector-intro">
         <span className="section-kicker"><Activity size={14} /> Chronique vivante</span>
-        <h3>Les traces récentes du monde.</h3>
-        <p>Chaque entrée est issue de l’instantané déterministe : l’observatoire ne réécrit jamais son histoire.</p>
+        <h3>Histoire</h3>
       </section>
       <section className="detail-section history-feed">
-        <div className="section-title"><Activity size={15} /> Événements récents</div>
         {events.length === 0 ? <p className="muted">Aucun événement n’a encore été rapporté.</p> : (
           <ol className="event-list">{events.map((event, index) => <li key={`${index}-${event}`}>{event}</li>)}</ol>
         )}
@@ -293,7 +291,6 @@ export function Inspector({ snapshot, selected, onSelect, view }: {
         {inspected && tab === "social" && <SocialView agent={inspected} snapshot={snapshot} />}
         {inspected && tab === "events" && (
           <section className="detail-section">
-            <div className="section-title"><Activity size={15} /> Événements récents</div>
             <ol className="event-list">
               {snapshot.recent_events.slice().reverse().map((event, index) => <li key={`${index}-${event}`}>{event}</li>)}
             </ol>

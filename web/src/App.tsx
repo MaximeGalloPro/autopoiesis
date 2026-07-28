@@ -326,7 +326,6 @@ export default function App() {
         activity={data.activity}
         evolution={data.evolution}
         recompilation={data.recompilation}
-        recentEvents={snapshot?.recent_events ?? []}
       />
       {data.validation && validationGuardKey && (openGuardKey === validationGuardKey
         ? <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
