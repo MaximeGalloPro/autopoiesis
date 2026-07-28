@@ -39,7 +39,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
   transition: background 500ms ease;
 }
 
-.app-shell.night { background: radial-gradient(circle at 18% 0%, rgba(75, 103, 147, 0.3), transparent 38%), #111c27; }
+.app-shell.night { background: radial-gradient(circle at 18% 0%, rgba(75, 103, 147, 0.3), transparent 38%), #172636; }
 
 .topbar {
   position: relative;

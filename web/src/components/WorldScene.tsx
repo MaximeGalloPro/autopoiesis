@@ -170,7 +170,7 @@ function AgentMeshes({
               <ringGeometry args={[0.37, 0.45, 32]} />
               <meshBasicMaterial color="#ffd66e" toneMapped={false} />
             </mesh>
-            <Html center position={[0, 0.95, 0]} distanceFactor={14} className="world-label">
+            <Html center position={[0, 0.95, 0]} distanceFactor={1} className="world-label">
               {agent.name}
             </Html>
           </>
@@ -215,7 +215,7 @@ function AnimalMeshes({
               <ringGeometry args={[0.3, 0.38, 28]} />
               <meshBasicMaterial color="#ffca76" toneMapped={false} />
             </mesh>
-            <Html center position={[0, 0.66, 0]} distanceFactor={14} className="world-label">
+              <Html center position={[0, 0.66, 0]} distanceFactor={1} className="world-label">
               {animalLabels[animal.type] ?? animal.type}
             </Html>
           </>
@@ -251,24 +251,24 @@ export function WorldScene({
   return (
     <div className="world-canvas" role="img" aria-label="Vue du dessus du monde torique 40 par 24">
       <Canvas shadows="basic" dpr={[1, 1.75]} gl={{ antialias: true, alpha: false }}>
-        <color attach="background" args={[isNight ? "#1a2735" : "#b5c7b0"]} />
-        <fog attach="fog" args={[isNight ? "#26394a" : "#9db5a0", 32, 70]} />
+        <color attach="background" args={[isNight ? "#24384b" : "#b5c7b0"]} />
+        <fog attach="fog" args={[isNight ? "#304a60" : "#9db5a0", 36, 80]} />
         <OrthographicCamera
           makeDefault
           position={cameraPosition}
-          left={-24}
-          right={24}
-          top={18}
-          bottom={-18}
+          left={-21}
+          right={21}
+          top={13}
+          bottom={-13}
           near={0.1}
           far={100}
         />
-        <ambientLight intensity={isNight ? 0.78 : 1.1} color={isNight ? "#a3bad8" : "#fff1d1"} />
+        <ambientLight intensity={isNight ? 1.12 : 1.1} color={isNight ? "#b8cbe5" : "#fff1d1"} />
         <directionalLight
           castShadow
           position={[-12, 32, 8]}
-          intensity={isNight ? 0.72 : 2.1}
-          color={isNight ? "#91aedd" : "#ffe1a8"}
+          intensity={isNight ? 0.95 : 2.1}
+          color={isNight ? "#a5bce4" : "#ffe1a8"}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
         />
