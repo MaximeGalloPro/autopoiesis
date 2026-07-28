@@ -6,7 +6,11 @@ import {
   Gauge,
   HelpCircle,
   Leaf,
+  Maximize2,
+  Minimize2,
   Pause,
+  PanelRightClose,
+  PanelRightOpen,
   Play,
   Radio,
   RotateCcw,
@@ -16,10 +20,10 @@ import {
   TimerReset,
   TriangleAlert,
   Users,
-  Warehouse,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Inspector } from "./components/Inspector";
+import { ObservatoryNavigation, type ObservatoryView } from "./components/ObservatoryNavigation";
 import { ProgressDock } from "./components/ProgressDock";
 import {
   EvolutionCompletionOverlay,
@@ -51,6 +55,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
         <div><dt><kbd>Espace</kbd></dt><dd>Pause / reprise</dd></div>
         <div><dt><kbd>1</kbd>…<kbd>5</kbd></dt><dd>Vitesses 0,25× à 4×</dd></div>
         <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Ralentir / accélérer</dd></div>
+        <div><dt><kbd>F</kbd></dt><dd>Mode observation plein écran</dd></div>
         <div><dt><kbd>?</kbd></dt><dd>Afficher cette aide</dd></div>
       </dl>
       <p>La souris fait pivoter le monde. La molette zoome et le clic droit déplace la caméra.</p>
@@ -130,6 +135,9 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showServices, setShowServices] = useState(false);
   const [openGuardKey, setOpenGuardKey] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<ObservatoryView>("characters");
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [observationMode, setObservationMode] = useState(false);
 
   useEffect(() => {
     if (snapshot) setDelayDraft(snapshot.delay_ms);
@@ -154,6 +162,14 @@ export default function App() {
         setShowShortcuts((visible) => !visible);
         return;
       }
+      if (event.key.toLowerCase() === "f") {
+        setObservationMode((active) => !active);
+        return;
+      }
+      if (event.key === "Escape" && observationMode) {
+        setObservationMode(false);
+        return;
+      }
       if (!snapshot || data.engine.status !== "running") return;
       if (event.code === "Space") {
         event.preventDefault();
@@ -172,9 +188,8 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [snapshot, data.engine.status, sendCommand]);
+  }, [snapshot, data.engine.status, observationMode, sendCommand]);
 
-  const campFood = useMemo(() => snapshot?.cells.reduce((total, cell) => total + cell.stored_food, 0) ?? 0, [snapshot]);
   const dayProgress = snapshot ? Math.max(0, Math.min(100, (snapshot.cycle_in_day / snapshot.cycles_per_day) * 100)) : 0;
   const validationGuardKey = data.validation
     ? `validation:${data.validation.kind}:${data.validation.simulation_cycle}`
@@ -182,22 +197,38 @@ export default function App() {
   const completionGuardKey = data.evolution_completion
     ? `completion:${data.evolution_completion.request_id}:${data.evolution_completion.stage}`
     : null;
+  const selectEntity = (selection: EntitySelection) => {
+    setSelected(selection);
+    setActiveView("characters");
+    setPanelCollapsed(false);
+  };
+  const selectView = (view: ObservatoryView) => {
+    setActiveView(view);
+    setPanelCollapsed(false);
+  };
 
   return (
-    <div className={`app-shell ${snapshot?.phase === "night" && !data.awaiting_dawn ? "night" : "day"}`}>
+    <div className={`app-shell ${snapshot?.phase === "night" && !data.awaiting_dawn ? "night" : "day"}${observationMode ? " observation-mode" : ""}`}>
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>
           <div><strong>Autopoiesis</strong><span>Observatoire du vivant</span></div>
         </div>
-        <div className="world-facts">
-          <div className="fact date-fact"><CalendarDays /><span><small>Calendrier</small><strong>{snapshot ? `An ${snapshot.date.year} · Mois ${snapshot.date.month} · Jour ${snapshot.date.day_of_month}` : "En attente"}</strong></span></div>
-          <div className="fact"><Sun /><span><small>Phase · {snapshot ? seasonLabels[snapshot.date.season] : "—"}</small><strong>{data.awaiting_dawn ? "Aube" : snapshot?.phase === "night" ? "Nuit" : snapshot ? "Jour" : "—"}</strong></span></div>
-          <div className="fact"><CloudRain /><span><small>Climat</small><strong>{snapshot ? `${snapshot.climate.temperature_c} °C · ${snapshot.climate.condition}` : "—"}</strong></span></div>
-          <div className="fact compact"><Warehouse /><span><small>Réserve</small><strong>{campFood}</strong></span></div>
+        <ObservatoryNavigation activeView={activeView} onChange={selectView} />
+        <div className="world-glance" aria-label="État du monde">
+          <span><CalendarDays aria-hidden="true" />{snapshot ? `Jour ${snapshot.date.absolute_day}` : "Connexion"}</span>
+          <span><Sun aria-hidden="true" />{data.awaiting_dawn ? "Aube" : snapshot?.phase === "night" ? "Nuit" : "Jour"}</span>
+          <span><CloudRain aria-hidden="true" />{snapshot ? `${snapshot.climate.temperature_c} °C · ${snapshot.climate.condition}` : "—"}</span>
         </div>
         <div className="connection-tools">
           <span className={`connection-pill ${connection}`}><i />{connectionLabels[connection]}</span>
+          <button
+            className="observation-button"
+            onClick={() => setObservationMode((active) => !active)}
+            aria-label={observationMode ? "Quitter le mode observation plein écran" : "Activer le mode observation plein écran"}
+            aria-pressed={observationMode}
+            title="Mode observation (F)"
+          >{observationMode ? <Minimize2 /> : <Maximize2 />}<span>{observationMode ? "Quitter" : "Observer"}</span></button>
           <button className="icon-button" onClick={() => setShowServices((visible) => !visible)} aria-label="Configurer les services IA" title="Services IA"><Settings2 /></button>
           <button className="icon-button" onClick={() => setShowShortcuts((visible) => !visible)} aria-label="Afficher les raccourcis" title="Raccourcis (?)"><HelpCircle /></button>
         </div>
@@ -207,7 +238,7 @@ export default function App() {
         <section className="world-panel">
           <div className="world-overlay top-left">
             <span className="eyebrow">Monde torique · 40 × 24</span>
-            <strong>{snapshot ? `Jour absolu ${snapshot.date.absolute_day}` : "Connexion au moteur"}</strong>
+            <strong>{snapshot ? `Jour ${snapshot.date.absolute_day} · ${seasonLabels[snapshot.date.season]}` : "Connexion au moteur"}</strong>
             <span>{data.awaiting_dawn ? "Aube prochaine" : `Cycle ${snapshot?.simulation_cycle.toLocaleString("fr-FR") ?? "—"}`}</span>
           </div>
           <div className="world-overlay top-right phase-orb" aria-label={`Progression de la journée ${Math.round(dayProgress)} %`}>
@@ -215,7 +246,7 @@ export default function App() {
             <p><strong>{data.awaiting_dawn ? "Aube" : `${Math.round(dayProgress)}%`}</strong><small>{data.awaiting_dawn ? "prochaine" : "de la journée"}</small></p>
           </div>
           <Suspense fallback={<div className="world-canvas" aria-label="Chargement de la scène tridimensionnelle" />}>
-            <WorldScene snapshot={snapshot} awaitingDawn={data.awaiting_dawn} selected={selected} onSelect={setSelected} />
+            <WorldScene snapshot={snapshot} awaitingDawn={data.awaiting_dawn} selected={selected} onSelect={selectEntity} />
           </Suspense>
           <div className="world-legend" aria-label="Légende du monde">
             <span><i className="food" />Nourriture</span><span><i className="wood" />Bois</span><span><i className="fiber" />Fibres</span><span><i className="shelter" />Abri</span><span><i className="fire" /><Flame />Feu</span><span><i className="stock" />Réserve commune</span>
@@ -229,7 +260,21 @@ export default function App() {
           )}
         </section>
 
-        {snapshot ? <Inspector snapshot={snapshot} selected={selected} onSelect={setSelected} /> : <EmptyInspector error={data.engine.last_error} />}
+        <section className={`side-panel${panelCollapsed ? " collapsed" : ""}`} aria-label="Panneau d’observation">
+          <button
+            className="panel-toggle"
+            type="button"
+            aria-label={panelCollapsed ? "Déplier le panneau d’observation" : "Replier le panneau d’observation"}
+            aria-controls="observatory-inspector"
+            aria-expanded={!panelCollapsed}
+            onClick={() => setPanelCollapsed((collapsed) => !collapsed)}
+          >{panelCollapsed ? <PanelRightOpen /> : <PanelRightClose />}<span>{panelCollapsed ? "Ouvrir" : "Réduire"}</span></button>
+          <div id="observatory-inspector" className="side-panel-content" hidden={panelCollapsed}>
+            {snapshot
+              ? <Inspector snapshot={snapshot} selected={selected} onSelect={selectEntity} view={activeView} />
+              : <EmptyInspector error={data.engine.last_error} />}
+          </div>
+        </section>
       </main>
 
       <footer className="control-deck">

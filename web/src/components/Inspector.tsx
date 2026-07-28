@@ -1,7 +1,8 @@
-import { Activity, Brain, Heart, PackageOpen, PawPrint, Sparkles, Users } from "lucide-react";
+import { Activity, Brain, CalendarDays, CloudRain, Flame, Heart, Map, PackageOpen, PawPrint, Sparkles, Users } from "lucide-react";
 import { useState } from "react";
 import type { AgentState, AnimalState, WorldSnapshot } from "../protocol";
 import { actionLabels, animalLabels, attributeLabels, clampPercent } from "../lib/format";
+import { observatoryViewLabel, type ObservatoryView } from "./ObservatoryNavigation";
 import type { EntitySelection } from "./WorldScene";
 
 function Meter({ label, value, inverse = false }: { label: string; value: number; inverse?: boolean }) {
@@ -128,10 +129,120 @@ function AnimalView({ animal }: { animal: AnimalState }) {
   );
 }
 
-export function Inspector({ snapshot, selected, onSelect }: {
+function CampView({ snapshot }: { snapshot: WorldSnapshot }) {
+  const campfires = snapshot.cells.filter((cell) => cell.campfire);
+  const storedFood = snapshot.cells.reduce((total, cell) => total + cell.stored_food, 0);
+  const shelters = snapshot.cells.filter((cell) => cell.shelter_level > 0);
+  const residents = snapshot.agents.filter((agent) => agent.alive);
+  const focalFire = campfires[0];
+
+  return (
+    <div className="panel-stack section-view">
+      <section className="inspector-intro camp-intro">
+        <span className="section-kicker"><Flame size={14} /> Vie collective</span>
+        <h3>{campfires.length > 0 ? "Le foyer rassemble le vivant." : "Aucun foyer n’est encore allumé."}</h3>
+        <p>{campfires.length > 0
+          ? "Les stocks et abris ci-dessous sont les éléments actuellement observables par le moteur."
+          : "La première flamme persistante deviendra le point de ralliement de la communauté."}</p>
+      </section>
+      <section className="detail-section camp-summary" aria-label="État du foyer">
+        <span><small>Feux connus</small><strong>{campfires.length}</strong></span>
+        <span><small>Réserve commune</small><strong>{storedFood} rations</strong></span>
+        <span><small>Abris</small><strong>{shelters.length}</strong></span>
+        <span><small>Résidents</small><strong>{residents.length}</strong></span>
+      </section>
+      <section className="detail-section key-values">
+        <div className="section-title"><Flame size={15} /> Point de ralliement</div>
+        {focalFire ? <>
+          <span>Position <strong>{focalFire.position.x} · {focalFire.position.y}</strong></span>
+          <span>Provisions observées <strong>{focalFire.stored_food}</strong></span>
+          <span>Abri local <strong>{focalFire.shelter_level > 0 ? `Niveau ${focalFire.shelter_level}` : "À construire"}</strong></span>
+        </> : <p className="muted">Les habitants cherchent encore à constituer un premier feu de camp.</p>}
+      </section>
+      <section className="detail-section resident-list">
+        <div className="section-title"><Users size={15} /> Autour du foyer</div>
+        {residents.length === 0 ? <p className="muted">Aucun personnage vivant à observer.</p> : residents.map((resident) => (
+          <div key={resident.id}><span>{resident.name}</span><small>{resident.behavior.archetype || "habitant"}</small></div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function HistoryView({ snapshot }: { snapshot: WorldSnapshot }) {
+  const events = snapshot.recent_events.slice().reverse();
+  return (
+    <div className="panel-stack section-view">
+      <section className="inspector-intro">
+        <span className="section-kicker"><Activity size={14} /> Chronique vivante</span>
+        <h3>Les traces récentes du monde.</h3>
+        <p>Chaque entrée est issue de l’instantané déterministe : l’observatoire ne réécrit jamais son histoire.</p>
+      </section>
+      <section className="detail-section history-feed">
+        <div className="section-title"><Activity size={15} /> Événements récents</div>
+        {events.length === 0 ? <p className="muted">Aucun événement n’a encore été rapporté.</p> : (
+          <ol className="event-list">{events.map((event, index) => <li key={`${index}-${event}`}>{event}</li>)}</ol>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MapsView({ snapshot, selected }: { snapshot: WorldSnapshot; selected: EntitySelection | null }) {
+  const selectedEntity = selected?.kind === "agent"
+    ? snapshot.agents.find((agent) => agent.id === selected.id)
+    : snapshot.animals.find((animal) => animal.id === selected?.id);
+  return (
+    <div className="panel-stack section-view">
+      <section className="inspector-intro map-intro">
+        <span className="section-kicker"><Map size={14} /> Carte d’observation</span>
+        <h3>Un monde sans bord.</h3>
+        <p>La carte est torique : franchir une lisière ramène vers le côté opposé du même territoire.</p>
+      </section>
+      <section className="detail-section map-card">
+        <div className="map-grid" aria-hidden="true"><span /><span /><span /><span /><span /><span /><span /><span /><span /></div>
+        <div className="map-key" aria-label="Repères de carte">
+          <span><i className="food" />Nourriture</span>
+          <span><i className="wood" />Bois</span>
+          <span><i className="shelter" />Abri</span>
+          <span><i className="fire" />Foyer</span>
+        </div>
+      </section>
+      <section className="detail-section key-values">
+        <div className="section-title"><Map size={15} /> Repère actuel</div>
+        <span>Étendue <strong>{snapshot.width} × {snapshot.height}</strong></span>
+        <span>Entité suivie <strong>{selectedEntity ? ("name" in selectedEntity ? selectedEntity.name : animalLabels[selectedEntity.type]) : "Aucune"}</strong></span>
+        <span>Position <strong>{selectedEntity ? `${selectedEntity.position.x} · ${selectedEntity.position.y}` : "—"}</strong></span>
+      </section>
+    </div>
+  );
+}
+
+function WorldView({ snapshot }: { snapshot: WorldSnapshot }) {
+  const livingAgents = snapshot.agents.filter((agent) => agent.alive).length;
+  const livingAnimals = snapshot.animals.filter((animal) => animal.alive).length;
+  return (
+    <div className="panel-stack section-view">
+      <section className="inspector-intro world-intro">
+        <span className="section-kicker"><CloudRain size={14} /> Lecture du monde</span>
+        <h3>{snapshot.climate.condition} · {snapshot.climate.temperature_c} °C</h3>
+        <p>Le rythme du monde reste défini par le moteur ; la vitesse graphique n’altère ni ses cycles ni ses validations.</p>
+      </section>
+      <section className="detail-section world-grid">
+        <span><CalendarDays size={15} /><small>Calendrier</small><strong>An {snapshot.date.year} · mois {snapshot.date.month}</strong></span>
+        <span><Activity size={15} /><small>Cycle</small><strong>{snapshot.simulation_cycle.toLocaleString("fr-FR")}</strong></span>
+        <span><CloudRain size={15} /><small>Pluie</small><strong>{snapshot.climate.rainfall_mm} mm</strong></span>
+        <span><Users size={15} /><small>Population</small><strong>{livingAgents} humains · {livingAnimals} animaux</strong></span>
+      </section>
+    </div>
+  );
+}
+
+export function Inspector({ snapshot, selected, onSelect, view }: {
   snapshot: WorldSnapshot;
   selected: EntitySelection | null;
   onSelect: (selection: EntitySelection) => void;
+  view: ObservatoryView;
 }) {
   const [tab, setTab] = useState<"vitals" | "profile" | "social" | "events">("vitals");
   const agent = selected?.kind === "agent" ? snapshot.agents.find((candidate) => candidate.id === selected.id) : undefined;
@@ -140,7 +251,8 @@ export function Inspector({ snapshot, selected, onSelect }: {
   const inspected = agent ?? (!animal ? fallback : undefined);
 
   return (
-    <aside className="inspector">
+    <aside className="inspector" aria-label={`${observatoryViewLabel(view)} de l’observatoire`}>
+      {view === "characters" && <>
       <div className="entity-switcher" aria-label="Entités observables">
         {snapshot.agents.map((candidate) => (
           <button
@@ -188,6 +300,11 @@ export function Inspector({ snapshot, selected, onSelect }: {
           </section>
         )}
       </div>
+      </>}
+      {view === "camp" && <div className="inspector-content"><CampView snapshot={snapshot} /></div>}
+      {view === "history" && <div className="inspector-content"><HistoryView snapshot={snapshot} /></div>}
+      {view === "maps" && <div className="inspector-content"><MapsView snapshot={snapshot} selected={selected} /></div>}
+      {view === "world" && <div className="inspector-content"><WorldView snapshot={snapshot} /></div>}
     </aside>
   );
 }
