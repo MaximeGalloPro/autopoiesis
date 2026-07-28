@@ -11,24 +11,9 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { EngineCommand, EvolutionCompletion, EvolutionRequest, ValidationPrompt } from "../protocol";
+import type { EngineCommand, EvolutionCompletion, ValidationPrompt } from "../protocol";
 import { stringifyMechanism } from "../lib/format";
-
-function RequestCard({ request, devil, onSelect }: {
-  request: EvolutionRequest;
-  devil: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button className={`request-card${devil ? " devil" : ""}`} onClick={onSelect}>
-      <span className="request-source">{devil ? <><Flame size={14} /> Contrainte du Diable</> : request.agent_name ?? "Personnification"}</span>
-      <h3>{request.title}</h3>
-      <p>{request.need}</p>
-      <div className="request-obstacle"><span>Obstacle</span>{request.obstacle}</div>
-      <span className="inspect-request">Examiner la proposition <span aria-hidden="true">→</span></span>
-    </button>
-  );
-}
+import { EvolutionRequestCard } from "./cards/EvolutionRequestCard";
 
 export function ValidationReminder({ prompt, sendCommand, onOpen }: {
   prompt: ValidationPrompt;
@@ -103,7 +88,7 @@ export function ValidationOverlay({ prompt, sendCommand, onMinimize }: {
             )}
             <div className="request-grid">
               {prompt.requests.map((request) => (
-                <RequestCard
+                <EvolutionRequestCard
                   key={request.request_id}
                   request={request}
                   devil={isDevil || request.source === "devil"}

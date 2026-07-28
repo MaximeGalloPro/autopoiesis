@@ -1,6 +1,7 @@
 import { Bot, CheckCircle2, Circle, Code2, LoaderCircle, TriangleAlert } from "lucide-react";
 import type { AiActivity, EvolutionProgress, RecompileProgress } from "../protocol";
 import { formatDuration } from "../lib/format";
+import { RecentEventCard } from "./cards/RecentEventCard";
 
 const stages = [
   ["queued", "File"],
@@ -13,12 +14,13 @@ const stages = [
   ["complete", "Activée"],
 ] as const;
 
-export function ProgressDock({ activity, evolution, recompilation }: {
+export function ProgressDock({ activity, evolution, recompilation, recentEvents }: {
   activity: AiActivity | null;
   evolution: EvolutionProgress | null;
   recompilation: RecompileProgress | null;
+  recentEvents: string[];
 }) {
-  if (!activity && !evolution && !recompilation) return null;
+  if (!activity && !evolution && !recompilation && recentEvents.length === 0) return null;
   const stageIndex = evolution ? stages.findIndex(([key]) => key === evolution.stage) : -1;
   const failed = evolution?.stage === "failed" || evolution?.stage === "timed_out";
   return (
@@ -47,7 +49,7 @@ export function ProgressDock({ activity, evolution, recompilation }: {
               return <li key={key} className={active ? "active" : done ? "done" : ""}>{done ? <CheckCircle2 /> : active ? <LoaderCircle className="spin" /> : <Circle />}<span>{label}</span></li>;
             })}
           </ol>
-          {evolution.detail && <p>{failed && <TriangleAlert size={15} />}{evolution.detail}</p>}
+          {evolution.detail && <p className="workflow-detail"><span>Dernier retour</span>{failed && <TriangleAlert size={15} />}{evolution.detail}</p>}
         </section>
       )}
       {recompilation && (
@@ -55,6 +57,16 @@ export function ProgressDock({ activity, evolution, recompilation }: {
           {recompilation.stage === "compiling" ? <LoaderCircle className="spin" /> : recompilation.stage === "ready" ? <CheckCircle2 /> : <TriangleAlert />}
           <div><span className="eyebrow">Transfert de version</span><strong>{recompilation.stage === "compiling" ? "Recompilation du moteur" : recompilation.stage === "ready" ? "Nouvelle version prête" : "Échec de recompilation"}</strong><p>{recompilation.detail}</p></div>
           <time>{formatDuration(recompilation.elapsed_ms)}</time>
+        </section>
+      )}
+      {recentEvents.length > 0 && (
+        <section className="recent-events" aria-label="Événements récents du moteur">
+          <header><span className="eyebrow">Fil du monde</span><strong>Événements récents</strong></header>
+          <ol>
+            {recentEvents.slice().reverse().map((event, index) => (
+              <RecentEventCard key={`${index}-${event}`} event={event} />
+            ))}
+          </ol>
         </section>
       )}
     </div>

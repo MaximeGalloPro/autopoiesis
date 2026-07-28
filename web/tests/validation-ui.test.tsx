@@ -30,6 +30,8 @@ describe("interface de validation", () => {
     expect(html).toContain("Les autres resteront pending");
     expect(html).toContain("Aucune évolution");
     expect(html).toContain("Arrêter le run");
+    expect(html).toContain("Nouvelle demande · Ada");
+    expect(html).toContain("Changement proposé");
     expect(html).toContain("Réduire la fenêtre de décision");
     expect(html).not.toContain("aria-modal=\"true\"");
   });
