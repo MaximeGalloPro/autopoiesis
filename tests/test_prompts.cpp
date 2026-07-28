@@ -21,4 +21,7 @@ int main() {
   assert(request.find("active_world_mechanisms") != std::string::npos);
   assert(request.find("evolution_history") != std::string::npos);
   assert(request.find("nouvelle cle") != std::string::npos);
+  assert(request.find("request_mode") != std::string::npos);
+  assert(request.find("parent_request_id") != std::string::npos);
+  assert(request.find("insist") != std::string::npos);
 }

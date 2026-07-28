@@ -4,6 +4,7 @@
 #include "decision.hpp"
 #include <fstream>
 #include <set>
+#include <string>
 
 namespace apo {
 class Logger {

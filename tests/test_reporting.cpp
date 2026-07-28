@@ -184,6 +184,30 @@ int main() {
            evolution.value("status","")=="activated";
   }));
 
+  const auto endorsement_directory=std::filesystem::path("/tmp/autopoiesis-endorsement-tests");
+  std::filesystem::remove_all(endorsement_directory);
+  Logger endorsement_logger(endorsement_directory.string());
+  std::ofstream(endorsement_directory/"feature_requests.jsonl")
+      << R"({"id":"open-request","status":"pending","evolution_key":"shared_shelter","title":"Abri partage","mechanism":{"summary":"Un abri protege le foyer."}})" << '\n';
+  const auto insist = [](const std::string& agent_id) {
+    return json{{"requested",true},{"request_mode","insist"},{"parent_request_id","open-request"},
+      {"insistence_reason","Cette capacite bloque encore le projet collectif."},{"evidence",json::array({"Le personnage a observe deux nuits exposees."})},
+      {"evolution_key","shared_shelter"},{"domain","construction"},{"title","Abri partage"},{"need","Protection nocturne"},
+      {"obstacle","Le foyer reste expose."},{"proposed_change","Ajouter un abri declaratif."},
+      {"mechanism",json{{"name","shared_shelter"},{"summary","Un abri protege le foyer."},{"resources",json::array({"wood"})},
+        {"actions",json::array({"build_shelter"})},{"preconditions",json::array({"near_campfire"})},{"deterministic_effects",json::array({"protects_at_night"})}}},
+      {"acceptance_tests",json::array({"Un abri protege le foyer la nuit."})}};
+  };
+  endorsement_logger.ai_feature_request(720,3,simulation.agents().at(0),json::object(),insist("a1"));
+  endorsement_logger.ai_feature_request(720,3,simulation.agents().at(0),json::object(),insist("a1"));
+  endorsement_logger.ai_feature_request(720,3,simulation.agents().at(1),json::object(),insist("a2"));
+  std::ifstream endorsement_input(endorsement_directory/"feature_endorsements.jsonl");
+  std::size_t endorsement_lines=0; std::string endorsement_line;
+  while(std::getline(endorsement_input,endorsement_line))++endorsement_lines;
+  assert(endorsement_lines==2);
+  const auto remembered=endorsement_logger.evolution_memory();
+  assert(remembered.size()==1&&remembered.front().value("support_count",0)==2);
+
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");
 }

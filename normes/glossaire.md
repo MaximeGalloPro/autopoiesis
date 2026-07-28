@@ -62,6 +62,13 @@ Action ou aptitude disponible pour un personnage lorsque ses préconditions loca
 
 Proposition structurée indiquant un besoin, un obstacle, un mécanisme souhaité et des critères d'acceptation. Son statut initial est `pending`. Elle ne peut devenir `approved` qu'après le contrôle de l'instance validatrice et l'autorisation prévue par la politique active. La politique actuelle exige une validation humaine explicite. Le Validator peut être humain (`VALIDATOR_MODE=human`) ou Codex (`VALIDATOR_MODE=codex`), mais le mode Codex ne fait qu'émettre une recommandation et ne franchit jamais cette garde.
 
+Une demande `pending` est ouverte et possède un identifiant stable. Un autre personnage peut
+l'insister avec `request_mode=insist` en indiquant cet identifiant, une raison et des preuves.
+Cette insistance est un soutien enregistré, pas une nouvelle proposition : elle ne modifie pas
+le mécanisme original, ne crée pas de doublon et ne peut être enregistrée deux fois par le même
+personnage dans une même fenêtre. Le nombre de soutiens est transmis aux fenêtres suivantes,
+comme première base d'un futur vote de peuple ; la validation humaine reste obligatoire.
+
 ### Cycle élémentaire
 
 Un cycle élémentaire est un tick de l'horloge du monde. Le monde avance à
