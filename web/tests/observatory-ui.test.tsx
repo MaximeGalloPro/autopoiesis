@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Inspector } from "../src/components/Inspector";
 import { ObservatoryNavigation, observatoryViews } from "../src/components/ObservatoryNavigation";
@@ -21,6 +22,16 @@ const snapshot = worldSnapshot({
 });
 
 describe("coquille de l’observatoire", () => {
+  test("réserve le viewport à la carte et transforme le panneau en tiroir", () => {
+    const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+    expect(styles).toContain("height: 100dvh !important");
+    expect(styles).toContain("overflow: hidden !important");
+    expect(styles).toContain(".app-shell:not(.observation-mode) .side-panel");
+    expect(styles).toContain("position: absolute !important");
+    expect(styles).toContain("transform: translateX(100%) !important");
+  });
+
   test("propose les cinq lectures du monde avec une section courante explicite", () => {
     const html = renderToStaticMarkup(
       <ObservatoryNavigation activeView="maps" onChange={() => undefined} />,
