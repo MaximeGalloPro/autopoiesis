@@ -19,7 +19,7 @@
 
 * { box-sizing: border-box; }
 
-html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+html, body, #root { width: 100%; min-width: 320px; height: 100%; min-height: 0; margin: 0; }
 
 body { background: #08100d; color: var(--ink); overflow: hidden; }
 
@@ -29,8 +29,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 
 .app-shell {
   width: 100vw;
+  height: 100vh;
   height: 100dvh;
-  min-height: 640px;
+  min-height: 0;
   display: grid;
   grid-template-rows: 78px minmax(0, 1fr) 88px;
   background:
@@ -412,19 +413,19 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
 }
 
 @media (max-width: 900px) {
-  body { overflow: auto; }
-  .app-shell { height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; }
+  body { overflow: hidden; }
+  .app-shell { height: 100dvh; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
   .topbar { position: sticky; top: 0; min-height: 70px; grid-template-columns: 1fr auto; padding: 10px 14px; }
   .world-facts { grid-column: 1 / -1; grid-row: 2; height: 48px; order: 3; }
   .fact { padding: 0 10px; }
   .fact strong { font-size: 10px; }
   .connection-pill { font-size: 0; }
   .connection-pill i { display: block; }
-  .workspace { min-height: 0; display: flex; flex-direction: column; }
-  .world-panel { height: min(66vh, 580px); min-height: 430px; }
-  .inspector { min-height: 620px; }
-  .inspector-content { overflow: visible; }
-  .control-deck { position: sticky; bottom: 0; grid-template-columns: 135px 1fr; min-height: 80px; }
+  .workspace { min-height: 0; display: block; overflow: hidden; }
+  .world-panel { height: 100%; min-height: 0; }
+  .inspector { min-height: 0; }
+  .inspector-content { overflow-y: auto; }
+  .control-deck { position: relative; bottom: auto; grid-template-columns: 135px 1fr; min-height: 0; max-height: 42dvh; overflow-y: auto; }
   .delay-control { grid-column: 1 / -1; border-top: 1px solid var(--line); padding: 10px 16px; }
   .population { display: none; }
   .progress-dock { bottom: 150px; }
@@ -436,7 +437,7 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .world-facts { grid-template-columns: 1.15fr .65fr; }
   .fact:nth-child(3) { display: none; }
   .fact:nth-child(2) { border-right: 1px solid var(--line); }
-  .world-panel { min-height: 390px; }
+  .world-panel { min-height: 0; }
   .top-left { top: 14px; left: 14px; }
   .phase-orb { top: 14px; right: 14px; }
   .phase-orb p { display: none; }
@@ -480,6 +481,8 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
 
 /* Coquille de l’observatoire : la carte reste le premier plan, les données se consultent à la demande. */
 .app-shell {
+  min-height: 0;
+  overflow: hidden;
   grid-template-rows: 68px minmax(0, 1fr) 76px;
   background:
     radial-gradient(circle at 48% -18%, rgba(148, 182, 111, 0.18), transparent 42%),
@@ -571,12 +574,14 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
 .observation-button svg { width: 14px; height: 14px; }
 
 .workspace {
+  min-height: 0;
+  overflow: hidden;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0;
   background: transparent;
 }
 
-.world-panel { border-right: 1px solid var(--line); }
+.world-panel { min-height: 0; border-right: 1px solid var(--line); }
 .top-left { top: 19px; left: 20px; padding: 9px 12px; border-left-width: 2px; background: linear-gradient(90deg, rgba(7,13,11,0.76), rgba(7,13,11,0)); }
 .top-left strong { font-size: 15px; }
 .phase-orb { top: 18px; right: 20px; border-radius: 999px; background: rgba(7,13,11,.48); }
@@ -587,12 +592,13 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   width: min(380px, 30vw);
   min-width: 330px;
   min-height: 0;
+  overflow: visible;
   background: linear-gradient(180deg, rgba(15,25,21,.97), rgba(9,16,13,.99));
   transition: width 220ms ease, min-width 220ms ease;
 }
 
 .side-panel.collapsed { width: 54px; min-width: 54px; }
-.side-panel-content { height: 100%; min-height: 0; }
+.side-panel-content { height: 100%; min-height: 0; overflow: hidden; }
 .side-panel-content[hidden] { display: none; }
 
 .panel-toggle {
@@ -708,22 +714,35 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
 }
 
 @media (max-width: 900px) {
-  .app-shell:not(.observation-mode) { height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; }
-  .topbar { position: sticky; grid-template-columns: auto 1fr auto; gap: 10px; min-height: 104px; padding: 8px 12px; }
+  .app-shell:not(.observation-mode) { height: 100dvh; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .topbar { position: relative; grid-template-columns: auto 1fr auto; gap: 10px; min-height: 104px; padding: 8px 12px; }
   .observatory-navigation { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; overflow-x: auto; padding: 0 2px 2px; }
   .observatory-navigation button { flex: 0 0 auto; padding: 8px 10px; }
   .connection-pill { font-size: 0; }
   .observation-button span { display: none; }
   .observation-button { width: 34px; justify-content: center; padding: 0; }
-  .workspace { display: block; }
-  .world-panel { height: min(64vh, 580px); min-height: 410px; border-right: 0; }
-  .side-panel, .side-panel.collapsed { width: 100%; min-width: 0; min-height: 52px; }
-  .side-panel.collapsed { background: rgba(9,16,13,.99); }
-  .panel-toggle, .side-panel.collapsed .panel-toggle { top: 8px; right: 12px; left: auto; }
-  .side-panel.collapsed .panel-toggle { width: auto; padding: 0 11px; }
-  .side-panel.collapsed .panel-toggle span { display: inline; }
-  .inspector { min-height: 620px; }
-  .control-deck { position: sticky; bottom: 0; flex-wrap: wrap; min-height: 0; padding: 9px 12px; }
+  .workspace { position: relative; display: block; min-height: 0; overflow: hidden; }
+  .world-panel { height: 100%; min-height: 0; border-right: 0; }
+  .side-panel, .side-panel.collapsed {
+    position: absolute;
+    z-index: 25;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, calc(100% - 42px));
+    min-width: 0;
+    min-height: 0;
+    background: linear-gradient(180deg, rgba(15,25,21,.99), rgba(9,16,13,.995));
+    box-shadow: -18px 0 42px rgba(0,0,0,.3);
+    transform: translateX(0);
+    transition: transform 220ms ease;
+  }
+  .side-panel.collapsed { transform: translateX(calc(100% - 52px)); }
+  .panel-toggle { top: 12px; right: 12px; left: auto; }
+  .side-panel.collapsed .panel-toggle { left: 7px; right: auto; width: 38px; padding: 0; }
+  .side-panel.collapsed .panel-toggle span { display: none; }
+  .inspector { min-height: 0; }
+  .control-deck { position: relative; bottom: auto; flex-wrap: wrap; min-height: 0; max-height: 42dvh; padding: 9px 12px; overflow-y: auto; }
   .pause-control { flex: 0 0 140px; padding-right: 10px; }
   .speed-controls { flex: 1 1 260px; padding: 0 10px; }
   .delay-control { flex: 1 0 100%; margin-top: 7px; padding: 9px 8px 2px; border-top: 1px solid var(--line); border-left: 0; }
@@ -741,7 +760,7 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .connection-tools { gap: 5px; }
   .icon-button { width: 32px; height: 32px; }
   .observatory-navigation button { gap: 5px; font-size: 9px; }
-  .world-panel { min-height: 380px; }
+  .world-panel { min-height: 0; }
   .top-left { top: 13px; left: 13px; }
   .phase-orb { top: 13px; right: 13px; }
   .world-legend { left: 12px; bottom: 12px; }

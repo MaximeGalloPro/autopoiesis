@@ -9,8 +9,6 @@ import {
   Maximize2,
   Minimize2,
   Pause,
-  PanelRightClose,
-  PanelRightOpen,
   Play,
   Radio,
   RotateCcw,
@@ -25,6 +23,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Inspector } from "./components/Inspector";
 import { ObservatoryNavigation, type ObservatoryView } from "./components/ObservatoryNavigation";
 import { ProgressDock } from "./components/ProgressDock";
+import { SidePanelToggle } from "./components/SidePanelToggle";
 import {
   EvolutionCompletionOverlay,
   EvolutionCompletionReminder,
@@ -261,14 +260,11 @@ export default function App() {
         </section>
 
         <section className={`side-panel${panelCollapsed ? " collapsed" : ""}`} aria-label="Panneau d’observation">
-          <button
-            className="panel-toggle"
-            type="button"
-            aria-label={panelCollapsed ? "Déplier le panneau d’observation" : "Replier le panneau d’observation"}
-            aria-controls="observatory-inspector"
-            aria-expanded={!panelCollapsed}
-            onClick={() => setPanelCollapsed((collapsed) => !collapsed)}
-          >{panelCollapsed ? <PanelRightOpen /> : <PanelRightClose />}<span>{panelCollapsed ? "Ouvrir" : "Réduire"}</span></button>
+          <SidePanelToggle
+            expanded={!panelCollapsed}
+            panelId="observatory-inspector"
+            onToggle={() => setPanelCollapsed((collapsed) => !collapsed)}
+          />
           <div id="observatory-inspector" className="side-panel-content" hidden={panelCollapsed}>
             {snapshot
               ? <Inspector snapshot={snapshot} selected={selected} onSelect={selectEntity} view={activeView} />
