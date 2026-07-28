@@ -17,3 +17,28 @@ Avant toute modification, lire [`normes/glossaire.md`](normes/glossaire.md). Ce 
 - Après chaque run de modifications, committer puis pousser la branche courante ; une modification non poussée n'est pas livrée et ne permet pas de lancer le jeu depuis un autre environnement.
 
 Les normes peuvent être enrichies dans `normes/`, mais une nouvelle règle doit rester compatible avec ces invariants.
+
+## Méthode de travail multi-agents
+
+Pour toute évolution suffisamment large pour être découpée, utiliser en priorité
+des sous-workspaces Nuagent indépendants plutôt qu'un développement monolithique
+dans le workspace principal. Chaque lot doit avoir un périmètre explicite et
+rester intégrable sans dépendre d'un état caché d'un autre lot.
+
+- Lancer les sous-agents Codex avec le modèle `gpt-5.6-terra`, sauf demande explicite contraire.
+- Répartir les lots par responsabilité : moteur, protocole, interface, rendu,
+  tests ou documentation ; éviter que deux agents modifient le même fichier
+  central sans coordination.
+- Demander à chaque agent de travailler en TDD, d'ajouter les tests de son lot,
+  de compiler et de pousser un commit identifiable.
+- L'agent principal reste responsable de l'intégration : lire le diff de chaque
+  lot, résoudre les conflits manuellement, vérifier les invariants du glossaire
+  et refuser toute implémentation seulement déclarative ou non testée.
+- Après intégration, exécuter les tests complets et le build Docker ; ouvrir la
+  preview, tester les parcours critiques avec le navigateur et contrôler la
+  console avant de considérer la fonctionnalité livrée.
+- Ne jamais considérer le simple succès d'un sous-agent comme une validation :
+  seul le workspace principal peut conclure, après intégration, tests et push.
+- Pour une refonte visuelle, préserver la séparation entre observation et état
+  autoritaire : l'interface peut être découpée en lots parallèles, mais le
+  moteur C++ reste la source de vérité.
