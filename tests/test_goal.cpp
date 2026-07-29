@@ -40,18 +40,18 @@ int main() {
         {"cells", json::array()},
         {"known_map", json::array({
             {{"x", 0}, {"y", 5}, {"terrain", static_cast<int>(Terrain::Ground)}, {"status", "traversable"}},
-            {{"x", 39}, {"y", 5}, {"terrain", static_cast<int>(Terrain::Ground)}, {"status", "traversable"}},
-            {{"x", 38}, {"y", 5}, {"terrain", static_cast<int>(Terrain::Water)}, {"status", "blocked"}}})}}};
+            {{"x", 1}, {"y", 5}, {"terrain", static_cast<int>(Terrain::Ground)}, {"status", "traversable"}},
+            {{"x", 2}, {"y", 5}, {"terrain", static_cast<int>(Terrain::Water)}, {"status", "blocked"}}})}}};
   };
 
-  const Decision wrapped_route = decider.decide(water_route(70, 20));
-  assert(wrapped_route.action == "move");
-  assert(wrapped_route.parameters["direction"] == "west");
+  const Decision bounded_route = decider.decide(water_route(70, 20));
+  assert(bounded_route.action == "move");
+  assert(bounded_route.parameters["direction"] == "east");
 
   const Decision persistent_first = decider.decide(water_route(50, 55, "persistent"));
   const Decision persistent_second = decider.decide(water_route(40, 60, "persistent"));
-  assert(persistent_first.parameters["direction"] == "west");
-  assert(persistent_second.parameters["direction"] == "west");
+  assert(persistent_first.parameters["direction"] == "east");
+  assert(persistent_second.parameters["direction"] == "east");
 
   auto blocked_shelter_project = [](const std::vector<std::string>& actions,
                                     int wood_inventory) {

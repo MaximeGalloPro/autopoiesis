@@ -69,7 +69,7 @@ tente et comment son choix d'évolution a changé la trajectoire du monde.
 - [ ] Clarifier ou implémenter par TDD le palier de chasse du lapin si la capacité attendue n’est pas encore active dans le moteur.
 - [ ] Préparer les mécanismes suivants : bois, arbres abattables, haches, fer, fabrication et préconditions associées.
 - [x] Ajouter des tests de rejeu pour garantir le déterminisme du moteur local et des projets.
-- [x] Agrandir la carte à `40 × 24` et appliquer une topologie torique à tous les déplacements.
+- [x] Agrandir la carte à `40 × 24` et borner tous les déplacements à ses limites.
 - [x] Ajouter eau, soif, cinq aliments, cinq espèces animales et dix attributs actifs.
 - [x] Remplacer la décision locale purement réactive par utilité, persistance d'objectif et BFS sur mémoire limitée.
 - [x] Ajouter le Diable : tirage local une fois par fenêtre, contraintes rationnelles, validation séparée et approbation automatique optionnelle.
