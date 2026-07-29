@@ -21,7 +21,7 @@ struct BlockedDecider final : IDecider {
 namespace apo {
 struct SimulationTestAccess {
   static void make_adjacent(Simulation& simulation) {
-    simulation.agents_[1].position = simulation.world_.step(simulation.agents_[0].position, "east");
+    simulation.agents_[1].position = *simulation.world_.step(simulation.agents_[0].position, "east");
   }
   static std::string execute(Simulation& simulation, Agent& agent, const Decision& decision) {
     return simulation.execute(agent, decision);

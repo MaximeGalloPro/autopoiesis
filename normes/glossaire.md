@@ -164,9 +164,9 @@ Un mois contient 30 journées. Une année contient 12 mois, soit 360 journées. 
 
 État quotidien déterministe dérivé du jour absolu et de la saison : température, pluviométrie et condition. Il agit uniquement par des règles locales validées : régénération ou raréfaction progressive des aliments, soif lors des fortes chaleurs, faim et fatigue pendant le gel, avec protection mesurable des abris. Il ne déclenche aucun appel API.
 
-### Monde torique
+### Monde borné
 
-La carte canonique mesure `40 × 24`. Elle ne possède pas de bord bloquant : tout déplacement dépassant une coordonnée est normalisé vers le côté opposé. Les distances, perceptions, voisinages et chemins utilisent tous cette même topologie.
+La carte canonique mesure `40 × 24` et ses bords sont bloquants. Tout déplacement qui dépasse une coordonnée est refusé ; aucune position hors carte n'est mémorisée ni introduite dans l'état du monde. Les distances de Manhattan, perceptions, voisinages et chemins restent dans ces bornes.
 
 ### Besoins vitaux
 
@@ -207,7 +207,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 10. Les secrets restent dans l'environnement et ne sont jamais committés.
 11. Toute évolution du moteur suit le TDD : test échouant d'abord, implémentation minimale, tests verts, puis revue.
 12. Toute session de modification terminée doit se conclure par la compilation, les tests, un commit Git et un push vers le dépôt distant. Une modification non poussée n'est pas considérée comme livrée, car elle ne peut pas être récupérée pour lancer le jeu.
-13. La topologie torique est un invariant transversal : aucune perception, distance ou navigation ne peut réintroduire implicitement un bord infranchissable.
+13. Les limites de la carte sont un invariant transversal : aucune perception, distance ou navigation ne peut reboucler, mémoriser ou accepter une coordonnée hors bornes.
 14. Une aspiration ou un projet n'est pas décoratif : sa progression, son blocage et ses effets décisionnels doivent être observables et testés.
 15. Un blocage local enrichit l'historique du personnage mais ne produit jamais directement une demande à Dieu ; seules les deux étapes IA de fin de fenêtre peuvent créer cette demande.
 16. Le Diable ne crée que des demandes structurées issues d'un catalogue local testé ; il n'applique jamais lui-même une contrainte au monde.

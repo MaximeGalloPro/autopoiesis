@@ -62,8 +62,8 @@ bool validate_feature_request(const json& request, std::string& error) {
 
 json active_world_mechanisms() {
   return json::array({
-      {{"key","toroidal_world_and_climate"},
-       {"summary","Carte torique de 40 par 24 cases, calendrier persistant, saisons, température, pluie et effets climatiques déterministes."},
+      {{"key","bounded_world_and_climate"},
+       {"summary","Carte bornée de 40 par 24 cases, calendrier persistant, saisons, température, pluie et effets climatiques déterministes."},
        {"resources",{"terrain","eau","arbres","buissons","abris"}},
        {"actions",json::array()}},
       {{"key","food_water_and_hunting"},
