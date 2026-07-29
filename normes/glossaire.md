@@ -320,6 +320,14 @@ Après approbation, elle persiste la transition puis attend le workflow de Dieu 
 
 L'interface normale est une application React et Three.js servie par Elysia. Elysia est une passerelle de transport sans état du monde faisant autorité : elle lance le backend C++, relaie ses événements versionnés et lui transmet des commandes bornées. Le moteur transmet un `UiSnapshot` copié et en lecture seule contenant la carte, le calendrier, le climat, les personnages, les animaux et les événements récents. Une sélection dans la scène 3D reste un état local du navigateur ; elle ne produit aucune décision et ne modifie jamais le monde. Lors d'une validation, le navigateur devient seulement une source de commande pour `HumanValidation`, jamais une source de statut parallèle.
 
+L'observatoire est conçu **mobile-first**. Les lectures essentielles et les
+actions doivent rester accessibles sur un écran tactile étroit, avec les
+informations secondaires dans des panneaux latéraux et sans défilement vertical
+obligatoire. Les consignes de contrôle de caméra actuellement documentées
+concernent le navigateur web sur ordinateur : glisser à la souris déplace la
+vue du dessus et la molette règle le zoom. La version mobile doit fournir les
+gestes tactiles équivalents sans changer l'état autoritaire du monde.
+
 Pendant un appel IA, le client réseau C++ travaille hors de la boucle de présentation afin que l'interface continue à recevoir les états de progression. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Une reconnexion reçoit le dernier état publié sans rejouer de cycle ni de commande.
 
 L’interface peut piloter l’activation des services IA déjà configurés sur le
