@@ -9,6 +9,7 @@ import {
   Stars,
 } from "@react-three/drei";
 import { memo, useMemo } from "react";
+import { MOUSE } from "three";
 import type { WorldCell, WorldSnapshot } from "../protocol";
 import { WorldEntities, worldPosition, type EntitySelection } from "./entities/WorldEntities";
 
@@ -152,6 +153,10 @@ export function WorldScene({
           minPolarAngle={0}
           maxPolarAngle={0}
           enableRotate={false}
+          enablePan
+          screenSpacePanning
+          panSpeed={0.9}
+          mouseButtons={{ LEFT: MOUSE.PAN, RIGHT: MOUSE.PAN }}
           enableDamping
           dampingFactor={0.08}
         />

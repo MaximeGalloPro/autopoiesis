@@ -10,4 +10,10 @@ describe("scène du monde", () => {
     expect(sceneSource).not.toContain("torus-hint");
     expect(sceneSource).not.toContain("continuité torique");
   });
+
+  test("déplace la carte au glisser gauche en vue du dessus", () => {
+    expect(sceneSource).toContain("enablePan");
+    expect(sceneSource).toContain("screenSpacePanning");
+    expect(sceneSource).toContain("LEFT: MOUSE.PAN");
+  });
 });
