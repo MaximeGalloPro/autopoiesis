@@ -37,12 +37,12 @@ Route route_between(const World& world, Position start, Position target) {
     pending.pop();
     for (const auto& direction : directions) {
       const auto next = world.step(current, direction);
-      if (!world.passable(next) || parent.contains({next.x, next.y})) continue;
-      parent[{next.x, next.y}] = {current.x, current.y};
-      parent_direction[{next.x, next.y}] = direction;
-      if (next == target) {
+      if (!next || !world.passable(*next) || parent.contains({next->x, next->y})) continue;
+      parent[{next->x, next->y}] = {current.x, current.y};
+      parent_direction[{next->x, next->y}] = direction;
+      if (*next == target) {
         std::vector<std::string> result;
-        Coordinates cursor{next.x, next.y};
+        Coordinates cursor{next->x, next->y};
         const Coordinates origin{start.x, start.y};
         while (cursor != origin) {
           result.push_back(parent_direction.at(cursor));
@@ -51,14 +51,14 @@ Route route_between(const World& world, Position start, Position target) {
         std::ranges::reverse(result);
         return {std::move(result)};
       }
-      pending.push(next);
+      pending.push(*next);
     }
   }
   return {};
 }
 
 Position position_after(const World& world, Position position, const Route& route) {
-  for (const auto& direction : route.directions) position = world.step(position, direction);
+  for (const auto& direction : route.directions) position = *world.step(position, direction);
   return position;
 }
 

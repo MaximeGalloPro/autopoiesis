@@ -283,8 +283,16 @@ Decision LocalDecider::decide(const Perception& p) {
   int fear=0,anger=0;for(const auto& emotion:emotions){if(emotion.value("type","")=="fear")fear=std::max(fear,emotion.value("intensity",0));if(emotion.value("type","")=="anger")anger=std::max(anger,emotion.value("intensity",0));}
   const int focus=attributes.value("focus",50),willpower=attributes.value("willpower",50);
   const int width=p.value.value("world_width",World::width),height=p.value.value("world_height",World::height);
-  const auto wrap=[&](Position position){return Position{((position.x%width)+width)%width,((position.y%height)+height)%height};};
-  const auto step=[&](Position position,const std::string& direction){if(direction=="north")--position.y;if(direction=="south")++position.y;if(direction=="east")++position.x;if(direction=="west")--position.x;return wrap(position);};
+  const auto in_bounds=[&](Position position){return position.x>=0&&position.x<width&&position.y>=0&&position.y<height;};
+  const auto step=[&](Position position,const std::string& direction)->std::optional<Position>{
+    if(!in_bounds(position))return std::nullopt;
+    if(direction=="north")--position.y;
+    else if(direction=="south")++position.y;
+    else if(direction=="east")++position.x;
+    else if(direction=="west")--position.x;
+    else return std::nullopt;
+    return in_bounds(position)?std::optional<Position>{position}:std::nullopt;
+  };
   static const std::vector<std::string> directions{"north","east","south","west"};
   const Position self{me.value("x",0),me.value("y",0)};
 
@@ -362,8 +370,6 @@ Decision LocalDecider::decide(const Perception& p) {
   if(!vital_emergency&&!companion_id.empty()&&companion_until_day>=time.value("day",0))for(const auto& other:visible_agents)
     if(other.value("id","")==companion_id&&!other.value("adjacent",false)){
       int dx=other.value("x",self.x)-self.x,dy=other.value("y",self.y)-self.y;
-      if(std::abs(dx)>width/2)dx=dx>0?dx-width:dx+width;
-      if(std::abs(dy)>height/2)dy=dy>0?dy-height:dy+height;
       const std::string direction=std::abs(dx)>=std::abs(dy)?(dx>0?"east":"west"):(dy>0?"south":"north");
       return {DecisionType::Action,"move",{{"direction",direction}},"Je reste auprès de mon compagnon.","relation","","accompagner"};
     }
@@ -490,10 +496,10 @@ Decision LocalDecider::decide(const Perception& p) {
       Position current=pending.front(); pending.pop();
       const auto current_info=reached.at({current.x,current.y});
       for(const auto& direction:directions){
-        Position next=step(current,direction);
-        if(reached.contains({next.x,next.y})||!traversable.contains({next.x,next.y})) continue;
-        reached[{next.x,next.y}]={current_info.first+1,current_info.first==0?direction:current_info.second};
-        pending.push(next);
+        const auto next=step(current,direction);
+        if(!next||reached.contains({next->x,next->y})||!traversable.contains({next->x,next->y})) continue;
+        reached[{next->x,next->y}]={current_info.first+1,current_info.first==0?direction:current_info.second};
+        pending.push(*next);
       }
     }
     int best_distance=std::numeric_limits<int>::max();
@@ -510,16 +516,17 @@ Decision LocalDecider::decide(const Perception& p) {
 
     std::vector<std::pair<std::string,Position>> unknown;
     for(const auto& direction:directions){
-      Position next=step(self,direction);
+      const auto next=step(self,direction);
+      if(!next)continue;
       bool known_cell=false;
-      for(const auto& cell:known) if(cell.value("x",-1)==next.x&&cell.value("y",-1)==next.y){known_cell=true;break;}
+      for(const auto& cell:known) if(cell.value("x",-1)==next->x&&cell.value("y",-1)==next->y){known_cell=true;break;}
       bool accessible=false;
-      for(const auto& cell:p.value["cells"]) if(cell.value("x",-1)==next.x&&cell.value("y",-1)==next.y){
+      for(const auto& cell:p.value["cells"]) if(cell.value("x",-1)==next->x&&cell.value("y",-1)==next->y){
         const int terrain=cell.value("terrain",-1);
         accessible=terrain==static_cast<int>(Terrain::Ground)||terrain==static_cast<int>(Terrain::Bush);
         break;
       }
-      if(!known_cell&&accessible) unknown.push_back({direction,next});
+      if(!known_cell&&accessible) unknown.push_back({direction,*next});
     }
     const bool has_fresh=std::any_of(unknown.begin(),unknown.end(),[&](const auto& candidate){return !repeated_positions.contains({candidate.second.x,candidate.second.y});});
     for(const auto&[direction,target]:unknown) if(!has_fresh||!repeated_positions.contains({target.x,target.y}))
@@ -570,7 +577,7 @@ Decision LocalDecider::decide(const Perception& p) {
     while(!pending.empty()){
       const auto current=pending.front();pending.pop();
       if(current!=self&&targets.contains({current.x,current.y}))return first_steps[{current.x,current.y}];
-      for(const auto& direction:directions){const auto next=step(current,direction);const std::pair<int,int> key{next.x,next.y};if(first_steps.contains(key)||!traversable.contains(key))continue;first_steps[key]=first_steps[{current.x,current.y}].empty()?direction:first_steps[{current.x,current.y}];pending.push(next);}
+      for(const auto& direction:directions){const auto next=step(current,direction);if(!next)continue;const std::pair<int,int> key{next->x,next->y};if(first_steps.contains(key)||!traversable.contains(key))continue;first_steps[key]=first_steps[{current.x,current.y}].empty()?direction:first_steps[{current.x,current.y}];pending.push(*next);}
     }
     return std::string{};
   };
@@ -578,7 +585,7 @@ Decision LocalDecider::decide(const Perception& p) {
     std::set<std::pair<int,int>> work_positions;
     for(const auto& building:p.value.value("buildings",json::array()))if(!building.value("complete",false)){
       Position site{building.value("x",0),building.value("y",0)};
-      for(const auto& direction:directions){const auto candidate=step(site,direction);if(traversable.contains({candidate.x,candidate.y}))work_positions.insert({candidate.x,candidate.y});}
+      for(const auto& direction:directions)if(const auto candidate=step(site,direction);candidate&&traversable.contains({candidate->x,candidate->y}))work_positions.insert({candidate->x,candidate->y});
     }
     const auto direction=route_to(work_positions);
     if(!direction.empty())return {DecisionType::Action,"move",{{"direction",direction}},
@@ -588,7 +595,7 @@ Decision LocalDecider::decide(const Perception& p) {
     std::set<std::pair<int,int>> camp_positions;
     for(const auto& coordinates:campfire_cells){
       Position fire{coordinates.first,coordinates.second};
-      for(const auto& direction:directions){const auto candidate=step(fire,direction);if(traversable.contains({candidate.x,candidate.y}))camp_positions.insert({candidate.x,candidate.y});}
+      for(const auto& direction:directions)if(const auto candidate=step(fire,direction);candidate&&traversable.contains({candidate->x,candidate->y}))camp_positions.insert({candidate->x,candidate->y});
     }
     const auto camp_direction=route_to(camp_positions);
     if(!camp_direction.empty())return {DecisionType::Action,"move",{{"direction",camp_direction}},
@@ -598,7 +605,7 @@ Decision LocalDecider::decide(const Perception& p) {
     std::set<std::pair<int,int>> camp_positions;
     for(const auto& coordinates:campfire_cells){
       Position fire{coordinates.first,coordinates.second};
-      for(const auto& direction:directions){const auto candidate=step(fire,direction);if(traversable.contains({candidate.x,candidate.y}))camp_positions.insert({candidate.x,candidate.y});}
+      for(const auto& direction:directions)if(const auto candidate=step(fire,direction);candidate&&traversable.contains({candidate->x,candidate->y}))camp_positions.insert({candidate->x,candidate->y});
     }
     const auto camp_direction=route_to(camp_positions);
     if(!camp_direction.empty())return {DecisionType::Action,"move",{{"direction",camp_direction}},
@@ -625,7 +632,7 @@ Decision LocalDecider::decide(const Perception& p) {
       if(traversable.contains(rest))camp_positions.insert(rest);
     }else for(const auto& coordinates:campfire_cells){
       Position fire{coordinates.first,coordinates.second};
-      for(const auto& direction:directions){const auto candidate=step(fire,direction);if(traversable.contains({candidate.x,candidate.y}))camp_positions.insert({candidate.x,candidate.y});}
+      for(const auto& direction:directions)if(const auto candidate=step(fire,direction);candidate&&traversable.contains({candidate->x,candidate->y}))camp_positions.insert({candidate->x,candidate->y});
     }
     const auto camp_direction=route_to(camp_positions);
     if(!camp_direction.empty())return {DecisionType::Action,"move",{{"direction",camp_direction}},
@@ -638,7 +645,7 @@ Decision LocalDecider::decide(const Perception& p) {
   }
   if(best_goal=="hydrate"){
     std::set<std::pair<int,int>> drink_targets;
-    for(const auto& coordinates:water_cells){Position water{coordinates.first,coordinates.second};for(const auto& direction:directions){const auto candidate=step(water,direction);if(traversable.contains({candidate.x,candidate.y}))drink_targets.insert({candidate.x,candidate.y});}}
+    for(const auto& coordinates:water_cells){Position water{coordinates.first,coordinates.second};for(const auto& direction:directions)if(const auto candidate=step(water,direction);candidate&&traversable.contains({candidate->x,candidate->y}))drink_targets.insert({candidate->x,candidate->y});}
     const auto direction=route_to(drink_targets);
     if(!direction.empty())return {DecisionType::Action,"move",{{"direction",direction}},"Je rejoins une source d'eau connue.","water","","be hydrated"};
   }
@@ -663,7 +670,8 @@ Decision LocalDecider::decide(const Perception& p) {
       Position candidate{coordinates.first,coordinates.second};
       if(candidate==self)continue;
       const bool borders_unknown=std::any_of(directions.begin(),directions.end(),[&](const std::string& direction){
-        return !known_position(step(candidate,direction));
+        const auto next=step(candidate,direction);
+        return next&&!known_position(*next);
       });
       if(borders_unknown)frontiers.push_back(candidate);
     }
@@ -717,12 +725,13 @@ Decision LocalDecider::decide(const Perception& p) {
     }
   }
   for(const auto& direction:directions){
-    Position adjacent=step(self,direction);
+    const auto adjacent=step(self,direction);
+    if(!adjacent)continue;
     int visits=0;
     bool excluded=false;
     bool known_direction=false;
     for(const auto& cell:known){
-      if(cell.value("x",-1)!=adjacent.x||cell.value("y",-1)!=adjacent.y) continue;
+      if(cell.value("x",-1)!=adjacent->x||cell.value("y",-1)!=adjacent->y) continue;
       known_direction=true;
       const std::string status=cell.value("status","unknown");
       excluded=status=="blocked"||status=="out_of_bounds";
@@ -934,14 +943,14 @@ bool Simulation::activate_feature(const std::string& key, int version) {
 Perception Simulation::perceive(Agent& a) {
   json cells=json::array();
   std::set<std::pair<int,int>> perceived;
-  for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx)if(std::abs(dx)+std::abs(dy)<=3){Position p=world_.wrap({a.position.x+dx,a.position.y+dy});if(!perceived.insert({p.x,p.y}).second)continue;auto terrain=world_.terrain(p);a.remember_map(p,terrain);if(world_.campfire(p))a.known_campfires.insert({p.x,p.y});json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&animal.position==p){const auto type=animal_type_name(animal.type);a.observed_animals.insert(type);animals.push_back({{"id",animal.id},{"type",type},{"danger",animal.danger},{"nutrition",animal.nutrition}});}json building=nullptr;if(const auto structure=world_.building(p))building={{"type",building_type_name(structure->type)},{"progress",structure->progress},{"required_work",structure->required_work},{"complete",structure->complete}};cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",world_.campfire(p)},{"building",building},{"stored_food",world_.stored_food(p)},{"stored_wood",world_.stored_wood(p)},{"stored_branches",world_.stored_branches(p)},{"stored_iron_ore",world_.stored_iron_ore(p)},{"crafted_items",world_.stored_crafted_items(p)},{"water",terrain==Terrain::Water},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()},{"animals",animals}});}
+  for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx)if(std::abs(dx)+std::abs(dy)<=3){Position p{a.position.x+dx,a.position.y+dy};if(!world_.in_bounds(p)||!perceived.insert({p.x,p.y}).second)continue;auto terrain=world_.terrain(p);a.remember_map(p,terrain);if(world_.campfire(p))a.known_campfires.insert({p.x,p.y});json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&animal.position==p){const auto type=animal_type_name(animal.type);a.observed_animals.insert(type);animals.push_back({{"id",animal.id},{"type",type},{"danger",animal.danger},{"nutrition",animal.nutrition}});}json building=nullptr;if(const auto structure=world_.building(p))building={{"type",building_type_name(structure->type)},{"progress",structure->progress},{"required_work",structure->required_work},{"complete",structure->complete}};cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",world_.campfire(p)},{"building",building},{"stored_food",world_.stored_food(p)},{"stored_wood",world_.stored_wood(p)},{"stored_branches",world_.stored_branches(p)},{"stored_iron_ore",world_.stored_iron_ore(p)},{"crafted_items",world_.stored_crafted_items(p)},{"water",terrain==Terrain::Water},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()},{"animals",animals}});}
   if(const auto primary=world_.primary_campfire()){
     a.known_campfires.insert({primary->x,primary->y});
     if(a.home_camp!=primary){a.home_camp=primary;a.camp_rest_position.reset();}
   }
   if(!a.home_camp&&!a.known_campfires.empty()){
     std::vector<Position> candidates;for(const auto& coordinates:a.known_campfires)candidates.push_back({coordinates.first,coordinates.second});
-    std::sort(candidates.begin(),candidates.end(),[&](Position left,Position right){const int left_distance=world_.toroidal_distance(a.position,left),right_distance=world_.toroidal_distance(a.position,right);return left_distance!=right_distance?left_distance<right_distance:std::pair{left.x,left.y}<std::pair{right.x,right.y};});
+    std::sort(candidates.begin(),candidates.end(),[&](Position left,Position right){const int left_distance=world_.distance(a.position,left),right_distance=world_.distance(a.position,right);return left_distance!=right_distance?left_distance<right_distance:std::pair{left.x,left.y}<std::pair{right.x,right.y};});
     a.home_camp=candidates.front();
   }
   if(a.home_camp&&!a.camp_rest_position){
@@ -953,8 +962,8 @@ Perception Simulation::perceive(Agent& a) {
     }
   }
   json known=json::array();for(const auto&[position,terrain]:a.map_memory){Position p{position.first,position.second};bool traversable=world_.passable(p);const bool known_fire=a.known_campfires.contains(position);json building=nullptr;if(const auto structure=world_.building(p))building={{"type",building_type_name(structure->type)},{"complete",structure->complete}};known.push_back({{"x",position.first},{"y",position.second},{"terrain",static_cast<int>(terrain)},{"status",traversable?"traversable":"blocked"},{"visit_count",a.map_visit_counts[position]},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",known_fire},{"building",building},{"stored_food",known_fire?world_.stored_food(p):0},{"stored_wood",known_fire?world_.stored_wood(p):0},{"stored_branches",known_fire?world_.stored_branches(p):0},{"stored_iron_ore",known_fire?world_.stored_iron_ore(p):0},{"crafted_items",known_fire?world_.stored_crafted_items(p):0}});}
-  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.toroidal_distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"fatigue",o.fatigue},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"conditions",health_conditions_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
-  json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.toroidal_distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
+  json visible=json::array();for(const auto&o:agents_)if(o.alive&&o.id!=a.id&&world_.distance(o.position,a.position)<=3)visible.push_back({{"id",o.id},{"name",o.name},{"x",o.position.x},{"y",o.position.y},{"fatigue",o.fatigue},{"adjacent",world_.adjacent(a.position,o.position)},{"skills",skills_json(o)},{"conditions",health_conditions_json(o)},{"relationship",relationships_json(a.relationships).value(o.id,json::object())}});
+  json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&world_.distance(animal.position,a.position)<=3)animals.push_back({{"id",animal.id},{"type",animal_type_name(animal.type)},{"x",animal.position.x},{"y",animal.position.y},{"danger",animal.danger},{"nutrition",animal.nutrition},{"adjacent",world_.adjacent(a.position,animal.position)}});
   json mem=json::array();for(const auto&s:a.memories)mem.push_back(s);
   const auto phase=day_phase_for(cycle_in_day_,cycles_per_day_);
   if(a.home_camp&&a.community_role.empty()){
@@ -996,13 +1005,14 @@ Perception Simulation::perceive(Agent& a) {
   json camp_inventory=json::object();if(const auto fire=world_.nearby_campfire(a.position))camp_inventory={{"wood",world_.stored_wood(*fire)},{"branches",world_.stored_branches(*fire)},{"iron_ore",world_.stored_iron_ore(*fire)},{"wooden_handles",world_.stored_item(*fire,CraftItem::WoodenHandle)},{"charcoal",world_.stored_item(*fire,CraftItem::Charcoal)},{"ropes",world_.stored_item(*fire,CraftItem::Rope)},{"iron_ingots",world_.stored_item(*fire,CraftItem::IronIngot)},{"axes",world_.stored_item(*fire,CraftItem::Axe)}};
   json lessons=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& learner:agents_)if(learner.alive&&learner.id!=a.id&&world_.nearby_campfire(learner.position)==fire)if(const auto skill=teachable_skill(a,learner))lessons.push_back({{"target_id",learner.id},{"target_name",learner.name},{"skill",skill_name(*skill)}});
   json care=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& patient:agents_)if(patient.alive&&patient.id!=a.id&&world_.nearby_campfire(patient.position)==fire){const HealthCondition* selected=nullptr;for(const auto& condition:patient.conditions)if(!condition.treated&&(!selected||condition.severity>selected->severity))selected=&condition;if(selected)care.push_back({{"target_id",patient.id},{"target_name",patient.name},{"condition_id",selected->id},{"type",health_condition_name(selected->type)},{"severity",selected->severity}});}
-  json buildings=json::array();for(const auto&[site,building]:world_.buildings())if(a.map_memory.contains({site.x,site.y})||world_.toroidal_distance(a.position,site)<=3)buildings.push_back({{"x",site.x},{"y",site.y},{"type",building_type_name(building.type)},{"progress",building.progress},{"required_work",building.required_work},{"complete",building.complete},{"adjacent",world_.adjacent(a.position,site)}});
+  json buildings=json::array();for(const auto&[site,building]:world_.buildings())if(a.map_memory.contains({site.x,site.y})||world_.distance(a.position,site)<=3)buildings.push_back({{"x",site.x},{"y",site.y},{"type",building_type_name(building.type)},{"progress",building.progress},{"required_work",building.required_work},{"complete",building.complete},{"adjacent",world_.adjacent(a.position,site)}});
   json designations=json::array();if(const auto fire=world_.nearby_campfire(a.position)){
     const std::array<std::pair<BuildingType,Position>,5> preferred{{
       {BuildingType::Wall,{-2,0}},{BuildingType::Door,{-1,-1}},{BuildingType::Bed,{0,-2}},
       {BuildingType::Stockpile,{1,-1}},{BuildingType::Workshop,{2,0}}}};
     for(const auto&[type,offset]:preferred)if(!world_.has_completed_building(type)){
-      Position site=world_.wrap({fire->x+offset.x,fire->y+offset.y});
+      Position site{fire->x+offset.x,fire->y+offset.y};
+      if(!world_.in_bounds(site))continue;
       if(world_.can_designate_building(site,*fire,type)){designations.push_back({{"building",building_type_name(type)},{"x",site.x},{"y",site.y}});break;}
     }
   }
@@ -1082,7 +1092,7 @@ void Simulation::update_population() {
 void Simulation::update_dangers() {
   auto warn=[&](DangerType type,Position position,int severity,int duration,
                 std::string cause,std::string warning,std::string mitigation){
-    position=world_.wrap(position);
+    if(!world_.in_bounds(position))return;
     if(std::any_of(dangers_.begin(),dangers_.end(),[&](const DangerEvent& danger){return danger.type==type&&danger.position==position;}))return;
     dangers_.push_back({"danger-"+std::to_string(next_danger_id_++),type,position,std::clamp(severity,1,100),day_,duration,
                         std::move(cause),std::move(warning),std::move(mitigation)});
@@ -1111,7 +1121,7 @@ void Simulation::update_dangers() {
       const auto building=world_.building(agent.position);
       const bool sheltered=world_.shelter_level(agent.position)>0||
           (building&&building->complete&&building->type==BuildingType::Bed);
-      const int distance=world_.toroidal_distance(agent.position,danger.position);
+      const int distance=world_.distance(agent.position,danger.position);
       if(danger.type==DangerType::Predator&&distance<=1){agent.health=clamp_stat(agent.health-std::max(2,danger.severity/12));add_health_condition(agent,HealthConditionType::Injury,12,"attaque de prédateur");add_emotion(agent,EmotionType::Fear,55,"attaque d'un loup","chercher la sécurité",4,day_);}
       else if(danger.type==DangerType::Storm&&!sheltered){agent.fatigue=clamp_stat(agent.fatigue+std::max(3,danger.severity/10));add_emotion(agent,EmotionType::Fear,30,"tempête sans abri","rejoindre un abri",3,day_);}
       else if(danger.type==DangerType::Wildfire&&distance<=2&&!sheltered){agent.health=clamp_stat(agent.health-5);add_emotion(agent,EmotionType::Fear,50,"feu près du foyer","s'éloigner du feu",4,day_);}
@@ -1304,7 +1314,7 @@ std::string Simulation::execute(Agent&a,const Decision&d){
     if(!world_.create_shelter(a.position)){--a.shelter_construction->progress;++a.wood_inventory;return "assemblage impossible";}
     a.shelter_construction.reset();a.remember("J'ai construit un abri en bois.");return "construit un abri";
   }
-  if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();Position p=world_.step(a.position,dir);if(world_.passable(p)){a.position=p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(p,world_.terrain(p));++a.map_visit_counts[{p.x,p.y}];a.remember("Je me suis deplace.");return "se deplace";}a.remember_map(p,world_.terrain(p));a.remember("Mon deplacement a ete bloque par un obstacle.");return "deplacement bloque";}
+  if(d.action=="move"){auto dir=d.parameters["direction"].get<std::string>();const auto p=world_.step(a.position,dir);if(p&&world_.passable(*p)){a.position=*p;a.fatigue=clamp_stat(a.fatigue+std::max(0,(50-a.attributes.agility)/20));a.remember_map(*p,world_.terrain(*p));++a.map_visit_counts[{p->x,p->y}];a.remember("Je me suis deplace.");return "se deplace";}if(p)a.remember_map(*p,world_.terrain(*p));a.remember("Mon deplacement a ete bloque par un obstacle.");return "deplacement bloque";}
   if(d.action=="warn_danger"||d.action=="help_companion"||d.action=="accompany"||d.action=="confront"||d.action=="reconcile"){
     Agent* target=nullptr;for(auto& other:agents_)if(other.alive&&other.id!=a.id&&other.id==d.parameters.value("target_id","")&&world_.adjacent(a.position,other.position))target=&other;
     if(!target)return "interaction relationnelle indisponible";

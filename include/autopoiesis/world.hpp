@@ -9,10 +9,9 @@ class World {
  public:
   static constexpr int width = 40, height = 24;
   explicit World(unsigned seed = 42);
-  Position wrap(Position p) const;
-  Position step(Position p, const std::string& direction) const;
-  int toroidal_distance(Position a, Position b) const;
-  bool adjacent(Position a, Position b) const { return toroidal_distance(a,b)==1; }
+  std::optional<Position> step(Position p, const std::string& direction) const;
+  int distance(Position a, Position b) const;
+  bool adjacent(Position a, Position b) const { return distance(a,b)==1; }
   std::vector<Position> neighbors(Position p) const;
   Terrain terrain(Position p) const;
   bool in_bounds(Position p) const { return p.x >= 0 && p.x < width && p.y >= 0 && p.y < height; }
@@ -105,6 +104,6 @@ class World {
   EcologyState ecology_;
   int next_animal_id_{2};
   void replenish_branches();
-  int index(Position p) const { const auto canonical=wrap(p); return canonical.y * width + canonical.x; }
+  int index(Position p) const { return p.y * width + p.x; }
 };
 }

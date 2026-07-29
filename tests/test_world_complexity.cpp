@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <set>
+#include <vector>
 
 using namespace apo;
 
@@ -25,11 +26,18 @@ int main() {
   World world(42);
   assert(World::width == 40);
   assert(World::height == 24);
-  assert((world.wrap({-1, 7}) == Position{39, 7}));
-  assert((world.wrap({40, 7}) == Position{0, 7}));
-  assert((world.wrap({4, -1}) == Position{4, 23}));
-  assert(world.toroidal_distance({0, 5}, {39, 5}) == 1);
-  assert(world.terrain({-1, 7}) == world.terrain({39, 7}));
+  assert(!world.step({0, 7}, "west"));
+  assert(!world.step({39, 7}, "east"));
+  assert(!world.step({4, 0}, "north"));
+  assert((world.step({0, 7}, "east") == Position{1, 7}));
+  assert((world.neighbors({0, 0}) == std::vector<Position>{{1, 0}, {0, 1}}));
+  assert(world.distance({0, 5}, {39, 5}) == 39);
+  assert(!world.adjacent({0, 5}, {39, 5}));
+  assert(world.terrain({-1, 7}) == Terrain::Wall);
+  assert(!world.passable({-1, 7}));
+  const int berries_before = world.berries({14, 2});
+  assert(!world.eat_berries({14 - World::width, 2}));
+  assert(world.berries({14, 2}) == berries_before);
 
   std::set<FoodType> foods;
   for (const auto& resource : world.food_resources()) foods.insert(resource.type);
@@ -62,4 +70,10 @@ int main() {
   Decision drink{DecisionType::Action, "drink", json::object(), "test"};
   assert(SimulationTestAccess::execute(simulation, thirsty, drink) == "boit de l'eau");
   assert(thirsty.thirst < before_thirst);
+
+  Agent edge{"edge", "Bord", {0, 0}};
+  Decision leave_world{DecisionType::Action, "move", {{"direction", "west"}}, "test"};
+  assert(SimulationTestAccess::execute(simulation, edge, leave_world) == "deplacement bloque");
+  assert((edge.position == Position{0, 0}));
+  assert(edge.map_memory.empty());
 }

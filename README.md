@@ -21,7 +21,7 @@ jusqu’à une validation humaine explicite.
 L’interface web conserve les fonctions de l’ancienne présentation native et
 ajoute une expérience responsive :
 
-- monde torique `40 × 24` en 3D, cycle jour/nuit, saisons, climat et ressources ;
+- monde borné `40 × 24` en 3D, cycle jour/nuit, saisons, climat et ressources ;
 - sélection des personnages et animaux, inspecteur des besoins, attributs,
   humeur, projet, inventaire, relations et actions disponibles ;
 - feu de camp, abris, nourriture portée et réserve commune visibles ;
@@ -72,7 +72,7 @@ capacités ne contient aucune logique arbitraire.
 
 ## Monde et vie collective
 
-Le monde torique `40 × 24` fait évoluer localement le climat, les ressources,
+Le monde borné `40 × 24` fait évoluer localement le climat, les ressources,
 la faune et les dangers annoncés. Le foyer collectif centralise nourriture et
 matériaux, permet cuisine, fabrication, réparation et chantiers, et soutient les
 activités sociales. Les personnages transportent un inventaire borné, acquièrent
