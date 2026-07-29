@@ -22,7 +22,7 @@ add_library(autopoiesis_core
     src/world.cpp src/decision.cpp src/simulation.cpp src/logger.cpp src/api_budget.cpp
     src/renderer.cpp src/openai_client.cpp src/feature_request.cpp src/validation.cpp
     src/devil.cpp src/calendar.cpp src/ui_model.cpp src/runtime_handoff.cpp
-    src/web_interface.cpp src/capability_registry.cpp)
+    src/web_interface.cpp src/capability_registry.cpp src/navigation.cpp)
 target_include_directories(autopoiesis_core PUBLIC include)
 target_compile_definitions(autopoiesis_core PRIVATE AUTOPOIESIS_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 target_link_libraries(autopoiesis_core PUBLIC CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
@@ -156,6 +156,9 @@ add_test(NAME evolving_population COMMAND autopoiesis_population_tests)
 add_executable(autopoiesis_danger_tests tests/test_dangers.cpp)
 target_link_libraries(autopoiesis_danger_tests PRIVATE autopoiesis_core)
 add_test(NAME active_dangers COMMAND autopoiesis_danger_tests)
+add_executable(autopoiesis_navigation_tests tests/test_navigation.cpp)
+target_link_libraries(autopoiesis_navigation_tests PRIVATE autopoiesis_core)
+add_test(NAME bounded_navigation_contract COMMAND autopoiesis_navigation_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -200,6 +203,7 @@ foreach(test_target
     autopoiesis_emotion_tests
     autopoiesis_relationship_tests
     autopoiesis_population_tests
-    autopoiesis_danger_tests)
+    autopoiesis_danger_tests
+    autopoiesis_navigation_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()
