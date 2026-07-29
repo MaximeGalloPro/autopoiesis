@@ -58,7 +58,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
         <div><dt><kbd>F</kbd></dt><dd>Mode observation plein écran</dd></div>
         <div><dt><kbd>?</kbd></dt><dd>Afficher cette aide</dd></div>
       </dl>
-      <p>La souris fait pivoter le monde. La molette zoome et le clic droit déplace la caméra.</p>
+      <p>Ordinateur : glissez avec la souris pour déplacer la carte, et utilisez la molette pour zoomer. Mobile-first : l’équivalent tactile reste la cible de l’interface.</p>
     </div>
   );
 }

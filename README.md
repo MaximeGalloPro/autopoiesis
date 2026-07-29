@@ -16,10 +16,20 @@ Cette frontière conserve les invariants du projet : le décideur IA propose,
 le moteur décide de ce qui est exécutable et toute évolution reste `pending`
 jusqu’à une validation humaine explicite.
 
+## Priorité des plateformes
+
+Autopoiesis est conçu **mobile-first** : les informations essentielles, les
+cartes, les panneaux latéraux et les commandes doivent rester utilisables sur
+un écran tactile étroit, sans défilement vertical obligatoire. Les détails de
+contrôle de caméra mentionnés ci-dessous concernent actuellement la version
+navigateur web sur ordinateur : glisser à la souris pour déplacer la carte et
+molette pour zoomer. Les gestes tactiles (glisser à un doigt et pincement)
+doivent conserver la même intention sur mobile.
+
 ## L’observatoire
 
 L’interface web conserve les fonctions de l’ancienne présentation native et
-ajoute une expérience responsive :
+propose une expérience responsive mobile-first :
 
 - monde borné `40 × 24` en 3D, cycle jour/nuit, saisons, climat et ressources ;
 - sélection des personnages et animaux, inspecteur des besoins, attributs,
