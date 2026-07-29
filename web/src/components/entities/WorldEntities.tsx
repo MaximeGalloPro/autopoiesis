@@ -1,7 +1,11 @@
 import { Float, Html, Instance, Instances } from "@react-three/drei";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import type { Group } from "three";
 import type { AgentState, AnimalState, Position, WorldCell, WorldSnapshot } from "../../protocol";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../../protocol";
 import { animalLabels } from "../../lib/format";
+import { interpolatePosition, type SmoothPosition } from "../../lib/smoothPosition";
 
 export type EntitySelection = { kind: "agent" | "animal"; id: string };
 
@@ -9,6 +13,44 @@ const agentPalette = ["#e7b85f", "#d4775d", "#82bca4", "#a68acb"];
 
 export function worldPosition(position: Position, y = 0): [number, number, number] {
   return [position.x - WORLD_WIDTH / 2 + 0.5, y, position.y - WORLD_HEIGHT / 2 + 0.5];
+}
+
+function useSmoothWorldPosition(position: Position, y: number) {
+  const groupRef = useRef<Group>(null);
+  const initial = worldPosition(position, y);
+  const targetRef = useRef<SmoothPosition>({ x: initial[0], y: initial[1], z: initial[2] });
+  const visualRef = useRef<SmoothPosition>({ ...targetRef.current });
+
+  useLayoutEffect(() => {
+    groupRef.current?.position.set(visualRef.current.x, visualRef.current.y, visualRef.current.z);
+  }, []);
+  useEffect(() => {
+    const next = worldPosition(position, y);
+    targetRef.current = { x: next[0], y: next[1], z: next[2] };
+  }, [position.x, position.y, y]);
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+    visualRef.current = interpolatePosition(visualRef.current, targetRef.current, delta);
+    groupRef.current.position.set(visualRef.current.x, visualRef.current.y, visualRef.current.z);
+  });
+  return groupRef;
+}
+
+function SmoothPositionGroup({
+  position,
+  y,
+  rotation,
+  onClick,
+  children,
+}: {
+  position: Position;
+  y: number;
+  rotation?: [number, number, number];
+  onClick?: (event: ThreeEvent<MouseEvent>) => void;
+  children: ReactNode;
+}) {
+  const positionRef = useSmoothWorldPosition(position, y);
+  return <group ref={positionRef} rotation={rotation} onClick={onClick}>{children}</group>;
 }
 
 function offsetPosition(cell: WorldCell, y: number, x = 0, z = 0): [number, number, number] {
@@ -224,9 +266,10 @@ function AgentModels({
     const isSelected = selected?.kind === "agent" && selected.id === agent.id;
     const hasPack = agent.wood_inventory > 0 || agent.branch_inventory > 0 || Boolean(agent.carried_food);
     return (
-      <group
+      <SmoothPositionGroup
         key={agent.id}
-        position={worldPosition(agent.position, 0.28)}
+        position={agent.position}
+        y={0.28}
         rotation={[0, (index % 4) * (Math.PI / 2), 0]}
         onClick={(event) => { event.stopPropagation(); onSelect({ kind: "agent", id: agent.id }); }}
       >
@@ -252,7 +295,7 @@ function AgentModels({
           <SelectionRing radius={0.39} y={-0.13} />
           <Html center position={[0, 0.88, 0]} distanceFactor={1} className="world-label">{agent.name}</Html>
         </>}
-      </group>
+      </SmoothPositionGroup>
     );
   });
 }
@@ -300,9 +343,10 @@ function AnimalModels({
     const radius = animal.type === "deer" || animal.type === "wolf" ? 0.42 : 0.35;
     const ringHeight = animal.type === "fish" ? -0.05 : -0.15;
     return (
-      <group
+      <SmoothPositionGroup
         key={animal.id}
-        position={worldPosition(animal.position, animal.type === "fish" ? 0.2 : 0.31)}
+        position={animal.position}
+        y={animal.type === "fish" ? 0.2 : 0.31}
         onClick={(event) => { event.stopPropagation(); onSelect({ kind: "animal", id: animal.id }); }}
       >
         <AnimalSilhouette animal={animal} />
@@ -311,7 +355,7 @@ function AnimalModels({
           <SelectionRing radius={radius} y={ringHeight} />
           <Html center position={[0, 0.7, 0]} distanceFactor={1} className="world-label">{animalLabels[animal.type] ?? animal.type}</Html>
         </>}
-      </group>
+      </SmoothPositionGroup>
     );
   });
 }
