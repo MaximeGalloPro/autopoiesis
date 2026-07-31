@@ -190,14 +190,42 @@ Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de réf
 
 Après ces six appels, le Diable effectue son tirage local. Ce tirage et la création éventuelle de sa contrainte n'ajoutent aucun appel API. La validation du Diable est une étape séparée et ne consomme pas le choix unique parmi les trois propositions des personnages.
 
-Après chaque fenêtre IA, le moteur s'arrête et attend une confirmation humaine. La validation traite au maximum une demande parmi celles de la fenêtre ; les autres restent `pending`. La reprise est explicite (`o`) ; l'arrêt est explicite (`q`). Cette garde est active par défaut via `WAIT_FOR_HUMAN_VALIDATION=1`.
-L'interface ne présente que les trois demandes les plus récentes de la fenêtre courante. Les autres propositions restent conservées dans les journaux et `pending`, mais ne sont pas proposées dans ce choix.
+Le monde ne s'arrête pas à la fin d'une fenêtre. L'API ne peut générer un
+nouveau lot que si le lot précédent a été entièrement traité par la décision
+humaine et que `CARD_REQUEST_COOLDOWN` est écoulé. Un seul appel réseau est
+actif à la fois ; une erreur est journalisée et ne relance pas une boucle
+automatique. Le compteur d'appels est persistant et l'interface demande une
+confirmation supplémentaire à chaque multiple de dix appels.
+L'interface présente trois cartes au foyer principal lorsqu'une demande est
+ouverte. Cliquer sur le feu avec son alerte ouvre l'overlay ; choisir une carte
+la retire immédiatement et rend le contrôle au monde. Une carte refusée est
+également traitée : elle ne reste pas ouverte indéfiniment.
+
+### Famille et fin de partie
+
+Les premiers personnages appartiennent à une même famille et au même foyer
+principal. Une naissance exige des adultes compatibles, un logement ou un
+foyer viable, des ressources réservées et un délai de reproduction ; elle
+crée un nouvel individu avec des parents persistés et des traits hérités selon
+une règle déterministe bornée. L'âge progresse avec les journées, les besoins
+restent simulés pour chaque individu et la mort conserve sa cause dans
+l'historique. Une partie se termine lorsque aucun personnage vivant ne reste ;
+le monde est alors consultable mais ne reçoit plus de décisions autonomes.
+
+### Interface de cartes
+
+Les cartes sont le niveau de décision collectif. Elles peuvent proposer une
+nouvelle capacité ou réactiver une capacité déjà implémentée. Après activation,
+la capacité devient disponible pour la famille ou le peuple concerné, jamais
+pour le seul personnage ayant formulé la demande. Les cartes ne modifient pas
+directement le moteur : elles transmettent un choix borné, revalidé par le
+moteur et soumis aux coûts et préconditions de la capacité.
 
 ## Règles d'architecture
 
 1. Le décideur IA propose ; le moteur d'exécution dispose.
-2. Les cycles élémentaires sont exécutés localement ; à la fin de chaque fenêtre IA configurée, l'IA reçoit d'abord un bilan puis produit une demande d'évolution dans un second appel lié pour chaque personnage. Aucun appel IA ne décide les actions quotidiennes.
-3. La simulation ne franchit jamais une fenêtre IA sans passer par la garde de confirmation humaine d'au plus une demande, sauf désactivation explicite pour un run automatisé.
+2. Les cycles élémentaires sont exécutés localement et continuellement ; les cartes sont générées périodiquement par un appel borné, sans que l'IA décide les actions quotidiennes.
+3. Aucun nouveau lot de trois cartes ne peut être demandé tant que le lot précédent n'est pas traité et que le délai de refroidissement n'est pas écoulé. La confirmation humaine intervient dans l'interface du foyer principal.
 4. Aucune réponse textuelle, justification ou demande IA ne peut modifier directement une variable du monde.
 5. Toute action est refusée par défaut si elle est inconnue, mal paramétrée ou indisponible.
 6. Une erreur IA ou réseau ne doit pas arrêter la simulation.
@@ -213,7 +241,7 @@ L'interface ne présente que les trois demandes les plus récentes de la fenêtr
 16. Le Diable ne crée que des demandes structurées issues d'un catalogue local testé ; il n'applique jamais lui-même une contrainte au monde.
 17. Le calendrier et le climat progressent avec le jour absolu et ne se réinitialisent jamais à une frontière de fenêtre IA.
 18. Un effet climatique doit être déterministe, borné, observable et laisser au moins une mitigation compatible avec les capacités actives.
-19. L’interface web observe un instantané après chaque cycle élémentaire ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine. Le rendu terminal peut rester journalier sans modifier la cadence réelle du moteur.
+19. L’interface web observe un instantané après chaque cycle élémentaire ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine. Le rendu terminal peut rester journalier sans modifier la cadence réelle du moteur. Une partie continue tant qu'un personnage vivant existe ; elle passe en état terminal lorsque toute la population est morte.
 20. Le rendu animé d'une fenêtre IA ne modifie ni le nombre ni l'ordre des appels : un seul appel réseau est actif à la fois, puis l'étape suivante commence après son retour.
 21. L'IA demandeuse reçoit avant sa proposition le catalogue des mécanismes actifs et une mémoire bornée des évolutions antérieures. Une nouvelle `evolution_key` ne rend jamais nouveau un mécanisme déjà proposé ou actif.
 22. Après l'activation d'une évolution, l'ancien binaire ne peut pas exécuter la journée suivante : il doit sauvegarder, recompiler, transférer l'exécution à la version activée, puis restaurer le checkpoint.
@@ -320,13 +348,9 @@ Après approbation, elle persiste la transition puis attend le workflow de Dieu 
 
 L'interface normale est une application React et Three.js servie par Elysia. Elysia est une passerelle de transport sans état du monde faisant autorité : elle lance le backend C++, relaie ses événements versionnés et lui transmet des commandes bornées. Le moteur transmet un `UiSnapshot` copié et en lecture seule contenant la carte, le calendrier, le climat, les personnages, les animaux et les événements récents. Une sélection dans la scène 3D reste un état local du navigateur ; elle ne produit aucune décision et ne modifie jamais le monde. Lors d'une validation, le navigateur devient seulement une source de commande pour `HumanValidation`, jamais une source de statut parallèle.
 
-L'observatoire est conçu **mobile-first**. Les lectures essentielles et les
-actions doivent rester accessibles sur un écran tactile étroit, avec les
-informations secondaires dans des panneaux latéraux et sans défilement vertical
-obligatoire. Les consignes de contrôle de caméra actuellement documentées
-concernent le navigateur web sur ordinateur : glisser à la souris déplace la
-vue du dessus et la molette règle le zoom. La version mobile doit fournir les
-gestes tactiles équivalents sans changer l'état autoritaire du monde.
+L'observatoire vise actuellement le navigateur web desktop. Les contraintes
+mobile sont explicitement reportées à une V2 et ne doivent pas dégrader la
+lisibilité de la carte, du foyer et de l'overlay de cartes sur grand écran.
 
 Pendant un appel IA, le client réseau C++ travaille hors de la boucle de présentation afin que l'interface continue à recevoir les états de progression. L'écran indique le numéro de l'appel, le personnage, la nature de l'étape et le temps écoulé. Chaque travail est rejoint avant le suivant : cette séparation d'affichage ne crée jamais de parallélisme entre appels. Une reconnexion reçoit le dernier état publié sans rejouer de cycle ni de commande.
 

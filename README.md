@@ -18,18 +18,14 @@ jusqu’à une validation humaine explicite.
 
 ## Priorité des plateformes
 
-Autopoiesis est conçu **mobile-first** : les informations essentielles, les
-cartes, les panneaux latéraux et les commandes doivent rester utilisables sur
-un écran tactile étroit, sans défilement vertical obligatoire. Les détails de
-contrôle de caméra mentionnés ci-dessous concernent actuellement la version
-navigateur web sur ordinateur : glisser à la souris pour déplacer la carte et
-molette pour zoomer. Les gestes tactiles (glisser à un doigt et pincement)
-doivent conserver la même intention sur mobile.
+La cible actuelle est le navigateur web sur ordinateur : glisser à la souris
+pour déplacer la carte et molette pour zoomer. Une adaptation mobile sera
+étudiée séparément en V2 et ne contraint pas l'architecture actuelle.
 
 ## L’observatoire
 
 L’interface web conserve les fonctions de l’ancienne présentation native et
-propose une expérience responsive mobile-first :
+propose une expérience desktop centrée sur la carte :
 
 - monde borné `40 × 24` en 3D, cycle jour/nuit, saisons, climat et ressources ;
 - sélection des personnages et animaux, inspecteur des besoins, attributs,
