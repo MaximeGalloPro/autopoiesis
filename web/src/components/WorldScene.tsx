@@ -102,11 +102,15 @@ export function WorldScene({
   awaitingDawn = false,
   selected,
   onSelect,
+  campfireAlert = false,
+  onCampfireClick,
 }: {
   snapshot: WorldSnapshot | null;
   awaitingDawn?: boolean;
   selected: EntitySelection | null;
   onSelect: (selection: EntitySelection) => void;
+  campfireAlert?: boolean;
+  onCampfireClick?: () => void;
 }) {
   const cells = snapshot?.cells ?? [];
   const isNight = snapshot?.phase === "night" && !awaitingDawn;
@@ -142,7 +146,13 @@ export function WorldScene({
             <WorldFloor isNight={isNight} />
             <TerrainFeatures cells={cells} isNight={isNight} />
             <Nature cells={cells} />
-            <WorldEntities snapshot={snapshot} selected={selected} onSelect={onSelect} />
+            <WorldEntities
+              snapshot={snapshot}
+              selected={selected}
+              onSelect={onSelect}
+              campfireAlert={campfireAlert}
+              onCampfireClick={onCampfireClick}
+            />
           </>
         ) : <EmptyWorld isNight={isNight} />}
         <OrbitControls

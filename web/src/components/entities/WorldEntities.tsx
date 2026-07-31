@@ -199,9 +199,21 @@ function ShelterModels({ cells }: { cells: WorldCell[] }) {
   });
 }
 
-function CampfireModels({ cells }: { cells: WorldCell[] }) {
+function CampfireModels({
+  cells,
+  hasAlert = false,
+  onCampfireClick,
+}: {
+  cells: WorldCell[];
+  hasAlert?: boolean;
+  onCampfireClick?: () => void;
+}) {
   return cells.filter((cell) => cell.campfire).map((cell) => (
-    <group key={`fire-${cell.position.x}-${cell.position.y}`} position={worldPosition(cell.position, 0.17)}>
+    <group
+      key={`fire-${cell.position.x}-${cell.position.y}`}
+      position={worldPosition(cell.position, 0.17)}
+      onClick={hasAlert ? (event) => { event.stopPropagation(); onCampfireClick?.(); } : undefined}
+    >
       {[0, 1, 2, 3, 4, 5].map((stone) => {
         const angle = (stone / 6) * Math.PI * 2;
         return (
@@ -229,6 +241,14 @@ function CampfireModels({ cells }: { cells: WorldCell[] }) {
           <meshBasicMaterial color="#ffe08a" toneMapped={false} />
         </mesh>
       </Float>
+      {hasAlert && (
+        <Float speed={2.4} rotationIntensity={0.22} floatIntensity={0.26}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.62, 0]}>
+            <ringGeometry args={[0.28, 0.35, 24]} />
+            <meshBasicMaterial color="#ffe08a" transparent opacity={0.92} toneMapped={false} />
+          </mesh>
+        </Float>
+      )}
       <pointLight color="#ff9d45" intensity={1.65} distance={4} decay={2} />
     </group>
   ));
@@ -379,15 +399,19 @@ export function WorldEntities({
   snapshot,
   selected,
   onSelect,
+  campfireAlert = false,
+  onCampfireClick,
 }: {
   snapshot: WorldSnapshot;
   selected: EntitySelection | null;
   onSelect: (selection: EntitySelection) => void;
+  campfireAlert?: boolean;
+  onCampfireClick?: () => void;
 }) {
   return <>
     <ShelterModels cells={snapshot.cells} />
     <ResourceMarkers cells={snapshot.cells} />
-    <CampfireModels cells={snapshot.cells} />
+    <CampfireModels cells={snapshot.cells} hasAlert={campfireAlert} onCampfireClick={onCampfireClick} />
     <AgentModels agents={snapshot.agents} selected={selected} onSelect={onSelect} />
     <AnimalModels animals={snapshot.animals} selected={selected} onSelect={onSelect} />
   </>;
