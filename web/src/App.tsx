@@ -22,7 +22,12 @@ import {
   X,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useReducer, useState } from "react";
-import { CampfireCardsOverlay, campfireCardsFromPrompt, campfireOverlayReducer } from "./components/CampfireCardsOverlay";
+import {
+  CampfireCallAlert,
+  CampfireCardsOverlay,
+  campfireCardsFromPrompt,
+  campfireOverlayReducer,
+} from "./components/CampfireCardsOverlay";
 import { Inspector } from "./components/Inspector";
 import { ObservatoryNavigation, type ObservatoryView } from "./components/ObservatoryNavigation";
 import { ProgressDock } from "./components/ProgressDock";
@@ -130,7 +135,16 @@ function EmptyInspector({ error }: { error: string | null }) {
 }
 
 export default function App() {
-  const { data, services, connection, commandError, dismissCommandError, sendCommand, setService } = useSimulation();
+  const {
+    data,
+    services,
+    connection,
+    commandError,
+    dismissCommandError,
+    sendCommand,
+    sendCardCycleCommand,
+    setService,
+  } = useSimulation();
   const snapshot = data.state;
   const [selected, setSelected] = useState<EntitySelection | null>(null);
   const [delayDraft, setDelayDraft] = useState(500);
@@ -150,8 +164,12 @@ export default function App() {
   }, [snapshot?.delay_ms]);
 
   useEffect(() => {
-    setApiCallCounter((current) => nextApiCallCounter(current, data.activity, snapshot?.total_api_calls));
-  }, [data.activity, snapshot?.total_api_calls]);
+    setApiCallCounter((current) => nextApiCallCounter(
+      current,
+      data.activity,
+      data.card_cycle?.total_api_calls ?? snapshot?.total_api_calls,
+    ));
+  }, [data.activity, data.card_cycle?.total_api_calls, snapshot?.total_api_calls]);
 
   useEffect(() => {
     if (!snapshot || selected) return;
@@ -206,12 +224,14 @@ export default function App() {
     : null;
   const campfireCards = campfireCardsFromPrompt(data.validation);
   const campfireHasAlert = campfireCards.length === 3;
-  const hasCallMilestone = (!snapshot?.call_alert?.acknowledged
-    && snapshot?.call_alert?.call_count === apiCallCounter.total)
-    || apiCallCounter.has_milestone_alert;
+  const hasCallMilestone = data.card_cycle
+    ? !!data.card_cycle.call_alert && !data.card_cycle.call_alert.acknowledged
+    : (!snapshot?.call_alert?.acknowledged && snapshot?.call_alert?.call_count === apiCallCounter.total)
+      || apiCallCounter.has_milestone_alert;
+  const campfireSignal = campfireHasAlert || hasCallMilestone;
   useEffect(() => {
-    if (!campfireHasAlert) dispatchCampfireOverlay({ type: "cards_closed" });
-  }, [campfireHasAlert]);
+    if (!campfireSignal) dispatchCampfireOverlay({ type: "cards_closed" });
+  }, [campfireSignal]);
   const chooseCampfireCard = (requestId: string) => {
     dispatchCampfireOverlay({ type: "card_chosen" });
     void sendCommand({ type: "validation.select", request_id: requestId });
@@ -281,8 +301,8 @@ export default function App() {
               awaitingDawn={data.awaiting_dawn}
               selected={selected}
               onSelect={selectEntity}
-              campfireAlert={campfireHasAlert}
-              onCampfireClick={() => dispatchCampfireOverlay({ type: "campfire_clicked", has_alert: campfireHasAlert })}
+              campfireAlert={campfireSignal}
+              onCampfireClick={() => dispatchCampfireOverlay({ type: "campfire_clicked", has_alert: campfireSignal })}
             />
           </Suspense>
           <div className="world-legend" aria-label="Légende du monde">
@@ -367,6 +387,13 @@ export default function App() {
           requests={campfireCards}
           hasCallMilestone={hasCallMilestone}
           onChoose={chooseCampfireCard}
+          onAcknowledgeCallMilestone={() => void sendCardCycleCommand({ type: "acknowledge_call_alert" })}
+          onClose={() => dispatchCampfireOverlay({ type: "cards_closed" })}
+        />
+      )}
+      {campfireOverlay.open && !campfireHasAlert && hasCallMilestone && (
+        <CampfireCallAlert
+          onAcknowledge={() => void sendCardCycleCommand({ type: "acknowledge_call_alert" })}
           onClose={() => dispatchCampfireOverlay({ type: "cards_closed" })}
         />
       )}

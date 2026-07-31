@@ -6,6 +6,7 @@ import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { BackendProcessManager } from "./backend-process";
 import type { AiServiceController, AiServiceName } from "./ai-services";
 import { CardCycleCoordinator } from "./card-cycle";
+import type { BackendCardCycleBridge } from "./card-cycle-runtime";
 import { isEngineCommand } from "./command-schema";
 
 const contentTypes: Record<string, string> = {
@@ -106,6 +107,7 @@ function mountTransportRoutes(
   prefix: string,
   manager: BackendProcessManager,
   safePreview: boolean,
+  onAcceptedCommand?: (command: EngineCommand) => Promise<void>,
 ): void {
   app
     .get(`${prefix}/health`, () => {
@@ -121,7 +123,7 @@ function mountTransportRoutes(
       if (!snapshot.state) set.status = 503;
       return snapshot;
     })
-    .post(`${prefix}/commands`, ({ body, set }) => {
+    .post(`${prefix}/commands`, async ({ body, set }) => {
       if (!isEngineCommand(body)) {
         set.status = 422;
         return { accepted: false, error: "Commande inconnue, mal paramétrée ou hors limites." };
@@ -134,6 +136,7 @@ function mountTransportRoutes(
         set.status = 503;
         return { accepted: false, error: "Le moteur n’est pas disponible." };
       }
+      await onAcceptedCommand?.(body);
       set.status = 202;
       return { accepted: true };
     });
@@ -178,6 +181,7 @@ function mountCardCycleRoutes(
   prefix: string,
   cycle: CardCycleCoordinator,
   safePreview: boolean,
+  onStateChange?: () => Promise<void>,
 ): void {
   app
     .get(`${prefix}/card-cycle`, () => cycle.snapshot())
@@ -197,6 +201,7 @@ function mountCardCycleRoutes(
         set.status = 409;
         return { accepted: false, error: "Commande incompatible avec l’état courant du cycle de cartes." };
       }
+      await onStateChange?.();
       set.status = 202;
       return { accepted: true, card_cycle: await cycle.snapshot() };
     });
@@ -212,6 +217,7 @@ export function createApp(
     passwordAuth?: PasswordAuth | false;
     services?: AiServiceController;
     cardCycle?: CardCycleCoordinator;
+    cardCycleBridge?: BackendCardCycleBridge;
   } = {},
 ) {
   const sockets = new Map<string, () => void>();
@@ -266,11 +272,17 @@ export function createApp(
       });
     });
   }
-  mountTransportRoutes(app, BROWSER_TRANSPORT_PREFIX, manager, safePreview);
-  mountTransportRoutes(app, "/api", manager, safePreview);
+  const recordCardCommand = options.cardCycleBridge
+    ? (command: EngineCommand) => options.cardCycleBridge!.recordAcceptedCommand(command)
+    : undefined;
+  mountTransportRoutes(app, BROWSER_TRANSPORT_PREFIX, manager, safePreview, recordCardCommand);
+  mountTransportRoutes(app, "/api", manager, safePreview, recordCardCommand);
   if (options.cardCycle) {
-    mountCardCycleRoutes(app, BROWSER_TRANSPORT_PREFIX, options.cardCycle, safePreview);
-    mountCardCycleRoutes(app, "/api", options.cardCycle, safePreview);
+    const publishCardCycle = options.cardCycleBridge
+      ? () => options.cardCycleBridge!.refresh()
+      : undefined;
+    mountCardCycleRoutes(app, BROWSER_TRANSPORT_PREFIX, options.cardCycle, safePreview, publishCardCycle);
+    mountCardCycleRoutes(app, "/api", options.cardCycle, safePreview, publishCardCycle);
   }
   if (options.services) {
     mountServiceRoutes(app, BROWSER_TRANSPORT_PREFIX, options.services, safePreview);

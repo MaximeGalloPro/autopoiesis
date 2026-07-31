@@ -174,4 +174,39 @@ describe("cycle de cartes", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  test("persiste un lot observé du moteur et n’ouvre le suivant qu’après sa décision puis le cooldown", async () => {
+    let now = 10_000;
+    const store = new MemoryCardCycleStore();
+    const cycle = new CardCycleCoordinator({ now: () => now, cooldownMs: 500, store });
+
+    expect(await cycle.recordObservedCall("7200:period_report:ada:1")).toBe(true);
+    expect(await cycle.recordObservedCall("7200:period_report:ada:1")).toBe(false);
+    expect(await cycle.ingestEngineBatch("engine-7200", cards("moteur"))).toMatchObject({ kind: "generated" });
+    expect(await cycle.recordEngineSelection("moteur-2")).toBe(true);
+    expect(await cycle.completeEngineDecision("moteur-2", "reject")).toBe(true);
+
+    const resolved = await cycle.snapshot();
+    expect(resolved).toMatchObject({
+      call_count: 1,
+      current_batch: {
+        id: "engine-7200",
+        status: "validated",
+        selected_card_id: "moteur-2",
+        cards: [
+          { id: "moteur-1", status: "pending" },
+          { id: "moteur-2", status: "rejected" },
+          { id: "moteur-3", status: "pending" },
+        ],
+      },
+      phase: "cooldown",
+    });
+
+    expect((await cycle.requestNextBatch(async () => cards("trop-tôt"))).kind).toBe("blocked");
+    now = 10_500;
+    expect((await cycle.requestNextBatch(async () => cards("après-cooldown"))).kind).toBe("generated");
+
+    const restored = new CardCycleCoordinator({ now: () => now, cooldownMs: 500, store });
+    expect(await restored.snapshot()).toMatchObject({ call_count: 1, current_batch: { id: expect.any(String) } });
+  });
 });

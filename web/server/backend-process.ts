@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type {
   AiActivity,
   BackendEvent,
+  CardCycleSnapshot,
   EngineCommand,
   EngineInfo,
   EvolutionProgress,
@@ -113,6 +114,7 @@ export class BackendProcessManager {
   private engine: EngineInfo = initialEngine();
   private apiCallCount = 0;
   private readonly apiCallKeys = new Set<string>();
+  private cardCycle: CardCycleSnapshot | null = null;
 
   private withApiTelemetry(state: WorldSnapshot): WorldSnapshot {
     return {
@@ -192,6 +194,7 @@ export class BackendProcessManager {
   snapshot(): PublicState {
     return {
       state: this.state,
+      card_cycle: this.cardCycle ? structuredClone(this.cardCycle) : null,
       awaiting_dawn: this.awaitingDawn,
       activity: this.activity,
       validation: this.validation,
@@ -201,6 +204,12 @@ export class BackendProcessManager {
       engine: { ...this.engine },
       latest_event: this.latestEvent,
     };
+  }
+
+  /** Projection read-only du garde-fou serveur ; elle ne modifie jamais le monde C++. */
+  setCardCycleSnapshot(snapshot: CardCycleSnapshot): void {
+    this.cardCycle = structuredClone(snapshot);
+    this.publish({ type: "card_cycle", payload: structuredClone(snapshot) });
   }
 
   acceptStdout(line: string): void {

@@ -5,6 +5,7 @@ import { worldSnapshot } from "./fixtures";
 
 const staleState = (): PublicState => ({
   state: worldSnapshot({ simulation_cycle: 719 }),
+  card_cycle: null,
   awaiting_dawn: false,
   activity: {
     kind: "evolution_request",
