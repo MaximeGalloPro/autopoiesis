@@ -159,6 +159,9 @@ add_test(NAME active_dangers COMMAND autopoiesis_danger_tests)
 add_executable(autopoiesis_navigation_tests tests/test_navigation.cpp)
 target_link_libraries(autopoiesis_navigation_tests PRIVATE autopoiesis_core)
 add_test(NAME bounded_navigation_contract COMMAND autopoiesis_navigation_tests)
+add_executable(autopoiesis_group_base_tests tests/test_group_base.cpp)
+target_link_libraries(autopoiesis_group_base_tests PRIVATE autopoiesis_core)
+add_test(NAME deterministic_group_base_model COMMAND autopoiesis_group_base_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -204,6 +207,7 @@ foreach(test_target
     autopoiesis_relationship_tests
     autopoiesis_population_tests
     autopoiesis_danger_tests
-    autopoiesis_navigation_tests)
+    autopoiesis_navigation_tests
+    autopoiesis_group_base_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()
