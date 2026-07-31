@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { interpolatePosition } from "../src/lib/smoothPosition";
+import { advancePosition, interpolatePosition } from "../src/lib/smoothPosition";
 
 describe("interpolation des déplacements visuels", () => {
   test("ne téléporte pas un personnage vers sa nouvelle cible", () => {
@@ -23,5 +23,11 @@ describe("interpolation des déplacements visuels", () => {
     expect(interpolatePosition({ x: 2, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, -1).x).toBe(2);
     const afterPause = interpolatePosition({ x: 0, y: 0, z: 0 }, { x: 10, y: 0, z: 0 }, 5);
     expect(afterPause.x).toBeLessThan(10);
+  });
+
+  test("avance à vitesse constante et s'arrête exactement sur la cible", () => {
+    const first = advancePosition({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 1 / 60);
+    expect(first.x).toBeCloseTo(3.2 / 60, 5);
+    expect(advancePosition({ x: 0.98, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 1 / 60)).toEqual({ x: 1, y: 0, z: 0 });
   });
 });

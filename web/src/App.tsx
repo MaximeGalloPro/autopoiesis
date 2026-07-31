@@ -9,7 +9,6 @@ import {
   Maximize2,
   Minimize2,
   Pause,
-  PanelRightClose,
   PanelRightOpen,
   Play,
   Radio,
@@ -20,6 +19,7 @@ import {
   TimerReset,
   TriangleAlert,
   Users,
+  X,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Inspector } from "./components/Inspector";
@@ -205,6 +205,10 @@ export default function App() {
     setPanelCollapsed(false);
   };
   const selectView = (view: ObservatoryView) => {
+    if (view === activeView && !panelCollapsed) {
+      setPanelCollapsed(true);
+      return;
+    }
     setActiveView(view);
     setPanelCollapsed(false);
   };
@@ -270,7 +274,7 @@ export default function App() {
             aria-controls="observatory-inspector"
             aria-expanded={!panelCollapsed}
             onClick={() => setPanelCollapsed((collapsed) => !collapsed)}
-          >{panelCollapsed ? <PanelRightOpen /> : <PanelRightClose />}<span>{panelCollapsed ? "Ouvrir" : "Réduire"}</span></button>
+          >{panelCollapsed ? <PanelRightOpen /> : <X />}<span>{panelCollapsed ? "Ouvrir" : "Fermer"}</span></button>
           <div id="observatory-inspector" className="side-panel-content" hidden={panelCollapsed}>
             {snapshot
               ? <Inspector snapshot={snapshot} selected={selected} onSelect={selectEntity} view={activeView} />
