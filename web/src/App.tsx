@@ -263,7 +263,7 @@ export default function App() {
       <main className="workspace">
         <section className="world-panel">
           <div className="world-overlay top-left">
-            <span className="eyebrow">Monde torique · 40 × 24</span>
+            <span className="eyebrow">Monde borné · 40 × 24</span>
             <strong>{snapshot ? `Jour ${snapshot.date.absolute_day} · ${seasonLabels[snapshot.date.season]}` : "Connexion au moteur"}</strong>
             <span>{data.awaiting_dawn ? "Aube prochaine" : `Cycle ${snapshot?.simulation_cycle.toLocaleString("fr-FR") ?? "—"}`}</span>
           </div>

@@ -195,7 +195,7 @@ function MapsView({ snapshot, selected }: { snapshot: WorldSnapshot; selected: E
       <section className="inspector-intro map-intro">
         <span className="section-kicker"><Map size={14} /> Carte d’observation</span>
         <h3>Un monde sans bord.</h3>
-        <p>La carte est torique : franchir une lisière ramène vers le côté opposé du même territoire.</p>
+        <p>La carte est bornée : ses lisières arrêtent les déplacements.</p>
       </section>
       <section className="detail-section map-card">
         <div className="map-grid" aria-hidden="true"><span /><span /><span /><span /><span /><span /><span /><span /><span /></div>
