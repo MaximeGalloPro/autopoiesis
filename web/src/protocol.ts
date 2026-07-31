@@ -2,6 +2,31 @@ export const WORLD_WIDTH = 40 as const;
 export const WORLD_HEIGHT = 24 as const;
 export const SIMULATION_SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
 
+export {
+  CARD_BATCH_SIZE,
+  CARD_CYCLE_PROTOCOL_VERSION,
+  cardContractError,
+  cloneCardBatch,
+  cloneCardCycleState,
+  initialCardCycleState,
+  parseCardCycleState,
+} from "./card-cycle-protocol";
+export type {
+  ApiCallAlert,
+  CardBatch,
+  CardBatchStatus,
+  CardCyclePhase,
+  CardCycleSnapshot,
+  CardCycleState,
+  CardDecision,
+  CardGenerationContext,
+  CardGenerationResult,
+  CardStatus,
+  EvolutionCard,
+  ExistingCardGenerator,
+  PendingEvolutionCard,
+} from "./card-cycle-protocol";
+
 export type SimulationSpeed = (typeof SIMULATION_SPEEDS)[number];
 export type ConnectionState = "connecting" | "connected" | "reconnecting" | "error";
 export type EngineStatus = "starting" | "running" | "restarting" | "stopped" | "unavailable";
