@@ -12,6 +12,11 @@ export type CardStatus = "pending" | "approved" | "rejected";
 export type CardBatchStatus = "awaiting_validation" | "validated";
 export type CardCyclePhase = "ready" | "generating" | "awaiting_validation" | "cooldown" | "call_alert";
 
+/** Commandes humaines bornées, traitées par l'orchestrateur et non par l'IA. */
+export type CardCycleCommand =
+  | { type: "acknowledge_call_alert" }
+  | { type: "card_decision"; card_id: string; decision: CardDecision };
+
 export interface EvolutionCard {
   /** Identifiant produit localement par le protocole, jamais par l'IA seule. */
   id: string;
@@ -87,6 +92,28 @@ export function initialCardCycleState(): CardCycleState {
     cooldown_until_ms: 0,
     call_alert: null,
   };
+}
+
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && keys.every((key) => expected.includes(key));
+}
+
+/** Refuse les champs inattendus avant d'atteindre l'état persistant. */
+export function isCardCycleCommand(value: unknown): value is CardCycleCommand {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const command = value as Record<string, unknown>;
+  switch (command.type) {
+    case "acknowledge_call_alert":
+      return hasExactKeys(command, ["type"]);
+    case "card_decision":
+      return hasExactKeys(command, ["type", "card_id", "decision"])
+        && isNonEmptyString(command.card_id)
+        && command.card_id.length <= 256
+        && (command.decision === "approve" || command.decision === "reject");
+    default:
+      return false;
+  }
 }
 
 function isNonEmptyString(value: unknown): value is string {

@@ -1,10 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { extname, resolve, sep } from "node:path";
 import { Elysia } from "elysia";
-import type { BackendEvent, EngineCommand } from "../src/protocol";
+import { isCardCycleCommand, type BackendEvent, type EngineCommand } from "../src/protocol";
 import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { BackendProcessManager } from "./backend-process";
 import type { AiServiceController, AiServiceName } from "./ai-services";
+import { CardCycleCoordinator } from "./card-cycle";
 import { isEngineCommand } from "./command-schema";
 
 const contentTypes: Record<string, string> = {
@@ -168,6 +169,39 @@ function mountServiceRoutes(
     });
 }
 
+/**
+ * Ces routes ne transmettent aucune commande au monde : elles consignent la
+ * décision humaine qui libère (ou non) le prochain lot de propositions.
+ */
+function mountCardCycleRoutes(
+  app: Elysia,
+  prefix: string,
+  cycle: CardCycleCoordinator,
+  safePreview: boolean,
+): void {
+  app
+    .get(`${prefix}/card-cycle`, () => cycle.snapshot())
+    .post(`${prefix}/card-cycle/commands`, async ({ body, set }) => {
+      if (!isCardCycleCommand(body)) {
+        set.status = 422;
+        return { accepted: false, error: "Commande de cycle de cartes inconnue ou mal formée." };
+      }
+      if (safePreview && body.type === "card_decision" && body.decision === "approve") {
+        set.status = 403;
+        return { accepted: false, error: "L’approbation réelle est désactivée dans cette preview publique." };
+      }
+      const accepted = body.type === "acknowledge_call_alert"
+        ? await cycle.acknowledgeCallAlert()
+        : await cycle.recordCardDecision(body.card_id, body.decision);
+      if (!accepted) {
+        set.status = 409;
+        return { accepted: false, error: "Commande incompatible avec l’état courant du cycle de cartes." };
+      }
+      set.status = 202;
+      return { accepted: true, card_cycle: await cycle.snapshot() };
+    });
+}
+
 export function createApp(
   manager: BackendProcessManager,
   options: {
@@ -177,6 +211,7 @@ export function createApp(
     snapshotIntervalMs?: number;
     passwordAuth?: PasswordAuth | false;
     services?: AiServiceController;
+    cardCycle?: CardCycleCoordinator;
   } = {},
 ) {
   const sockets = new Map<string, () => void>();
@@ -233,6 +268,10 @@ export function createApp(
   }
   mountTransportRoutes(app, BROWSER_TRANSPORT_PREFIX, manager, safePreview);
   mountTransportRoutes(app, "/api", manager, safePreview);
+  if (options.cardCycle) {
+    mountCardCycleRoutes(app, BROWSER_TRANSPORT_PREFIX, options.cardCycle, safePreview);
+    mountCardCycleRoutes(app, "/api", options.cardCycle, safePreview);
+  }
   if (options.services) {
     mountServiceRoutes(app, BROWSER_TRANSPORT_PREFIX, options.services, safePreview);
     mountServiceRoutes(app, "/api", options.services, safePreview);

@@ -9,12 +9,14 @@ export {
   cloneCardBatch,
   cloneCardCycleState,
   initialCardCycleState,
+  isCardCycleCommand,
   parseCardCycleState,
 } from "./card-cycle-protocol";
 export type {
   ApiCallAlert,
   CardBatch,
   CardBatchStatus,
+  CardCycleCommand,
   CardCyclePhase,
   CardCycleSnapshot,
   CardCycleState,
