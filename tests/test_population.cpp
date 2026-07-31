@@ -47,6 +47,7 @@ int main() {
   auto& world=SimulationTestAccess::world(simulation);
   const Position camp{13,2};assert(world.place_campfire(camp));
   assert(world.create_shelter({14,2}));stock_food(world,camp,40);
+  for(const auto& agent:simulation.agents())assert(agent.family_id=="foyer-principal");
   for(std::size_t index=0;index<simulation.agents().size();++index){
     auto& agent=SimulationTestAccess::agent(simulation,index);agent.position={14,2};agent.age_days=25*360;
   }
@@ -56,11 +57,15 @@ int main() {
   assert(simulation.agents().size()==initial+1);
   const auto& newcomer=simulation.agents().back();
   assert(newcomer.origin=="arrival"&&newcomer.arrival_day==60&&newcomer.age_days>=18*360);
+  assert(newcomer.family_id=="foyer-principal");
 
+  SimulationTestAccess::agent(simulation,1).family_id="famille-externe";
   SimulationTestAccess::set_day(simulation,90);SimulationTestAccess::update_population(simulation);
   assert(simulation.agents().size()==initial+2);
   const auto& child=simulation.agents().back();
   assert(child.origin=="birth"&&child.age_days==0&&child.parent_ids.size()==2);
+  assert(child.family_id=="foyer-principal");
+  assert((child.parent_ids==std::vector<std::string>{"a1","a3"}));
   const auto child_actions=available_actions(child,world,simulation.agents(),90,DayPhase::Day);
   assert(std::ranges::find(child_actions,"hunt_animal")==child_actions.end());
   assert(std::ranges::find(child_actions,"confront")==child_actions.end());
