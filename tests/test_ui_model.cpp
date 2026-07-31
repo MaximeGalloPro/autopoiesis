@@ -58,6 +58,7 @@ int main() {
   ada.thirst = 81;
   ada.fatigue = 37;
   ada.boredom = 12;
+  ada.family_id = "foyer-principal";
   ada.behavior.archetype = "builder";
   ada.behavior.aspiration = "Créer un foyer sûr";
   ada.project = {"build_shelter", "Préparer un abri", ProjectStatus::Active,
@@ -75,6 +76,7 @@ int main() {
   assert(snapshot.cells.size() == static_cast<std::size_t>(World::width * World::height));
   assert(snapshot.agents.size() == 1);
   assert(snapshot.agents[0].state.name == "Ada");
+  assert(snapshot.agents[0].state.family_id == "foyer-principal");
   assert(snapshot.agents[0].mood == "Tension liée à la soif");
   assert(std::find(snapshot.agents[0].available_actions.begin(),
                    snapshot.agents[0].available_actions.end(), "move") !=
