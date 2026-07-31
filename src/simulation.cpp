@@ -304,8 +304,9 @@ Decision LocalDecider::decide(const Perception& p) {
       {"eat",hunger>=40?hunger*(1.30-willpower/1200.0):0.0},
       {"rest",fatigue>=45?fatigue*(1.15-attributes.value("endurance",50)/1000.0):0.0},
       {"explore",30.0+personality.value("curiosity",50)/5.0}};
+  const bool project_blocked=project.value("status","")=="blocked";
   const bool blocked_shelter_project=
-      project.value("status","")=="blocked"&&
+      project_blocked&&
       project.value("key","")=="build_shelter"&&
       project.value("missing_capability","")=="build_shelter";
   if(project.value("status","")=="active"||blocked_shelter_project){
@@ -350,6 +351,78 @@ Decision LocalDecider::decide(const Perception& p) {
   if(best_goal=="eat"&&has_action("eat_camp_food"))
     return {DecisionType::Action,"eat_camp_food",json::object(),"Je prends un repas dans la réserve commune.","food","","be fed"};
   const bool vital_emergency=hunger>=75||thirst>=75;
+  const auto known=p.value.value("known_map",json::array());
+  std::map<std::pair<int,int>,json> known_cells;
+  std::set<std::pair<int,int>> traversable;
+  std::set<std::pair<int,int>> food_targets;
+  std::set<std::pair<int,int>> water_cells;
+  std::set<std::pair<int,int>> branch_targets;
+  std::set<std::pair<int,int>> iron_targets;
+  std::set<std::pair<int,int>> campfire_cells;
+  for(const auto& cell:known){
+    const std::pair<int,int> coordinates{cell.value("x",0),cell.value("y",0)};
+    known_cells[coordinates]=cell;
+    if(cell.value("status","")=="traversable")traversable.insert(coordinates);
+    if(cell.value("food",0)>0)food_targets.insert(coordinates);
+    if(cell.value("terrain",-1)==static_cast<int>(Terrain::Water))water_cells.insert(coordinates);
+    if(cell.value("branches",0)>0)branch_targets.insert(coordinates);
+    if(cell.value("iron_ore",0)>0)iron_targets.insert(coordinates);
+    if(cell.value("campfire",false))campfire_cells.insert(coordinates);
+  }
+  for(const auto& cell:p.value.value("cells",json::array())){
+    const std::pair<int,int> coordinates{cell.value("x",0),cell.value("y",0)};
+    const int terrain=cell.value("terrain",-1);
+    const auto building=cell.value("building",json(nullptr));
+    const bool blocked_wall=building.is_object()&&building.value("complete",false)&&building.value("type","")=="wall";
+    if(!blocked_wall&&(terrain==static_cast<int>(Terrain::Ground)||terrain==static_cast<int>(Terrain::Bush)))traversable.insert(coordinates);
+    if(cell.value("food",0)>0||terrain==static_cast<int>(Terrain::Bush))food_targets.insert(coordinates);
+    if(terrain==static_cast<int>(Terrain::Water))water_cells.insert(coordinates);
+    if(cell.value("branches",0)>0)branch_targets.insert(coordinates);
+    if(cell.value("iron_ore",0)>0)iron_targets.insert(coordinates);
+    if(cell.value("campfire",false))campfire_cells.insert(coordinates);
+  }
+  const auto home_camp=me.value("home_camp",json(nullptr));
+  std::optional<Position> known_home;
+  if(!home_camp.is_null()){
+    const std::pair<int,int> home{home_camp.value("x",0),home_camp.value("y",0)};
+    if(in_bounds({home.first,home.second})&&campfire_cells.contains(home)){
+      known_home=Position{home.first,home.second};
+      campfire_cells={home};
+    }
+  }
+  traversable.insert({self.x,self.y});
+  auto route_to=[&](const std::set<std::pair<int,int>>& targets){
+    std::queue<Position> pending;std::map<std::pair<int,int>,std::string> first_steps;
+    pending.push(self);first_steps[{self.x,self.y}]="";
+    while(!pending.empty()){
+      const auto current=pending.front();pending.pop();
+      if(current!=self&&targets.contains({current.x,current.y}))return first_steps[{current.x,current.y}];
+      for(const auto& direction:directions){const auto next=step(current,direction);if(!next)continue;const std::pair<int,int> key{next->x,next->y};if(first_steps.contains(key)||!traversable.contains(key))continue;first_steps[key]=first_steps[{current.x,current.y}].empty()?direction:first_steps[{current.x,current.y}];pending.push(*next);}
+    }
+    return std::string{};
+  };
+  const auto return_to_known_home=[&]()->std::optional<Decision>{
+    if(!known_home)return std::nullopt;
+    if(std::abs(self.x-known_home->x)+std::abs(self.y-known_home->y)==1){
+      if(has_action("rest_by_campfire"))return Decision{DecisionType::Action,"rest_by_campfire",json::object(),
+          "Je me repose près du feu du foyer après une impasse.","repos","","reprendre pied au camp"};
+      if(has_action("observe"))return Decision{DecisionType::Action,"observe",json::object(),
+          "J'observe le foyer pour réévaluer la suite.","observation","","réévaluer au camp"};
+      return std::nullopt;
+    }
+    std::set<std::pair<int,int>> rest_positions;
+    if(!reserved_rest.is_null()){
+      const Position rest{reserved_rest.value("x",0),reserved_rest.value("y",0)};
+      if(in_bounds(rest)&&traversable.contains({rest.x,rest.y}))rest_positions.insert({rest.x,rest.y});
+    }
+    if(rest_positions.empty())for(const auto& direction:directions)if(const auto candidate=step(*known_home,direction);
+        candidate&&traversable.contains({candidate->x,candidate->y}))rest_positions.insert({candidate->x,candidate->y});
+    const auto direction=route_to(rest_positions);
+    if(direction.empty())return std::nullopt;
+    return Decision{DecisionType::Action,"move",{{"direction",direction}},
+                    "Je rejoins le foyer connu pour sortir de l'impasse.","foyer","","rejoindre le camp"};
+  };
+  if(!vital_emergency&&project_blocked)if(const auto fallback=return_to_known_home())return *fallback;
   if(!vital_emergency&&has_action("treat_condition")){
     const auto care=p.value.value("care_opportunities",json::array());
     if(!care.empty())return {DecisionType::Action,"treat_condition",
@@ -538,52 +611,6 @@ Decision LocalDecider::decide(const Perception& p) {
   if(best_goal=="rest"&&fatigue>=75) return {DecisionType::Action,"sleep",json::object(),"I need rest","rest","","be rested"};
   if(best_goal=="rest"&&has_action("rest")) return {DecisionType::Action,"rest",json::object(),"I need rest","rest","","be rested"};
 
-  const auto known=p.value.value("known_map",json::array());
-  std::map<std::pair<int,int>,json> known_cells;
-  std::set<std::pair<int,int>> traversable;
-  std::set<std::pair<int,int>> food_targets;
-  std::set<std::pair<int,int>> water_cells;
-  std::set<std::pair<int,int>> branch_targets;
-  std::set<std::pair<int,int>> iron_targets;
-  std::set<std::pair<int,int>> campfire_cells;
-  for(const auto& cell:known){
-    const std::pair<int,int> coordinates{cell.value("x",0),cell.value("y",0)};
-    known_cells[coordinates]=cell;
-    if(cell.value("status","")=="traversable")traversable.insert(coordinates);
-    if(cell.value("food",0)>0)food_targets.insert(coordinates);
-    if(cell.value("terrain",-1)==static_cast<int>(Terrain::Water))water_cells.insert(coordinates);
-    if(cell.value("branches",0)>0)branch_targets.insert(coordinates);
-    if(cell.value("iron_ore",0)>0)iron_targets.insert(coordinates);
-    if(cell.value("campfire",false))campfire_cells.insert(coordinates);
-  }
-  for(const auto& cell:p.value.value("cells",json::array())){
-    const std::pair<int,int> coordinates{cell.value("x",0),cell.value("y",0)};
-    const int terrain=cell.value("terrain",-1);
-    const auto building=cell.value("building",json(nullptr));
-    const bool blocked_wall=building.is_object()&&building.value("complete",false)&&building.value("type","")=="wall";
-    if(!blocked_wall&&(terrain==static_cast<int>(Terrain::Ground)||terrain==static_cast<int>(Terrain::Bush)))traversable.insert(coordinates);
-    if(cell.value("food",0)>0||terrain==static_cast<int>(Terrain::Bush))food_targets.insert(coordinates);
-    if(terrain==static_cast<int>(Terrain::Water))water_cells.insert(coordinates);
-    if(cell.value("branches",0)>0)branch_targets.insert(coordinates);
-    if(cell.value("iron_ore",0)>0)iron_targets.insert(coordinates);
-    if(cell.value("campfire",false))campfire_cells.insert(coordinates);
-  }
-  const auto home_camp=me.value("home_camp",json(nullptr));
-  if(!home_camp.is_null()){
-    const std::pair<int,int> home{home_camp.value("x",0),home_camp.value("y",0)};
-    if(campfire_cells.contains(home))campfire_cells={home};
-  }
-  traversable.insert({self.x,self.y});
-  auto route_to=[&](const std::set<std::pair<int,int>>& targets){
-    std::queue<Position> pending;std::map<std::pair<int,int>,std::string> first_steps;
-    pending.push(self);first_steps[{self.x,self.y}]="";
-    while(!pending.empty()){
-      const auto current=pending.front();pending.pop();
-      if(current!=self&&targets.contains({current.x,current.y}))return first_steps[{current.x,current.y}];
-      for(const auto& direction:directions){const auto next=step(current,direction);if(!next)continue;const std::pair<int,int> key{next->x,next->y};if(first_steps.contains(key)||!traversable.contains(key))continue;first_steps[key]=first_steps[{current.x,current.y}].empty()?direction:first_steps[{current.x,current.y}];pending.push(*next);}
-    }
-    return std::string{};
-  };
   if(!me.value("equipped_tool",json(nullptr)).is_null()){
     std::set<std::pair<int,int>> work_positions;
     for(const auto& building:p.value.value("buildings",json::array()))if(!building.value("complete",false)){
@@ -710,6 +737,8 @@ Decision LocalDecider::decide(const Perception& p) {
       }
     }
   }
+
+  if(!vital_emergency)if(const auto fallback=return_to_known_home())return *fallback;
 
   int lowest_visits=std::numeric_limits<int>::max();
   std::string selected;
