@@ -5,10 +5,17 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <thread>
 #include <vector>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/select.h>
+#include <unistd.h>
+#endif
 
 namespace apo {
 namespace {
@@ -184,6 +191,20 @@ std::vector<json> select_window_requests(const std::vector<json>& available,
   for (const auto& request : available)
     if (window_ids.contains(request.value("id", ""))) selected.push_back(request);
   return selected;
+}
+
+bool input_ready(std::istream& input) {
+  if(input.rdbuf()&&input.rdbuf()->in_avail()>0)return true;
+#if defined(__unix__) || defined(__APPLE__)
+  if(input.rdbuf()!=std::cin.rdbuf())return false;
+  fd_set readable;
+  FD_ZERO(&readable);
+  FD_SET(STDIN_FILENO,&readable);
+  timeval timeout{};
+  return select(STDIN_FILENO+1,&readable,nullptr,nullptr,&timeout)>0;
+#else
+  return false;
+#endif
 }
 }
 
@@ -403,22 +424,19 @@ bool HumanValidation::wait_for_evolution(const std::string& request_id) {
   }
 }
 
-bool HumanValidation::review_devil(int day,int simulation_cycle) {
-  const path data_directory(data_directory_);
-  auto constraints=current_requests(data_directory,day,simulation_cycle,output_,notices_,true);
-  if(constraints.empty())return true;
-  const auto request=constraints.back();
-  const auto request_id=request.value("id","unknown");
+std::optional<std::string> HumanValidation::poll_command(const ValidationPrompt& prompt) {
+  if(interface_)return interface_->poll_command(prompt);
+  if(!input_ready(input_))return std::nullopt;
+  std::string line;
+  if(!std::getline(input_,line))return "q";
+  return line;
+}
+
+ValidationWindowState HumanValidation::advance_devil(ActiveWindow& window) {
+  const auto& request=*window.devil_request;
   const bool automatic=[](){const char* value=std::getenv("DEVIL_AUTO_APPROVE");return value&&std::string(value)=="1";}();
-
-  output_ << "\n=== APPARITION DU DIABLE ===\n"
-          << request.value("title","Contrainte sans titre") << "\n"
-          << "Difficulté : " << request.value("difficulty",1) << "/5\n"
-          << "Adaptation : " << request.value("adaptation",json::object()).value("rationale","non précisée") << "\n"
-          << "Fondement réel : " << request.value("real_world_basis","non précisé") << "\n"
-          << "Pression future : " << request.value("future_pressure","non précisée") << "\n";
-
-  auto decide=[&](bool approve,const std::string& mode){
+  const auto decide=[&](bool approve,const std::string& mode) {
+    const path data_directory(data_directory_);
     auto decided=request;
     decided["status"]=approve?"approved":"rejected";
     decided[approve?"approved_at":"rejected_at"]=timestamp();
@@ -428,149 +446,159 @@ bool HumanValidation::review_devil(int day,int simulation_cycle) {
     const auto reason=approve?(automatic?"Approbation automatique configurée du Diable":"Approbation humaine explicite de la contrainte"):
                               "Refus humain explicite de la contrainte";
     write_validation_record(data_directory,decided,approve?"approve":"reject",reason,mode);
-    output_ << (approve?"Contrainte approuvée : ":"Contrainte refusée : ") << request_id << "\n";
-    return !approve||wait_for_evolution(request_id);
+    output_ << (approve?"Contrainte approuvée : ":"Contrainte refusée : ")
+            << request.value("id","unknown") << "\n";
   };
 
   if(automatic){
     output_ << "Approbation automatique activée par DEVIL_AUTO_APPROVE=1.\n";
-    return decide(true,"devil_automatic");
+    decide(true,"devil_automatic");
+    window.devil_request.reset();
+    window.prompt_dirty=true;
+    if(window.requests.empty()){
+      active_window_.reset();
+      return ValidationWindowState::Resolved;
+    }
+    return ValidationWindowState::Pending;
   }
-
-  while(true){
-    output_ << "[a] accepter  [r] refuser  [d] détail  [q/exit] arrêter.\n> " << std::flush;
-    std::string line;
-    if(interface_)
-      line=interface_->request_command({ValidationStage::Confirm,day,simulation_cycle,
-                                        {request},1,ValidationPromptKind::Devil});
-    else if(!std::getline(input_,line))return false;
-    if(line=="a"||line=="A")return decide(true,"human");
-    if(line=="r"||line=="R")return decide(false,"human");
-    if(line=="d"||line=="D"){output_<<request.dump(2)<<'\n';continue;}
-    if(line=="q"||line=="Q"||line=="exit"||line=="quit")return false;
+  const ValidationPrompt prompt{ValidationStage::Confirm,window.day,window.simulation_cycle,
+                                {request},1,ValidationPromptKind::Devil};
+  if(window.prompt_dirty){
+    output_ << "\n=== APPARITION DU DIABLE ===\n"
+            << request.value("title","Contrainte sans titre") << "\n"
+            << "Difficulté : " << request.value("difficulty",1) << "/5\n"
+            << "Adaptation : " << request.value("adaptation",json::object()).value("rationale","non précisée") << "\n"
+            << "Fondement réel : " << request.value("real_world_basis","non précisé") << "\n"
+            << "Pression future : " << request.value("future_pressure","non précisée") << "\n"
+            << "[a] accepter  [r] refuser  [d] détail  [q/exit] arrêter.\n> " << std::flush;
+    window.prompt_dirty=false;
+  }
+  const auto line=poll_command(prompt);
+  if(!line)return ValidationWindowState::Pending;
+  if(*line=="a"||*line=="A")decide(true,"human");
+  else if(*line=="r"||*line=="R")decide(false,"human");
+  else if(*line=="d"||*line=="D"){output_<<request.dump(2)<<'\n';return ValidationWindowState::Pending;}
+  else if(*line=="q"||*line=="Q"||*line=="exit"||*line=="quit"){
+    active_window_.reset();
+    return ValidationWindowState::StopRequested;
+  }else{
     output_ << "Choisissez a, r ou d.\n";
+    return ValidationWindowState::Pending;
   }
+  window.devil_request.reset();
+  window.prompt_dirty=true;
+  if(window.requests.empty()){
+    active_window_.reset();
+    return ValidationWindowState::Resolved;
+  }
+  return ValidationWindowState::Pending;
 }
 
-bool HumanValidation::review_window(int day, int simulation_cycle) {
-  const path data_directory(data_directory_);
-  if(!review_devil(day,simulation_cycle))return false;
-  window_request_ids_.clear();
-  std::size_t selected_index=0;
-  bool decision_made = false;
-  while (true) {
-    auto requests = select_window_requests(
-        current_requests(data_directory, day, simulation_cycle, output_, notices_),
-        window_request_ids_, output_);
-    output_ << "\n=== VALIDATION HUMAINE ===\n"
-            << "Jour " << day << " | Cycle elementaire " << simulation_cycle << "\n";
-    if (requests.empty()) {
-      output_ << "Aucune demande en attente pour cette fenêtre.\n"
-               << "Tapez o pour reprendre, q ou exit pour arrêter.\n> " << std::flush;
-    } else if(selected_index==0 && !decision_made) {
-      output_ << requests.size() << " proposition(s) disponibles :\n";
-      for (std::size_t index=0; index<requests.size(); ++index) {
-        const auto& request=requests[index];
-        output_ << "[" << index+1 << "] " << request.value("id", "?") << " — "
-                 << request.value("agent_name", "?") << " — "
-                 << request.value("title", "(sans titre)") << '\n';
-      }
-      output_ << "Choisissez une proposition (1-" << requests.size()
-              << ") ou n pour aucune, d N détail, q/exit arrêter.\n> " << std::flush;
-    } else if(selected_index>0 && !decision_made) {
-      const auto& request=requests[selected_index-1];
-      output_ << "Proposition sélectionnée : " << request.value("title", "(sans titre)") << '\n'
-              << "[a] approuver  [r] refuser  [b] revenir au choix  [d] détail  [q/exit] arrêter.\n> " << std::flush;
-    } else {
-      output_ << requests.size() << " proposition(s) restantes, conservées pending.\n"
-               << "Tapez o pour reprendre, d N détail, q ou exit pour arrêter.\n> " << std::flush;
-    }
-
-    ValidationStage stage=ValidationStage::Complete;
-    if(requests.empty())stage=ValidationStage::Empty;
-    else if(selected_index==0&&!decision_made)stage=ValidationStage::Choose;
-    else if(selected_index>0&&!decision_made)stage=ValidationStage::Confirm;
-    std::string line;
-    if(interface_)line=interface_->request_command(
-        {stage,day,simulation_cycle,requests,selected_index});
-    else if(!std::getline(input_,line))return false;
-    std::istringstream command(line);
-    std::string action;
-    command >> action;
-    if (action=="o" || action=="O") {
-      if (requests.empty() || decision_made) return true;
-      output_ << "Choisissez d'abord une proposition, ou n pour n'en valider aucune.\n";
-      continue;
-    }
-    if (action=="n" || action=="N") {
-      if(selected_index==0 && !decision_made) {
-        output_ << "Aucune proposition sélectionnée ; les demandes restent pending.\n";
-        return true;
-      }
-      output_ << "Commande indisponible à cette étape.\n";
-      continue;
-    }
-    if (action=="q" || action=="Q" || action=="exit" || action=="quit") return false;
-
-    if (selected_index==0 && !decision_made) {
-      if (action=="d" || action=="D") {
-        std::size_t index=0;
-        command >> index;
-        if(index>0 && index<=requests.size()) output_ << requests[index-1].dump(2) << '\n';
-        else output_ << "Numéro de proposition invalide.\n";
-        continue;
-      }
-      try { selected_index=std::stoul(action); }
-      catch (...) { selected_index=0; }
-      if(selected_index==0 || selected_index>requests.size()) {
-        selected_index=0;
-        output_ << "Choisissez une proposition valide ou n.\n";
-      }
-      continue;
-    }
-
-    if (selected_index>0 && !decision_made) {
-      const auto& request=requests[selected_index-1];
-      if (action=="b" || action=="B") {
-        selected_index=0;
-        continue;
-      }
-      if (action=="d" || action=="D") {
-        output_ << request.dump(2) << '\n';
-        continue;
-      }
-      if (action!="a" && action!="A" && action!="r" && action!="R") {
-        output_ << "Choisissez a, r, b ou d.\n";
-        continue;
-      }
-      const bool approve=action=="a" || action=="A";
-      const auto request_id=request.value("id", "unknown");
-      auto decided=request;
-      decided["status"] = approve ? "approved" : "rejected";
-      decided[approve?"approved_at":"rejected_at"] = timestamp();
-      decided[approve?"approval_mode":"rejection_mode"] = "human";
-      if (!approve) decided["rejection_reason"] = "Refus explicite dans l'interface intégrée";
-      append_jsonl(data_directory / (approve ? "approved_feature_requests.jsonl" : "rejected_feature_requests.jsonl"), decided);
-      write_validation_record(data_directory, decided, approve?"approve":"reject",
-                              approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
-      output_ << (approve ? "Demande approuvée : " : "Demande refusée : ") << request_id << '\n'
-              << "Statut enregistré : " << (approve ? "approved" : "rejected")
-              << ".\n";
-      if (approve && !wait_for_evolution(request_id)) return false;
-      selected_index=0;
-      decision_made=true;
-      if(approve&&interface_)return true;
-      continue;
-    }
-
-    if (action=="d" || action=="D") {
-      std::size_t index=0;
-      command >> index;
-      if(index>0 && index<=requests.size()) output_ << requests[index-1].dump(2) << '\n';
-      else output_ << "Numéro de proposition invalide.\n";
-      continue;
-    }
-    output_ << "Une seule proposition peut être traitée par fenêtre. Tapez o pour reprendre.\n";
+ValidationWindowState HumanValidation::advance_feature(ActiveWindow& window) {
+  if(window.requests.empty()){
+    active_window_.reset();
+    return ValidationWindowState::Resolved;
   }
+  const bool choosing=window.selected_index==0;
+  const ValidationPrompt prompt{choosing?ValidationStage::Choose:ValidationStage::Confirm,
+                                window.day,window.simulation_cycle,window.requests,
+                                window.selected_index,ValidationPromptKind::Feature};
+  if(window.prompt_dirty){
+    output_ << "\n=== VALIDATION HUMAINE ===\n"
+            << "Jour " << window.day << " | Cycle elementaire " << window.simulation_cycle << "\n";
+    if(choosing){
+      output_ << window.requests.size() << " proposition(s) disponibles :\n";
+      for(std::size_t index=0;index<window.requests.size();++index){
+        const auto& request=window.requests[index];
+        output_ << "[" << index+1 << "] " << request.value("id","?") << " — "
+                << request.value("agent_name","?") << " — "
+                << request.value("title","(sans titre)") << '\n';
+      }
+      output_ << "Choisissez une proposition (1-" << window.requests.size()
+              << ") ou n pour aucune, d N détail, q/exit arrêter.\n> " << std::flush;
+    }else{
+      output_ << "Proposition sélectionnée : "
+              << window.requests[window.selected_index-1].value("title","(sans titre)") << '\n'
+              << "[a] approuver  [r] refuser  [b] revenir au choix  [d] détail  [q/exit] arrêter.\n> " << std::flush;
+    }
+    window.prompt_dirty=false;
+  }
+  const auto line=poll_command(prompt);
+  if(!line)return ValidationWindowState::Pending;
+  std::istringstream command(*line);
+  std::string action;
+  command>>action;
+  if(action=="q"||action=="Q"||action=="exit"||action=="quit"){
+    active_window_.reset();
+    return ValidationWindowState::StopRequested;
+  }
+  if(choosing){
+    if(action=="n"||action=="N"){
+      output_ << "Aucune proposition sélectionnée ; les demandes restent pending.\n";
+      active_window_.reset();
+      return ValidationWindowState::Resolved;
+    }
+    if(action=="d"||action=="D"){
+      std::size_t index{};
+      command>>index;
+      if(index>0&&index<=window.requests.size())output_<<window.requests[index-1].dump(2)<<'\n';
+      else output_ << "Numéro de proposition invalide.\n";
+      return ValidationWindowState::Pending;
+    }
+    try{window.selected_index=std::stoul(action);}catch(...){window.selected_index=0;}
+    if(window.selected_index==0||window.selected_index>window.requests.size()){
+      window.selected_index=0;
+      output_ << "Choisissez une proposition valide ou n.\n";
+      return ValidationWindowState::Pending;
+    }
+    window.prompt_dirty=true;
+    return ValidationWindowState::Pending;
+  }
+  const auto& request=window.requests[window.selected_index-1];
+  if(action=="b"||action=="B"){
+    window.selected_index=0;
+    window.prompt_dirty=true;
+    return ValidationWindowState::Pending;
+  }
+  if(action=="d"||action=="D"){
+    output_<<request.dump(2)<<'\n';
+    return ValidationWindowState::Pending;
+  }
+  if(action!="a"&&action!="A"&&action!="r"&&action!="R"){
+    output_ << "Choisissez a, r, b ou d.\n";
+    return ValidationWindowState::Pending;
+  }
+  const bool approve=action=="a"||action=="A";
+  const path data_directory(data_directory_);
+  auto decided=request;
+  decided["status"]=approve?"approved":"rejected";
+  decided[approve?"approved_at":"rejected_at"]=timestamp();
+  decided[approve?"approval_mode":"rejection_mode"]="human";
+  if(!approve)decided["rejection_reason"]="Refus explicite dans l'interface intégrée";
+  append_jsonl(data_directory/(approve?"approved_feature_requests.jsonl":"rejected_feature_requests.jsonl"),decided);
+  write_validation_record(data_directory,decided,approve?"approve":"reject",
+                          approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
+  output_ << (approve?"Demande approuvée : ":"Demande refusée : ") << request.value("id","unknown") << '\n'
+          << "Statut enregistré : " << (approve?"approved":"rejected") << ".\n";
+  active_window_.reset();
+  return ValidationWindowState::Resolved;
+}
+
+ValidationWindowState HumanValidation::advance_window(int day,int simulation_cycle,bool open_window) {
+  if(open_window&&active_window_)return ValidationWindowState::Pending;
+  if(!active_window_){
+    const path data_directory(data_directory_);
+    window_request_ids_.clear();
+    ActiveWindow window;
+    window.day=day;
+    window.simulation_cycle=simulation_cycle;
+    const auto constraints=current_requests(data_directory,day,simulation_cycle,output_,notices_,true);
+    if(!constraints.empty())window.devil_request=constraints.back();
+    window.requests=select_window_requests(
+        current_requests(data_directory,day,simulation_cycle,output_,notices_),window_request_ids_,output_);
+    active_window_=std::move(window);
+  }
+  if(active_window_->devil_request)return advance_devil(*active_window_);
+  return advance_feature(*active_window_);
 }
 }

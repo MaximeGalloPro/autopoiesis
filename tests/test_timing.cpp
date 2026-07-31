@@ -64,14 +64,42 @@ int main() {
   assert(reporter.events[4] == "report:a3:3:720");
   assert(reporter.events[5] == "request:a3:3:720");
 
-  int validation_gates = 0;
-  simulation.run(3, 0, 0, [&](int day, int simulation_cycle) {
-    ++validation_gates;
+  int validation_opens = 0;
+  int validation_polls = 0;
+  simulation.run(3, 0, 0, [&](int day, int simulation_cycle, bool open_window) {
+    ++validation_polls;
     assert(day == 6);
     assert(simulation_cycle == 1440);
-    return false;
+    if(open_window)++validation_opens;
+    return ValidationWindowState::Pending;
   });
-  assert(validation_gates == 1);
+  assert(validation_opens == 1);
+  assert(validation_polls == 1);
+  assert(simulation.date().absolute_day == 6);
+  assert(reporter.events.size() == 12);
+
+  simulation.run(3, 0, 0, [&](int day, int simulation_cycle, bool open_window) {
+    ++validation_polls;
+    assert(day == 6);
+    assert(simulation_cycle == 1440);
+    assert(!open_window);
+    return ValidationWindowState::Pending;
+  });
+  assert(simulation.date().absolute_day == 9);
+  assert(validation_opens == 1);
+  assert(validation_polls == 4);
+  assert(reporter.events.size() == 12);
+
+  simulation.run(1, 0, 0, [](int, int, bool) {
+    return ValidationWindowState::Resolved;
+  });
+  assert(simulation.date().absolute_day == 10);
+
+  simulation.run(2, 0, 0, [](int, int, bool) {
+    return ValidationWindowState::Resolved;
+  });
+  assert(simulation.date().absolute_day == 12);
+  assert(reporter.events.size() == 18);
 
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");
