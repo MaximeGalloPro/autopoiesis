@@ -5,12 +5,15 @@ import { createApp, createEventRelay } from "../server/app";
 import type { BackendProcessManager } from "../server/backend-process";
 import type { AiServiceController, AiServicesState } from "../server/ai-services";
 import { CardCycleCoordinator } from "../server/card-cycle";
+import { BackendCardCycleBridge } from "../server/card-cycle-runtime";
 import { worldSnapshot } from "./fixtures";
 
 class FakeManager {
   commands: EngineCommand[] = [];
+  private subscribers = new Set<(event: BackendEvent) => void>();
   current: PublicState = {
     state: worldSnapshot(),
+    card_cycle: null,
     awaiting_dawn: false,
     activity: null,
     validation: null,
@@ -22,7 +25,17 @@ class FakeManager {
   };
   snapshot() { return this.current; }
   send(command: EngineCommand) { this.commands.push(command); return true; }
-  subscribe(_subscriber: (event: BackendEvent) => void) { return () => undefined; }
+  subscribe(subscriber: (event: BackendEvent) => void) {
+    this.subscribers.add(subscriber);
+    return () => this.subscribers.delete(subscriber);
+  }
+  emit(event: BackendEvent) {
+    if (event.type === "validation") this.current = { ...this.current, validation: event.payload };
+    for (const subscriber of this.subscribers) subscriber(event);
+  }
+  setCardCycleSnapshot(card_cycle: NonNullable<PublicState["card_cycle"]>) {
+    this.current = { ...this.current, card_cycle };
+  }
 }
 
 class FakeServices implements AiServiceController {
@@ -197,5 +210,110 @@ describe("BFF Elysia", () => {
     expect((await send({ type: "card_decision", card_id: "a", decision: "approve" })).status).toBe(202);
     expect((await send({ type: "card_decision", card_id: "a", decision: "approve" })).status).toBe(409);
     expect(manager.commands).toEqual([]);
+  });
+
+  test("raccorde les trois cartes du moteur aux routes réelles et persiste leur décision", async () => {
+    const manager = new FakeManager();
+    const cycle = new CardCycleCoordinator({ cooldownMs: 100 });
+    const bridge = new BackendCardCycleBridge(manager as unknown as BackendProcessManager, cycle);
+    const app = createApp(manager as unknown as BackendProcessManager, {
+      serveStatic: false,
+      passwordAuth: false,
+      cardCycle: cycle,
+      cardCycleBridge: bridge,
+    });
+    for (let call = 1; call <= 10; call += 1) {
+      manager.emit({
+        type: "activity",
+        payload: {
+          kind: "period_report",
+          agent_id: "ada",
+          agent_name: "Ada",
+          simulation_cycle: call,
+          call_number: 1,
+          total_calls: 1,
+          elapsed_ms: 0,
+        },
+      });
+    }
+    await bridge.flush();
+    const cycleEndpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/card-cycle`;
+    const acknowledged = await app.handle(new Request(`${cycleEndpoint}/commands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "acknowledge_call_alert" }),
+    }));
+    expect(acknowledged.status).toBe(202);
+    expect(manager.snapshot().card_cycle?.call_alert).toEqual({ call_count: 10, acknowledged: true });
+    const cards = ["a", "b", "c"].map((id) => ({
+      request_id: id,
+      title: `Carte ${id}`,
+      need: "Besoin observé",
+      obstacle: "Obstacle concret",
+      proposed_change: "Changement proposé",
+      mechanism: "Mécanisme déterministe",
+      acceptance_tests: ["Test exécutable"],
+      status: "pending" as const,
+    }));
+
+    manager.emit({
+      type: "validation",
+      payload: {
+        kind: "feature",
+        stage: "choose",
+        day: 3,
+        simulation_cycle: 7200,
+        requests: cards,
+        allowed_commands: ["1", "2", "3", "n", "q"],
+      },
+    });
+    await bridge.flush();
+
+    const commandEndpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`;
+    const select = await app.handle(new Request(commandEndpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "validation.select", request_id: "b" }),
+    }));
+    expect(select.status).toBe(202);
+    manager.emit({
+      type: "validation",
+      payload: {
+        kind: "feature",
+        stage: "confirm",
+        day: 3,
+        simulation_cycle: 7200,
+        requests: cards,
+        selected_request_id: "b",
+        allowed_commands: ["a", "r", "b", "q"],
+      },
+    });
+    await bridge.flush();
+    const reject = await app.handle(new Request(commandEndpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "validation.decision", request_id: "b", decision: "reject" }),
+    }));
+    expect(reject.status).toBe(202);
+    await bridge.flush();
+
+    const snapshot = await app.handle(new Request(cycleEndpoint));
+    expect(await snapshot.json()).toMatchObject({
+      phase: "cooldown",
+      current_batch: {
+        status: "validated",
+        selected_card_id: "b",
+        cards: [
+          { id: "a", status: "pending" },
+          { id: "b", status: "rejected" },
+          { id: "c", status: "pending" },
+        ],
+      },
+    });
+    expect(manager.commands).toEqual([
+      { type: "validation.select", request_id: "b" },
+      { type: "validation.decision", request_id: "b", decision: "reject" },
+    ]);
+    bridge.stop();
   });
 });

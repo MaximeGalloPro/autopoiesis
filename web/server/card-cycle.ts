@@ -67,6 +67,7 @@ export interface CardCycleOptions {
 }
 
 const MAX_COOLDOWN_MS = 86_400_000;
+const MAX_REMEMBERED_CALL_KEYS = 96;
 
 function boundedCooldown(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return 0;
@@ -155,6 +156,99 @@ export class CardCycleCoordinator {
     }
   }
 
+  /**
+   * Raccorde un lot déjà produit par le moteur C++. Cette observation ne crée
+   * aucun appel et ne transmet aucune décision au monde.
+   */
+  async ingestEngineBatch(
+    batchId: string,
+    cards: readonly import("../src/card-cycle-protocol").EvolutionCard[],
+  ): Promise<CardGenerationResult> {
+    await this.loaded;
+    if (!batchId.trim()) return { kind: "failed", error: "Identifiant de lot moteur invalide." };
+    const current = this.state.current_batch;
+    if (current?.status === "awaiting_validation") {
+      if (current.id === batchId) return { kind: "generated", batch: cloneCardBatch(current) };
+      return { kind: "blocked", reason: "pending_cards" };
+    }
+    const contractError = cardContractError(cards);
+    if (contractError) return { kind: "failed", error: contractError };
+
+    // Le moteur a déjà réalisé les appels lorsque cette méthode est appelée.
+    // L'alerte et le cooldown bloquent les nouvelles générations pilotées par
+    // le serveur, mais ne permettent jamais de masquer une garde C++ en cours.
+    this.state.current_batch = generatedBatch(batchId, this.now(), cards);
+    await this.persist();
+    return { kind: "generated", batch: cloneCardBatch(this.state.current_batch) };
+  }
+
+  /** Déduplique les activités moteur afin que le compteur survive à un restart. */
+  async recordObservedCall(key: string): Promise<boolean> {
+    await this.loaded;
+    if (!key.trim() || key.length > 256 || this.state.recent_call_keys.includes(key)) return false;
+    this.state.recent_call_keys = [...this.state.recent_call_keys, key].slice(-MAX_REMEMBERED_CALL_KEYS);
+    this.state.call_count += 1;
+    if (this.state.call_count % 10 === 0) {
+      this.state.call_alert = { call_count: this.state.call_count, acknowledged: false };
+    }
+    await this.persist();
+    return true;
+  }
+
+  /** Conserve le choix affiché, sans le confondre avec une décision du monde. */
+  async recordEngineSelection(cardId: string): Promise<boolean> {
+    await this.loaded;
+    const batch = this.state.current_batch;
+    const card = batch?.cards.find((candidate) => candidate.id === cardId);
+    if (!batch || batch.status !== "awaiting_validation" || !card || card.status !== "pending") return false;
+    batch.selected_card_id = cardId;
+    await this.persist();
+    return true;
+  }
+
+  async clearEngineSelection(): Promise<boolean> {
+    await this.loaded;
+    const batch = this.state.current_batch;
+    if (!batch || batch.status !== "awaiting_validation" || batch.selected_card_id === undefined) return false;
+    delete batch.selected_card_id;
+    await this.persist();
+    return true;
+  }
+
+  /**
+   * Le moteur revalide la commande puis traite une seule carte de sa fenêtre.
+   * Les deux autres conservent donc explicitement leur statut pending.
+   */
+  async completeEngineDecision(cardId: string, decision: CardDecision): Promise<boolean> {
+    await this.loaded;
+    if (decision !== "approve" && decision !== "reject") return false;
+    const batch = this.state.current_batch;
+    const card = batch?.cards.find((candidate) => candidate.id === cardId);
+    if (!batch || batch.status !== "awaiting_validation" || !card || card.status !== "pending"
+      || batch.selected_card_id !== cardId) return false;
+    card.status = decision === "approve" ? "approved" : "rejected";
+    card.decided_at_ms = this.now();
+    batch.status = "validated";
+    batch.resolution = "engine_decision";
+    batch.validated_at_ms = this.now();
+    this.state.cooldown_until_ms = batch.validated_at_ms + this.cooldownMs;
+    await this.persist();
+    return true;
+  }
+
+  /** Une fenêtre explicitement ignorée est traitée sans changer les demandes pending. */
+  async completeEngineWithoutSelection(): Promise<boolean> {
+    await this.loaded;
+    const batch = this.state.current_batch;
+    if (!batch || batch.status !== "awaiting_validation" || batch.selected_card_id !== undefined) return false;
+    batch.status = "validated";
+    batch.resolution = "engine_none";
+    batch.validated_at_ms = this.now();
+    this.state.cooldown_until_ms = batch.validated_at_ms + this.cooldownMs;
+    await this.persist();
+    return true;
+  }
+
   /** Enregistre une décision humaine sans l'interpréter ni modifier le monde. */
   async recordCardDecision(cardId: string, decision: CardDecision): Promise<boolean> {
     await this.loaded;
@@ -168,6 +262,7 @@ export class CardCycleCoordinator {
     card.decided_at_ms = this.now();
     if (batch.cards.every((candidate) => candidate.status !== "pending")) {
       batch.status = "validated";
+      batch.resolution = "all_cards";
       batch.validated_at_ms = this.now();
       this.state.cooldown_until_ms = batch.validated_at_ms + this.cooldownMs;
     }

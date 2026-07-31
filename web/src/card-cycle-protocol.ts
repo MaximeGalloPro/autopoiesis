@@ -10,6 +10,7 @@ export const CARD_CYCLE_PROTOCOL_VERSION = 1 as const;
 export type CardDecision = "approve" | "reject";
 export type CardStatus = "pending" | "approved" | "rejected";
 export type CardBatchStatus = "awaiting_validation" | "validated";
+export type CardBatchResolution = "all_cards" | "engine_decision" | "engine_none";
 export type CardCyclePhase = "ready" | "generating" | "awaiting_validation" | "cooldown" | "call_alert";
 
 /** Commandes humaines bornées, traitées par l'orchestrateur et non par l'IA. */
@@ -38,6 +39,10 @@ export interface CardBatch {
   status: CardBatchStatus;
   created_at_ms: number;
   validated_at_ms?: number;
+  /** Sélection locale persistée, revalidée ensuite par le moteur C++. */
+  selected_card_id?: string;
+  /** La fenêtre C++ peut traiter une seule carte et conserver les autres pending. */
+  resolution?: CardBatchResolution;
   cards: PendingEvolutionCard[];
 }
 
@@ -53,6 +58,8 @@ export interface CardCycleState {
   current_batch: CardBatch | null;
   cooldown_until_ms: number;
   call_alert: ApiCallAlert | null;
+  /** Clés bornées des activités moteur déjà comptées après une reconnexion. */
+  recent_call_keys: string[];
 }
 
 export interface CardCycleSnapshot extends CardCycleState {
@@ -91,6 +98,7 @@ export function initialCardCycleState(): CardCycleState {
     current_batch: null,
     cooldown_until_ms: 0,
     call_alert: null,
+    recent_call_keys: [],
   };
 }
 
@@ -158,10 +166,22 @@ function isCardBatch(value: unknown): value is CardBatch {
   const cards = batch.cards as PendingEvolutionCard[];
   const ids = new Set(cards.map((card) => card.id));
   if (ids.size !== CARD_BATCH_SIZE) return false;
+  const selectedCardId = batch.selected_card_id;
+  if (selectedCardId !== undefined && (!isNonEmptyString(selectedCardId)
+    || !cards.some((card) => card.id === selectedCardId))) return false;
+  const resolution = batch.resolution;
+  if (resolution !== undefined && resolution !== "all_cards"
+    && resolution !== "engine_decision" && resolution !== "engine_none") return false;
   if (batch.status === "validated") {
-    return Number.isFinite(batch.validated_at_ms) && cards.every((card) => card.status !== "pending");
+    if (!Number.isFinite(batch.validated_at_ms)) return false;
+    if (resolution === "engine_decision") {
+      return selectedCardId !== undefined
+        && cards.some((card) => card.id === selectedCardId && card.status !== "pending");
+    }
+    if (resolution === "engine_none") return selectedCardId === undefined && cards.every((card) => card.status === "pending");
+    return cards.every((card) => card.status !== "pending");
   }
-  if (batch.validated_at_ms !== undefined) return false;
+  if (batch.validated_at_ms !== undefined || resolution !== undefined) return false;
   return cards.some((card) => card.status === "pending");
 }
 
@@ -180,7 +200,13 @@ export function parseCardCycleState(value: unknown): CardCycleState | null {
       || Number(alert.call_count) > Number(state.call_count) || Number(alert.call_count) % 10 !== 0
       || typeof alert.acknowledged !== "boolean") return null;
   }
-  return cloneCardCycleState(state as unknown as CardCycleState);
+  if (state.recent_call_keys !== undefined && (!Array.isArray(state.recent_call_keys)
+    || state.recent_call_keys.length > 96
+    || !state.recent_call_keys.every((key) => isNonEmptyString(key) && key.length <= 256))) return null;
+  return cloneCardCycleState({
+    ...(state as unknown as CardCycleState),
+    recent_call_keys: (state.recent_call_keys as string[] | undefined) ?? [],
+  });
 }
 
 export function cloneCardBatch(batch: CardBatch): CardBatch {
@@ -198,6 +224,7 @@ export function cloneCardCycleState(state: CardCycleState): CardCycleState {
     ...state,
     current_batch: state.current_batch ? cloneCardBatch(state.current_batch) : null,
     call_alert: state.call_alert ? { ...state.call_alert } : null,
+    recent_call_keys: [...state.recent_call_keys],
   };
 }
 

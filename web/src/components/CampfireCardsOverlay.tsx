@@ -38,11 +38,13 @@ export function CampfireCardsOverlay({
   requests,
   onChoose,
   hasCallMilestone = false,
+  onAcknowledgeCallMilestone,
   onClose,
 }: {
   requests: readonly EvolutionRequest[];
   onChoose: (requestId: string) => void;
   hasCallMilestone?: boolean;
+  onAcknowledgeCallMilestone?: () => void;
   onClose?: () => void;
 }) {
   if (requests.length !== CAMPFIRE_CARD_COUNT) return null;
@@ -52,7 +54,12 @@ export function CampfireCardsOverlay({
         <div><Flame aria-hidden="true" /><span><small>Feu de camp</small><strong>Choisir une proposition</strong></span></div>
         {onClose && <button type="button" className="campfire-cards-close" onClick={onClose}>Observer le monde</button>}
       </header>
-      {hasCallMilestone && <p className="campfire-call-alert" role="status">Palier de dix appels atteint : une décision humaine est attendue.</p>}
+      {hasCallMilestone && (
+        <div className="campfire-call-alert" role="status">
+          <span>Palier de dix appels atteint : une confirmation humaine est attendue.</span>
+          {onAcknowledgeCallMilestone && <button type="button" onClick={onAcknowledgeCallMilestone}>J’ai pris connaissance</button>}
+        </div>
+      )}
       <div className="campfire-cards-grid">
         {requests.map((request) => (
           <div className="campfire-decision-card" key={request.request_id}>
@@ -60,6 +67,23 @@ export function CampfireCardsOverlay({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** Alerte de garde au foyer, sans carte ni commande adressée au moteur. */
+export function CampfireCallAlert({ onAcknowledge, onClose }: {
+  onAcknowledge: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <section className="campfire-cards-overlay campfire-call-only" role="dialog" aria-label="Alerte d’appels IA au feu de camp">
+      <header className="campfire-cards-heading">
+        <div><Flame aria-hidden="true" /><span><small>Feu de camp</small><strong>Palier d’appels atteint</strong></span></div>
+        <button type="button" className="campfire-cards-close" onClick={onClose}>Observer le monde</button>
+      </header>
+      <p>Aucune règle du monde n’est modifiée. Confirmez simplement avoir pris connaissance du palier avant la prochaine demande de cartes.</p>
+      <div className="campfire-call-actions"><button type="button" onClick={onAcknowledge}>J’ai pris connaissance</button></div>
     </section>
   );
 }

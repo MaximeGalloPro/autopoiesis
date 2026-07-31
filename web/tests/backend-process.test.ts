@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BackendProcessManager, type ManagedProcess } from "../server/backend-process";
+import { CardCycleCoordinator } from "../server/card-cycle";
+import { BackendCardCycleBridge } from "../server/card-cycle-runtime";
 import { worldSnapshot } from "./fixtures";
 
 describe("processus backend", () => {
@@ -96,5 +98,13 @@ describe("processus backend", () => {
     await Bun.sleep(5);
     expect(spawnCount).toBe(1);
     expect(manager.snapshot().engine).toMatchObject({ status: "stopped", restarts: 0, last_error: null });
+  });
+
+  test("projette le cycle persistant sans reboucler sa propre publication", async () => {
+    const manager = new BackendProcessManager({ autoRestart: false });
+    const bridge = new BackendCardCycleBridge(manager, new CardCycleCoordinator());
+    await bridge.flush();
+    expect(manager.snapshot().card_cycle).toMatchObject({ phase: "ready", total_api_calls: 0 });
+    bridge.stop();
   });
 });

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   CAMPFIRE_CARD_COUNT,
+  CampfireCallAlert,
   CampfireCardsOverlay,
   campfireCardsFromPrompt,
   campfireOverlayReducer,
@@ -64,6 +65,15 @@ describe("cartes au feu de camp", () => {
     expect(incomplete).toBe("");
     expect(styles).toContain(".campfire-cards-overlay { position: fixed;");
     expect(styles).toContain("bottom: 92px");
+  });
+
+  test("fait confirmer le palier d’appels au feu sans lui donner de commande monde", () => {
+    const html = renderToStaticMarkup(
+      <CampfireCallAlert onAcknowledge={() => undefined} onClose={() => undefined} />,
+    );
+    expect(html).toContain("Alerte d’appels IA au feu de camp");
+    expect(html).toContain("J’ai pris connaissance");
+    expect(html).toContain("Aucune règle du monde n’est modifiée");
   });
 });
 
