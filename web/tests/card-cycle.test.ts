@@ -45,7 +45,7 @@ describe("cycle de cartes", () => {
     expect(result.kind).toBe("generated");
     expect(result.kind === "generated" && result.batch.cards).toHaveLength(3);
     expect(maximumActiveCalls).toBe(1);
-    expect((await cycle.snapshot()).call_count).toBe(6);
+    expect(await cycle.snapshot()).toMatchObject({ call_count: 6, total_api_calls: 6 });
   });
 
   test("ne relance aucune demande avant la validation des trois cartes puis le délai configuré", async () => {

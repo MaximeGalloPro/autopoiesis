@@ -191,7 +191,12 @@ export class CardCycleCoordinator {
       : snapshot.current_batch?.status === "awaiting_validation" ? "awaiting_validation"
       : this.now() < snapshot.cooldown_until_ms ? "cooldown"
       : "ready";
-    return { ...snapshot, phase, active_call_count: this.activeCallCount };
+    return {
+      ...snapshot,
+      total_api_calls: snapshot.call_count,
+      phase,
+      active_call_count: this.activeCallCount,
+    };
   }
 
   private async load(): Promise<void> {
