@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AiServicesState, BackendEvent, ClientMessage, ConnectionState, EngineCommand, PublicState } from "../protocol";
+import type {
+  AiServicesState,
+  BackendEvent,
+  CardCycleCommand,
+  ClientMessage,
+  ConnectionState,
+  EngineCommand,
+  PublicState,
+} from "../protocol";
 import { browserTransportUrl } from "../transport";
 
 const emptyState: PublicState = {
   state: null,
+  card_cycle: null,
   awaiting_dawn: false,
   activity: null,
   validation: null,
@@ -27,6 +36,7 @@ export function applyEvent(current: PublicState, event: BackendEvent): PublicSta
       evolution_completion: null,
       recompilation: null,
     };
+    case "card_cycle": return { ...base, card_cycle: event.payload };
     case "dawn_wait": return { ...base, awaiting_dawn: event.payload.active };
     case "runtime": return {
       ...base,
@@ -196,5 +206,33 @@ export function useSimulation() {
     }
   }, []);
 
-  return { data, services, connection, commandError, dismissCommandError: () => setCommandError(null), sendCommand, setService };
+  const sendCardCycleCommand = useCallback(async (command: CardCycleCommand): Promise<boolean> => {
+    setCommandError(null);
+    try {
+      const response = await fetch(`${browserTransportUrl("card-cycle")}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(command),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error ?? `Commande de cartes refusée (${response.status})`);
+      }
+      return true;
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "La commande de cartes n’a pas pu être transmise.");
+      return false;
+    }
+  }, []);
+
+  return {
+    data,
+    services,
+    connection,
+    commandError,
+    dismissCommandError: () => setCommandError(null),
+    sendCommand,
+    sendCardCycleCommand,
+    setService,
+  };
 }

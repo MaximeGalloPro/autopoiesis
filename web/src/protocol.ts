@@ -1,3 +1,5 @@
+import type { CardCycleSnapshot } from "./card-cycle-protocol";
+
 export const WORLD_WIDTH = 40 as const;
 export const WORLD_HEIGHT = 24 as const;
 export const SIMULATION_SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
@@ -15,6 +17,7 @@ export {
 export type {
   ApiCallAlert,
   CardBatch,
+  CardBatchResolution,
   CardBatchStatus,
   CardCycleCommand,
   CardCyclePhase,
@@ -280,6 +283,8 @@ export interface AiServicesState {
 
 export interface PublicState {
   state: WorldSnapshot | null;
+  /** Garde persistante du lot de cartes, distincte de l'instantané du monde. */
+  card_cycle: CardCycleSnapshot | null;
   awaiting_dawn: boolean;
   activity: AiActivity | null;
   validation: ValidationPrompt | null;
@@ -292,6 +297,7 @@ export interface PublicState {
 
 export type BackendEvent =
   | { type: "state"; payload: WorldSnapshot }
+  | { type: "card_cycle"; payload: CardCycleSnapshot }
   | { type: "dawn_wait"; payload: { active: boolean } }
   | { type: "runtime"; payload: RuntimeStatus }
   | { type: "activity"; payload: AiActivity | null }
