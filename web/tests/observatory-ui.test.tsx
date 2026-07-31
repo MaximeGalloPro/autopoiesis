@@ -58,4 +58,12 @@ describe("coquille de l’observatoire", () => {
     expect(renderView("maps")).toContain("Un monde sans bord.");
     expect(renderView("world")).toContain("Pluie fine · 8 °C");
   });
+
+  test("permet de fermer la sidebar avec sa croix ou son bouton actif", () => {
+    const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+
+    expect(appSource).toContain("view === activeView && !panelCollapsed");
+    expect(appSource).toContain("<X />");
+    expect(appSource).toContain('panelCollapsed ? "Ouvrir" : "Fermer"');
+  });
 });

@@ -5,7 +5,7 @@ import type { Group } from "three";
 import type { AgentState, AnimalState, Position, WorldCell, WorldSnapshot } from "../../protocol";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../../protocol";
 import { animalLabels } from "../../lib/format";
-import { interpolatePosition, type SmoothPosition } from "../../lib/smoothPosition";
+import { advancePosition, type SmoothPosition } from "../../lib/smoothPosition";
 
 export type EntitySelection = { kind: "agent" | "animal"; id: string };
 
@@ -15,23 +15,38 @@ export function worldPosition(position: Position, y = 0): [number, number, numbe
   return [position.x - WORLD_WIDTH / 2 + 0.5, y, position.y - WORLD_HEIGHT / 2 + 0.5];
 }
 
-function useSmoothWorldPosition(position: Position, y: number) {
+function useSmoothWorldPosition(position: Position, y: number, baseRotation: [number, number, number] = [0, 0, 0]) {
   const groupRef = useRef<Group>(null);
   const initial = worldPosition(position, y);
   const targetRef = useRef<SmoothPosition>({ x: initial[0], y: initial[1], z: initial[2] });
   const visualRef = useRef<SmoothPosition>({ ...targetRef.current });
+  const walkPhaseRef = useRef(0);
 
   useLayoutEffect(() => {
     groupRef.current?.position.set(visualRef.current.x, visualRef.current.y, visualRef.current.z);
-  }, []);
+    groupRef.current?.rotation.set(...baseRotation);
+  }, [baseRotation]);
   useEffect(() => {
     const next = worldPosition(position, y);
     targetRef.current = { x: next[0], y: next[1], z: next[2] };
   }, [position.x, position.y, y]);
   useFrame((_, delta) => {
     if (!groupRef.current) return;
-    visualRef.current = interpolatePosition(visualRef.current, targetRef.current, delta);
-    groupRef.current.position.set(visualRef.current.x, visualRef.current.y, visualRef.current.z);
+    const before = visualRef.current;
+    visualRef.current = advancePosition(before, targetRef.current, delta);
+    const dx = visualRef.current.x - before.x;
+    const dz = visualRef.current.z - before.z;
+    const moving = Math.hypot(targetRef.current.x - visualRef.current.x, targetRef.current.z - visualRef.current.z) > 0.001;
+    if (moving) {
+      walkPhaseRef.current += delta * 15;
+      const heading = Math.atan2(dx, dz);
+      groupRef.current.rotation.set(baseRotation[0], baseRotation[1] + heading, baseRotation[2]);
+    } else {
+      walkPhaseRef.current = 0;
+      groupRef.current.rotation.set(...baseRotation);
+    }
+    const bob = moving ? Math.abs(Math.sin(walkPhaseRef.current)) * 0.035 : 0;
+    groupRef.current.position.set(visualRef.current.x, visualRef.current.y + bob, visualRef.current.z);
   });
   return groupRef;
 }
@@ -49,7 +64,7 @@ function SmoothPositionGroup({
   onClick?: (event: ThreeEvent<MouseEvent>) => void;
   children: ReactNode;
 }) {
-  const positionRef = useSmoothWorldPosition(position, y);
+  const positionRef = useSmoothWorldPosition(position, y, rotation);
   return <group ref={positionRef} rotation={rotation} onClick={onClick}>{children}</group>;
 }
 
