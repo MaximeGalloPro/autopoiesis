@@ -450,6 +450,10 @@ Decision LocalDecider::decide(const Perception& p) {
     if(has_action("teach_skill")&&!lessons.empty())return {DecisionType::Action,"teach_skill",
         {{"target_id",lessons.front().value("target_id","")},{"skill",lessons.front().value("skill","")}},
         "Je transmets un savoir utile au foyer.","relation","","partager une compétence"};
+    const auto map_shares=p.value.value("map_sharing_opportunities",json::array());
+    if(has_action("share_map_knowledge")&&!map_shares.empty())return {DecisionType::Action,"share_map_knowledge",
+        {{"target_id",map_shares.front().value("target_id","")}},
+        "Je partage les cases cartographiées au foyer.","cartographie","","transmettre la carte connue"};
     for(const auto& other:p.value.value("visible_agents",json::array()))if(other.value("adjacent",false))
       return {DecisionType::Action,"talk",{{"target_agent_id",other.value("id","")},{"message","Partageons ce que nous avons appris."}},"Je renforce notre coopération.","relation","","mieux coopérer"};
   }
@@ -803,6 +807,7 @@ static bool action_succeeded(const Decision& decision, const std::string& result
   if (decision.action == "hold_vigil") return result.starts_with("veille avec ");
   if (decision.action == "celebrate") return result == "celebre avec le groupe";
   if (decision.action == "mourn") return result.starts_with("honore la memoire de ");
+  if (decision.action == "share_map_knowledge") return result.starts_with("transmet ");
   if (decision.action == "warn_danger") return result.starts_with("avertit ");
   if (decision.action == "help_companion") return result.starts_with("aide ");
   if (decision.action == "accompany") return result.starts_with("accompagne ");
@@ -831,7 +836,8 @@ static int action_duration_cycles(const Decision& decision) {
       decision.action == "assemble_shelter" || decision.action == "work_on_building") return 12;
   if (decision.action == "talk" || decision.action == "share_camp_meal" ||
       decision.action == "hold_vigil" || decision.action == "celebrate" ||
-      decision.action == "mourn" || decision.action == "teach_skill") return 5;
+      decision.action == "mourn" || decision.action == "teach_skill" ||
+      decision.action == "share_map_knowledge") return 5;
   return 3;
 }
 
@@ -950,6 +956,7 @@ bool Simulation::activate_feature(const std::string& key, int version) {
 }
 
 Perception Simulation::perceive(Agent& a) {
+  group_.observe_camp_skills(agents_);
   json cells=json::array();
   std::set<std::pair<int,int>> perceived;
   for(int dy=-3;dy<=3;++dy) for(int dx=-3;dx<=3;++dx)if(std::abs(dx)+std::abs(dy)<=3){Position p{a.position.x+dx,a.position.y+dy};if(!world_.in_bounds(p)||!perceived.insert({p.x,p.y}).second)continue;auto terrain=world_.terrain(p);a.remember_map(p,terrain);if(world_.campfire(p))a.known_campfires.insert({p.x,p.y});json animals=json::array();for(const auto& animal:world_.animals())if(animal.alive&&animal.position==p){const auto type=animal_type_name(animal.type);a.observed_animals.insert(type);animals.push_back({{"id",animal.id},{"type",type},{"danger",animal.danger},{"nutrition",animal.nutrition}});}json building=nullptr;if(const auto structure=world_.building(p))building={{"type",building_type_name(structure->type)},{"progress",structure->progress},{"required_work",structure->required_work},{"complete",structure->complete}};cells.push_back({{"x",p.x},{"y",p.y},{"terrain",static_cast<int>(terrain)},{"food",world_.food(p)},{"branches",world_.branches(p)},{"iron_ore",world_.iron_ore(p)},{"campfire",world_.campfire(p)},{"building",building},{"stored_food",world_.stored_food(p)},{"stored_wood",world_.stored_wood(p)},{"stored_branches",world_.stored_branches(p)},{"stored_iron_ore",world_.stored_iron_ore(p)},{"crafted_items",world_.stored_crafted_items(p)},{"water",terrain==Terrain::Water},{"rabbit",world_.rabbit_alive()&&p==world_.rabbit()},{"animals",animals}});}
@@ -980,6 +987,7 @@ Perception Simulation::perceive(Agent& a) {
     a.remember("J'assume le rôle de "+a.community_role+" au foyer.");
   }
   const auto actions=available_actions(a,world_,agents_,day_,phase);
+  const auto map_shares=map_sharing_opportunities(a,world_,agents_);
   const bool shelter_action_available=std::any_of(actions.begin(),actions.end(),[](const std::string& action){
     return action=="harvest_wood"||action=="assemble_shelter"||action=="build_shelter";
   });
@@ -1027,7 +1035,7 @@ Perception Simulation::perceive(Agent& a) {
   }
   const auto ecology=world_.ecology();
   json dangers=json::array();for(const auto& danger:dangers_)dangers.push_back({{"id",danger.id},{"type",danger_name(danger.type)},{"x",danger.position.x},{"y",danger.position.y},{"severity",danger.severity},{"warning_day",danger.warning_day},{"warning",danger.warning},{"mitigation",danger.mitigation}});
-  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"day",day_},{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"emotions",emotions_json(a)},{"companion_id",a.companion_id},{"companion_until_day",a.companion_until_day},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"dangers",dangers},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
+  return Perception{json{{"world_width",World::width},{"world_height",World::height},{"calendar",calendar_json(date_)},{"climate",climate_json(climate_)},{"ecology",{{"day",ecology.day},{"births_today",ecology.births},{"predations_today",ecology.predations},{"regrown_food_today",ecology.regrown_food},{"depleted_patches",ecology.depleted_patches},{"total_births",ecology.total_births},{"total_predations",ecology.total_predations}}},{"time",{{"day",day_},{"phase",day_phase_name(phase)},{"cycle_in_day",cycle_in_day_},{"cycles_per_day",cycles_per_day_},{"cycles_until_night",std::max(0,daylight_cycles(cycles_per_day_)-cycle_in_day_+1)}}},{"self",{{"id",a.id},{"name",a.name},{"x",a.position.x},{"y",a.position.y},{"health",a.health},{"hunger",a.hunger},{"thirst",a.thirst},{"fatigue",a.fatigue},{"boredom",a.boredom},{"wood_inventory",a.wood_inventory},{"branch_inventory",a.branch_inventory},{"iron_ore_inventory",a.iron_ore_inventory},{"carried_food",carried},{"equipped_tool",tool},{"inventory_load",inventory_load(a)},{"inventory_capacity",inventory_capacity(a)},{"home_camp",home},{"camp_rest_position",rest_position},{"shelter_construction",construction},{"community_role",a.community_role},{"skills",skills_json(a)},{"conditions",health_conditions_json(a)},{"emotions",emotions_json(a)},{"companion_id",a.companion_id},{"companion_until_day",a.companion_until_day},{"personality",personality_json(a.personality)},{"attributes",attributes_json(a.attributes)},{"behavior",behavior_json(a.behavior)},{"project",project_json(a.project)},{"relationships",relationships_json(a.relationships)},{"observed_animals",a.observed_animals}}},{"cells",cells},{"known_map",known},{"action_history",planning_history_[a.id]},{"visible_agents",visible},{"teachable_lessons",lessons},{"care_opportunities",care},{"map_sharing_opportunities",map_shares},{"camp_knowledge",group_.camp_knowledge_json()},{"buildings",buildings},{"building_designations",designations},{"animals",animals},{"dangers",dangers},{"memories",mem},{"available_actions",actions},{"craftable_recipes",craftable},{"camp_inventory",camp_inventory}}};
 }
 
 void Simulation::advance_action_needs(Agent& a,int action_index){if(action_index%80==0)a.hunger=clamp_stat(a.hunger+1);const int fatigue_interval=12+std::max(0,a.attributes.endurance-50)/10;if(action_index%fatigue_interval==0)a.fatigue=clamp_stat(a.fatigue+1);const int thirst_interval=60+std::max(0,a.attributes.endurance-40);if(action_index%thirst_interval==0)a.thirst=clamp_stat(a.thirst+1);}
@@ -1248,6 +1256,28 @@ std::string Simulation::execute(Agent&a,const Decision&d){
     auto& relation=a.relationships[learner->id];++relation.interactions;
     relation.trust=clamp_stat(relation.trust+2);
     return "transmet "+skill_name(*skill)+" a "+learner->name;
+  }
+  if(d.action=="share_map_knowledge"){
+    const auto target_id=d.parameters.value("target_id","");
+    const auto opportunities=map_sharing_opportunities(a,world_,agents_);
+    const auto opportunity=std::find_if(opportunities.begin(),opportunities.end(),[&](const json& candidate){
+      return candidate.value("target_id","")==target_id;
+    });
+    if(opportunity==opportunities.end())return "transmission cartographique indisponible";
+    auto target=std::find_if(agents_.begin(),agents_.end(),[&](const Agent& candidate){
+      return candidate.id==target_id;
+    });
+    if(target==agents_.end())return "transmission cartographique indisponible";
+
+    auto transferred=target->map_memory;
+    for(const auto& [position,terrain]:a.map_memory)transferred.emplace(position,terrain);
+    const auto cells=opportunity->at("cell_count").get<std::size_t>();
+    if(transferred.size()!=target->map_memory.size()+cells)return "transmission cartographique indisponible";
+    target->map_memory=std::move(transferred);
+    a.remember("J'ai partagé ma carte connue avec "+target->name+".");
+    target->remember(a.name+" m'a transmis des cases cartographiées.");
+    return "transmet "+std::to_string(cells)+" case"+(cells>1?"s":"")+
+           " cartographique"+(cells>1?"s":"")+" a "+target->name;
   }
   if(d.action=="share_camp_meal"){
     const auto fire=world_.nearby_campfire(a.position);

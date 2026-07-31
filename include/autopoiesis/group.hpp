@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.hpp"
+#include "capability_registry.hpp"
 
 #include <array>
 #include <stdexcept>
@@ -8,6 +8,90 @@
 
 namespace apo {
 inline constexpr std::string_view primary_group_id{"groupe-principal"};
+
+class CampKnowledge {
+ public:
+  CampKnowledge() {
+    for (const auto skill : all_skills()) skills_[skill] = {};
+    for (const auto& recipe : crafting_recipes()) recipes_.insert(recipe.key);
+  }
+
+  void observe_skills(const std::vector<Agent>& agents) {
+    for (const auto& agent : agents) {
+      if (!agent.alive) continue;
+      for (const auto skill : all_skills()) {
+        const SkillProgress observed{skill_experience(agent, skill), skill_level(agent, skill)};
+        auto& remembered = skills_[skill];
+        if (observed.level > remembered.level ||
+            (observed.level == remembered.level && observed.experience > remembered.experience))
+          remembered = observed;
+      }
+    }
+  }
+
+  json view() const {
+    json recipes = json::array();
+    for (const auto& recipe : crafting_recipes()) {
+      if (!recipes_.contains(recipe.key)) continue;
+      json items = json::object();
+      for (const auto& [item, amount] : recipe.items) items[item] = amount;
+      recipes.push_back({
+          {"id", recipe.key},
+          {"cost", {{"wood", recipe.wood}, {"branches", recipe.branches},
+                    {"iron_ore", recipe.iron_ore}, {"items", std::move(items)}}},
+          {"output", {{"item", recipe.output}, {"quantity", recipe.output_count}}}});
+    }
+    json skills = json::object();
+    for (const auto skill : all_skills()) {
+      const auto found = skills_.find(skill);
+      const SkillProgress progress = found == skills_.end() ? SkillProgress{} : found->second;
+      skills[skill_name(skill)] = {{"experience", progress.experience}, {"level", progress.level}};
+    }
+    return {{"recipes", std::move(recipes)}, {"skills", std::move(skills)}};
+  }
+
+  void restore(const json& state) {
+    if (!state.is_object() || !state.contains("recipes") || !state.at("recipes").is_array() ||
+        !state.contains("skills") || !state.at("skills").is_object())
+      throw std::runtime_error("checkpoint camp knowledge is invalid");
+
+    std::set<std::string> restored_recipes;
+    for (const auto& value : state.at("recipes")) {
+      if (!value.is_string()) throw std::runtime_error("checkpoint camp recipe is invalid");
+      const auto key = value.get<std::string>();
+      if (!CapabilityRegistry::defaults().recipe(key) || !restored_recipes.insert(key).second)
+        throw std::runtime_error("checkpoint camp recipe is unknown");
+    }
+
+    std::map<Skill, SkillProgress> restored_skills;
+    const auto& saved_skills = state.at("skills");
+    for (const auto skill : all_skills()) {
+      const auto key = skill_name(skill);
+      if (!saved_skills.contains(key) || !saved_skills.at(key).is_object())
+        throw std::runtime_error("checkpoint camp skill is missing");
+      const auto& saved = saved_skills.at(key);
+      if (!saved.contains("experience") || !saved.at("experience").is_number_integer() ||
+          !saved.contains("level") || !saved.at("level").is_number_integer())
+        throw std::runtime_error("checkpoint camp skill is invalid");
+      const int experience = saved.at("experience").get<int>();
+      const int level = saved.at("level").get<int>();
+      if (experience < 0 || experience > 50 || level != std::min(10, experience / 5))
+        throw std::runtime_error("checkpoint camp skill is invalid");
+      restored_skills[skill] = {experience, level};
+    }
+    for (const auto& [key, value] : saved_skills.items()) {
+      (void)value;
+      if (!skill_from_name(key)) throw std::runtime_error("checkpoint camp skill is unknown");
+    }
+
+    recipes_ = std::move(restored_recipes);
+    skills_ = std::move(restored_skills);
+  }
+
+ private:
+  std::set<std::string> recipes_;
+  std::map<Skill, SkillProgress> skills_;
+};
 
 enum class BaseKind { Campfire };
 enum class BaseInfrastructure { Stockpile, Workshop };
@@ -58,6 +142,9 @@ class Group {
 
   const std::string& id() const { return id_; }
   const GroupBase& primary_base() const { return primary_base_; }
+  const CampKnowledge& camp_knowledge() const { return camp_knowledge_; }
+  json camp_knowledge_json() const { return camp_knowledge_.view(); }
+  void observe_camp_skills(const std::vector<Agent>& agents) { camp_knowledge_.observe_skills(agents); }
 
   int infrastructure_level(BaseInfrastructure type) const {
     const auto* definition = base_infrastructure(type);
@@ -82,8 +169,12 @@ class Group {
     const auto& catalog = base_infrastructure_catalog();
     for (std::size_t index = 0; index < catalog.size(); ++index)
       levels[std::string{catalog[index].key}] = infrastructure_levels_[index];
+    const auto knowledge = camp_knowledge_.view();
+    json recipes = json::array();
+    for (const auto& recipe : knowledge.at("recipes")) recipes.push_back(recipe.at("id"));
     return {{"id", id_},
-            {"primary_base", {{"kind", "campfire"}, {"infrastructure_levels", std::move(levels)}}}};
+            {"primary_base", {{"kind", "campfire"}, {"infrastructure_levels", std::move(levels)}}},
+            {"camp_knowledge", {{"recipes", std::move(recipes)}, {"skills", knowledge.at("skills")}}}};
   }
 
   void restore_checkpoint(const json& state) {
@@ -117,9 +208,13 @@ class Group {
         restored_levels[catalog_index(*base_infrastructure(BaseInfrastructure::Stockpile))] == 0)
       throw std::runtime_error("checkpoint group infrastructure prerequisite is invalid");
 
+    CampKnowledge restored_knowledge;
+    if (state.contains("camp_knowledge")) restored_knowledge.restore(state.at("camp_knowledge"));
+
     id_ = id;
     primary_base_ = GroupBase{BaseKind::Campfire};
     infrastructure_levels_ = restored_levels;
+    camp_knowledge_ = std::move(restored_knowledge);
   }
 
  private:
@@ -143,5 +238,6 @@ class Group {
   std::string id_;
   GroupBase primary_base_;
   std::array<int, 2> infrastructure_levels_{};
+  CampKnowledge camp_knowledge_;
 };
 }  // namespace apo
