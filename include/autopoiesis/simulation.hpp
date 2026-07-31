@@ -3,6 +3,7 @@
 #include "capability_registry.hpp"
 #include "decision.hpp"
 #include "devil.hpp"
+#include "group.hpp"
 #include "logger.hpp"
 #include "ui_model.hpp"
 #include "validation.hpp"
@@ -76,6 +77,7 @@ class Simulation {
                           IUserInterface* interface = nullptr);
   void run_day();
   const World& world() const { return world_; } const std::vector<Agent>& agents() const { return agents_; }
+  const Group& group() const { return group_; }
   const CalendarDate& date() const { return date_; }
   const ClimateState& climate() const { return climate_; }
   int simulation_cycle() const { return simulation_cycle_; }
@@ -86,7 +88,7 @@ class Simulation {
   void save_checkpoint() const;
   friend struct SimulationTestAccess;
  private:
-  World world_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; Devil devil_;
+  World world_; Group group_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; Devil devil_;
   CalendarDate date_{date_from_absolute_day(1)};
   ClimateState climate_{climate_for(date_)};
   int cycles_per_day_{2400}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};

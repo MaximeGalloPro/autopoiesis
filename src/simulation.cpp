@@ -867,6 +867,7 @@ void Simulation::load_checkpoint() {
   json state;input>>state;
   if(state.at("version").get<int>()!=1)throw std::runtime_error("unsupported simulation checkpoint version");
   world_.restore_checkpoint(state.at("world"));
+  if (state.contains("group")) group_.restore_checkpoint(state.at("group"));
   std::vector<Agent> restored_agents;
   for(const auto& agent:state.at("agents"))restored_agents.push_back(restore_agent(agent));
   if(restored_agents.empty())throw std::runtime_error("simulation checkpoint has no agents");
@@ -912,7 +913,7 @@ void Simulation::save_checkpoint() const {
       {"severity",danger.severity},{"warning_day",danger.warning_day},{"remaining_days",danger.remaining_days},
       {"cause",danger.cause},{"warning",danger.warning},{"mitigation",danger.mitigation}});
   const json state={{"version",1},{"day",day_},{"simulation_cycle",simulation_cycle_},
-      {"world",world_.checkpoint()},{"agents",std::move(agents)},
+      {"world",world_.checkpoint()},{"group",group_.checkpoint()},{"agents",std::move(agents)},
       {"active_features",std::move(active_features)},
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
