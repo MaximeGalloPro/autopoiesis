@@ -802,6 +802,14 @@ html, body, #root { height: 100%; overflow: hidden; }
 .resident-list > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 1px; border-bottom: 1px solid var(--line); color: #d5ddd6; font-size: 11px; }
 .resident-list > div:last-child { border-bottom: 0; }
 .resident-list small { color: var(--faint); font-size: 9px; }
+.camp-encyclopedia { display: flex; flex-direction: column; gap: 14px; }
+.camp-encyclopedia .section-title { margin-bottom: 0; }
+.camp-encyclopedia-group { display: flex; flex-direction: column; gap: 7px; }
+.camp-encyclopedia-group + .camp-encyclopedia-group { padding-top: 12px; border-top: 1px solid var(--line); }
+.camp-encyclopedia-group h4 { margin: 0; color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.camp-encyclopedia-group article { display: flex; flex-direction: column; gap: 3px; padding-left: 9px; border-left: 2px solid rgba(216,175,97,.52); }
+.camp-encyclopedia-group strong { color: #d7ddd8; font-size: 11px; }
+.camp-encyclopedia-group article span, .camp-encyclopedia-group > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 
 .history-feed { flex: 1; }
 .history-feed .event-list li { padding: 0 0 13px 17px; border-bottom: 1px solid rgba(205,224,211,.08); font-size: 12px; line-height: 1.55; }
