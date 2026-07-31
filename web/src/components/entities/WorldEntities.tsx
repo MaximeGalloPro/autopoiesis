@@ -256,6 +256,15 @@ function CampfireModels({
 
 type AgentMarker = "rest" | "provisions" | "materials" | "project" | "blocked" | null;
 
+function actionWordFor(agent: AgentState): string {
+  if (agent.sleeping_days > 0 || agent.fatigue >= 85) return "Repos";
+  if (agent.carried_food) return "Retour";
+  if (agent.wood_inventory > 0 || agent.branch_inventory > 0) return "Transport";
+  if (agent.project.status === "blocked") return "Bloqué";
+  if (agent.project.status === "active") return "Construire";
+  return "Observer";
+}
+
 function markerFor(agent: AgentState): AgentMarker {
   if (agent.sleeping_days > 0 || agent.fatigue >= 85) return "rest";
   if (agent.carried_food) return "provisions";
@@ -285,6 +294,15 @@ function AgentActivityMarker({ agent }: { agent: AgentState }) {
         {marker === "blocked" && <mesh rotation={[0, 0, Math.PI / 4]}><boxGeometry args={[0.13, 0.13, 0.08]} /><meshStandardMaterial color={color} roughness={0.72} /></mesh>}
       </group>
     </Float>
+  );
+}
+
+function AgentInfoCard({ agent }: { agent: AgentState }) {
+  return (
+    <Html center position={[0, 1.02, 0]} distanceFactor={1} className="agent-info-card">
+      <div className="agent-info-card__name">{agent.name}</div>
+      <div className="agent-info-card__action">{actionWordFor(agent)}</div>
+    </Html>
   );
 }
 
@@ -326,9 +344,9 @@ function AgentModels({
         </mesh>
         {hasPack && <mesh position={[0, 0.13, 0.25]}><boxGeometry args={[0.19, 0.17, 0.11]} /><meshStandardMaterial color="#68503b" roughness={0.94} /></mesh>}
         <AgentActivityMarker agent={agent} />
+        <AgentInfoCard agent={agent} />
         {isSelected && <>
           <SelectionRing radius={0.39} y={-0.13} />
-          <Html center position={[0, 0.88, 0]} distanceFactor={1} className="world-label">{agent.name}</Html>
         </>}
       </SmoothPositionGroup>
     );

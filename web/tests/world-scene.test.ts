@@ -24,4 +24,12 @@ describe("scène du monde", () => {
     expect(entitiesSource).toContain("hasAlert");
     expect(entitiesSource).toContain("onCampfireClick");
   });
+
+  test("affiche une carte compacte avec le nom et l'action de chaque personnage", () => {
+    expect(entitiesSource).toContain("AgentInfoCard");
+    expect(entitiesSource).toContain("actionWordFor");
+    expect(entitiesSource).toContain("agent-info-card");
+    expect(entitiesSource).toContain('<div className="agent-info-card__name">{agent.name}</div>');
+    expect(entitiesSource).toContain('<div className="agent-info-card__action">{actionWordFor(agent)}</div>');
+  });
 });
