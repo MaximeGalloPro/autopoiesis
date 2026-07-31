@@ -1507,8 +1507,13 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
     if(!run_day(interface))break;
     bool period_complete=day_%report_every_days_==0;
     bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
-    if(all_dead) logger_.message("Simulation arrêtée : tous les personnages sont morts.");
-    if(!interface&&((render_every_days>0&&day_%render_every_days==0)||all_dead))
+    if(all_dead){
+      logger_.message("Simulation arrêtée : tous les personnages sont morts.");
+      if(!interface)render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
+      save_checkpoint();
+      break;
+    }
+    if(!interface&&render_every_days>0&&day_%render_every_days==0)
       render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
 
     if(period_complete){
@@ -1572,7 +1577,6 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
       }
     }
     save_checkpoint();
-    if(all_dead) break;
     if(period_complete&&validation_gate){
       if(!validation_gate(day_,simulation_cycle_)){
         logger_.message("Simulation mise en pause après la validation humaine.");

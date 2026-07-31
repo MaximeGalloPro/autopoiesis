@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <filesystem>
 #include <unistd.h>
 
@@ -20,6 +21,22 @@ static void stock_food(World& world,Position camp,int amount) {
   for(int index=0;index<amount;++index)
     assert(world.store_food(camp,FoodItem{FoodType::Roots,25,false,0,5}));
 }
+
+struct PopulationReporter final : ICycleReporter {
+  int reports{};
+  int requests{};
+
+  json report_period(int, int, const Agent&, const std::vector<std::string>&) override {
+    ++reports;
+    return nullptr;
+  }
+
+  json request_evolution(int, int, const Agent&, const std::vector<std::string>&,
+                         const json&) override {
+    ++requests;
+    return nullptr;
+  }
+};
 
 int main() {
   const auto root=std::filesystem::path("/tmp")/("autopoiesis-population-"+std::to_string(getpid()));
@@ -65,4 +82,22 @@ int main() {
   assert(std::ranges::any_of(restored.agents(),[&](const Agent& agent){
     return agent.origin=="birth"&&agent.parent_ids==child_parents;
   }));
+
+  setenv("CYCLES_PER_DAY","1",1);
+  setenv("REPORT_EVERY_DAYS","1",1);
+  PopulationReporter reporter;
+  Logger final_day_logger((root/"final-day").string());
+  std::mt19937 final_day_rng(99);LocalDecider final_day_decider(final_day_rng);
+  Simulation final_day(99,final_day_decider,final_day_logger,&reporter,(root/"final-day-state.json").string());
+  for(std::size_t index=0;index<final_day.agents().size();++index)
+    SimulationTestAccess::agent(final_day,index).age_days=80*360-1;
+
+  final_day.run(3,0,0);
+  assert(final_day.simulation_cycle()==1);
+  assert(std::ranges::none_of(final_day.agents(),[](const Agent& agent){return agent.alive;}));
+  assert(reporter.reports==0&&reporter.requests==0);
+  assert(std::filesystem::exists(root/"final-day-state.json"));
+
+  unsetenv("CYCLES_PER_DAY");
+  unsetenv("REPORT_EVERY_DAYS");
 }
