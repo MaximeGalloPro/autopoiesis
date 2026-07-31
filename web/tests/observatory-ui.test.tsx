@@ -65,5 +65,6 @@ describe("coquille de l’observatoire", () => {
     expect(appSource).toContain("view === activeView && !panelCollapsed");
     expect(appSource).toContain("<X />");
     expect(appSource).toContain('panelCollapsed ? "Ouvrir" : "Fermer"');
+    expect(appSource).toContain('panelCollapsed ? "Déplier le panneau d’observation" : "Fermer le panneau d’observation"');
   });
 });

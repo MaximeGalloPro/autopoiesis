@@ -270,7 +270,7 @@ export default function App() {
           <button
             className="panel-toggle"
             type="button"
-            aria-label={panelCollapsed ? "Déplier le panneau d’observation" : "Replier le panneau d’observation"}
+            aria-label={panelCollapsed ? "Déplier le panneau d’observation" : "Fermer le panneau d’observation"}
             aria-controls="observatory-inspector"
             aria-expanded={!panelCollapsed}
             onClick={() => setPanelCollapsed((collapsed) => !collapsed)}
