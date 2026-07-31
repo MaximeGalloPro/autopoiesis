@@ -1,6 +1,7 @@
-import { Activity, Brain, CalendarDays, CloudRain, Flame, Heart, Map, PackageOpen, PawPrint, Sparkles, Users } from "lucide-react";
+import { Activity, BookOpenText, Brain, CalendarDays, CloudRain, Flame, Heart, Map, PackageOpen, PawPrint, Sparkles, Users } from "lucide-react";
 import { useState } from "react";
 import type { AgentState, AnimalState, WorldSnapshot } from "../protocol";
+import { campEncyclopediaFromSnapshot } from "../lib/campEncyclopedia";
 import { actionLabels, animalLabels, attributeLabels, clampPercent } from "../lib/format";
 import { observatoryViewLabel, type ObservatoryView } from "./ObservatoryNavigation";
 import type { EntitySelection } from "./WorldScene";
@@ -135,6 +136,8 @@ function CampView({ snapshot }: { snapshot: WorldSnapshot }) {
   const shelters = snapshot.cells.filter((cell) => cell.shelter_level > 0);
   const residents = snapshot.agents.filter((agent) => agent.alive);
   const focalFire = campfires[0];
+  const encyclopedia = campEncyclopediaFromSnapshot(snapshot);
+  const residentNames = (names: string[]) => names.join(", ");
 
   return (
     <div className="panel-stack section-view">
@@ -164,6 +167,33 @@ function CampView({ snapshot }: { snapshot: WorldSnapshot }) {
         {residents.length === 0 ? <p className="muted">Aucun personnage vivant à observer.</p> : residents.map((resident) => (
           <div key={resident.id}><span>{resident.name}</span><small>{resident.behavior.archetype || "habitant"}</small></div>
         ))}
+      </section>
+      <section className="detail-section camp-encyclopedia" aria-label="Encyclopédie du foyer">
+        <div className="section-title"><BookOpenText size={15} /> Encyclopédie du foyer</div>
+        <div className="camp-encyclopedia-group">
+          <h4>Recettes disponibles</h4>
+          {encyclopedia.recipes.length === 0 ? <p className="muted">Aucune recette n’est disponible dans cet instantané.</p> : encyclopedia.recipes.map((entry) => (
+            <article key={entry.action}>
+              <strong>Fabrication au foyer</strong>
+              <span>{residentNames(entry.residents)} peut fabriquer selon une recette validée.</span>
+            </article>
+          ))}
+        </div>
+        <div className="camp-encyclopedia-group">
+          <h4>Compétences à apprendre</h4>
+          {encyclopedia.learnableSkills.length === 0 ? <p className="muted">Aucune leçon n’est disponible dans cet instantané.</p> : encyclopedia.learnableSkills.map((entry) => (
+            <article key={entry.action}>
+              <strong>Leçon au foyer</strong>
+              <span>{residentNames(entry.residents)} peut transmettre une compétence validée.</span>
+            </article>
+          ))}
+        </div>
+        <div className="camp-encyclopedia-group">
+          <h4>Partage de carte</h4>
+          {encyclopedia.mapSharing.available
+            ? <p>{residentNames(encyclopedia.mapSharing.residents)} peut partager sa carte connue.</p>
+            : <p className="muted">Le moteur ne signale aucun partage de carte disponible.</p>}
+        </div>
       </section>
     </div>
   );
