@@ -173,6 +173,10 @@ export interface WorldSnapshot {
   paused: boolean;
   speed: SimulationSpeed;
   delay_ms: number;
+  /** Compteur persistant fourni par l'adaptateur web quand le cycle de cartes est actif. */
+  total_api_calls?: number;
+  /** Signal de présentation : aucune décision de monde n'est portée par ce champ. */
+  call_alert?: { call_count: number; acknowledged: boolean } | null;
 }
 
 export type ActivityKind = "period_report" | "evolution_request";
@@ -183,6 +187,7 @@ export interface AiActivity {
   call_number: number;
   total_calls: number;
   elapsed_ms: number;
+  simulation_cycle?: number;
 }
 
 export interface EvolutionRequest {
@@ -324,13 +329,23 @@ export const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {
 export function isWorldSnapshot(value: unknown): value is WorldSnapshot {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<WorldSnapshot>;
+  const totalApiCallsValid = candidate.total_api_calls === undefined
+    || (Number.isSafeInteger(candidate.total_api_calls) && candidate.total_api_calls >= 0);
+  const callAlertValid = candidate.call_alert === undefined || candidate.call_alert === null
+    || (candidate.total_api_calls !== undefined
+      && Number.isSafeInteger(candidate.call_alert.call_count)
+      && candidate.call_alert.call_count > 0
+      && candidate.call_alert.call_count % 10 === 0
+      && candidate.call_alert.call_count <= candidate.total_api_calls
+      && typeof candidate.call_alert.acknowledged === "boolean");
   return candidate.width === WORLD_WIDTH && candidate.height === WORLD_HEIGHT
     && Array.isArray(candidate.cells) && Array.isArray(candidate.agents)
     && Array.isArray(candidate.animals) && Array.isArray(candidate.recent_events)
     && typeof candidate.simulation_cycle === "number"
     && typeof candidate.paused === "boolean"
     && SIMULATION_SPEEDS.includes(candidate.speed as SimulationSpeed)
-    && Number.isInteger(candidate.delay_ms) && (candidate.delay_ms ?? -1) >= 0 && (candidate.delay_ms ?? 10_001) <= 10_000;
+    && Number.isInteger(candidate.delay_ms) && (candidate.delay_ms ?? -1) >= 0 && (candidate.delay_ms ?? 10_001) <= 10_000
+    && totalApiCallsValid && callAlertValid;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

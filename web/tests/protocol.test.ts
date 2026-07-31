@@ -59,4 +59,29 @@ describe("protocole du moteur", () => {
       .toEqual({ type: "dawn_wait", payload: { active: true } });
     expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "dawn_wait", payload: { active: "true" } })}`)).toBeNull();
   });
+
+  test("garde le compteur persistant et son alerte dans l'adaptateur web", () => {
+    const snapshot = worldSnapshot({
+      total_api_calls: 10,
+      call_alert: { call_count: 10, acknowledged: false },
+    });
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "snapshot", payload: snapshot })}`))
+      .toEqual({ type: "state", payload: snapshot });
+
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "snapshot",
+      payload: { ...snapshot, total_api_calls: "10" },
+    })}`)).toBeNull();
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "snapshot",
+      payload: { ...snapshot, call_alert: { call_count: 9, acknowledged: false } },
+    })}`)).toBeNull();
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "snapshot",
+      payload: { ...snapshot, total_api_calls: undefined },
+    })}`)).toBeNull();
+  });
 });
