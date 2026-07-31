@@ -51,6 +51,8 @@ export interface CardCycleState {
 }
 
 export interface CardCycleSnapshot extends CardCycleState {
+  /** Nom public du compteur persistant consommé par l'observatoire. */
+  total_api_calls: number;
   phase: CardCyclePhase;
   active_call_count: number;
 }
