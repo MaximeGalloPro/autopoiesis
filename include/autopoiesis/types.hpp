@@ -5,11 +5,13 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <nlohmann/json.hpp>
 
 namespace apo {
 using json = nlohmann::json;
+inline constexpr std::string_view primary_family_id{"foyer-principal"};
 struct Position { int x{}; int y{}; friend bool operator==(const Position&, const Position&) = default; };
 enum class Terrain { Ground, Wall, Water, Tree, Bush };
 enum class FoodType { Berries, Roots, Mushrooms, Fish, Venison };
@@ -176,6 +178,7 @@ struct Agent {
   int last_help_day{};
   int last_warning_day{};
   int age_days{25*360};
+  std::string family_id{primary_family_id};
   std::string origin{"founder"};
   int arrival_day{1};
   std::vector<std::string> parent_ids;

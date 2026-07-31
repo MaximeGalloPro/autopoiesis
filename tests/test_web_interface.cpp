@@ -45,6 +45,7 @@ UiSnapshot sample_snapshot() {
   agent.thirst=81;
   agent.fatigue=37;
   agent.boredom=12;
+  agent.family_id="foyer-principal";
   agent.memories={"Un souvenir"};
   agent.map_memory[std::pair{3,2}]=Terrain::Bush;
   agent.map_visit_counts[std::pair{3,2}]=4;
@@ -118,6 +119,7 @@ int main() {
   assert(serialized.at("agents").at(0).at("state").at("carried_food").at("type")=="roots");
   assert(serialized.at("agents").at(0).at("state").at("map_memory").at(0).at("terrain")=="bush");
   assert(serialized.at("agents").at(0).at("state").at("relationships").at("a2").at("trust")==6);
+  assert(serialized.at("agents").at(0).at("state").at("family_id")=="foyer-principal");
   assert(serialized.at("animals").at(0).at("type")=="rabbit");
 
   std::istringstream runtime_input(
