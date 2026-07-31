@@ -5,6 +5,7 @@
 #include "devil.hpp"
 #include "logger.hpp"
 #include "ui_model.hpp"
+#include "validation.hpp"
 #include <functional>
 
 namespace apo {
@@ -66,7 +67,8 @@ struct SimulationRunResult {
 };
 class Simulation {
  public:
-  using ValidationGate = std::function<bool(int day, int simulation_cycle)>;
+  using ValidationGate = std::function<ValidationWindowState(
+      int day, int simulation_cycle, bool open_window)>;
   Simulation(unsigned seed, IDecider& decider, Logger& logger, ICycleReporter* reporter = nullptr,
              std::string checkpoint_path = {});
   SimulationRunResult run(int days, int delay_ms, int render_every_days,
@@ -97,6 +99,9 @@ class Simulation {
   std::string checkpoint_path_;
   std::vector<ActiveFeature> active_features_;
   bool restored_checkpoint_{};
+  bool validation_pending_{};
+  int validation_day_{};
+  int validation_cycle_{};
   bool run_day(IUserInterface* interface);
   void load_checkpoint();
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);

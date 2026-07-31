@@ -127,7 +127,9 @@ int main() {
   Simulation speed_simulation(42,speed_decider,speed_logger);
   FakeInterface speed_interface;
   speed_interface.selected_delay_ms=2500;
-  speed_simulation.run(1,7,1,[](int,int){return true;},&speed_interface);
+  speed_simulation.run(1,7,1,[](int,int,bool){
+    return ValidationWindowState::Resolved;
+  },&speed_interface);
   assert(speed_interface.idle_milliseconds==2500);
 
   assert(simulation_delay_from_slider(100.0F,100.0F,500.0F)==0);

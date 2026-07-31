@@ -157,6 +157,12 @@ bool supported_speed(float speed) {
   return std::find(speeds.begin(),speeds.end(),speed)!=speeds.end();
 }
 
+bool same_validation_prompt(const ValidationPrompt& left,const ValidationPrompt& right) {
+  return left.stage==right.stage&&left.day==right.day&&
+         left.simulation_cycle==right.simulation_cycle&&left.requests==right.requests&&
+         left.selected_index==right.selected_index&&left.kind==right.kind;
+}
+
 std::string web_command_name(WebCommandKind kind) {
   switch(kind){
     case WebCommandKind::Pause:return "pause";
@@ -350,6 +356,16 @@ bool WebInterface::drain_runtime_commands() {
     std::string error;
     const auto command=parse_web_command(line,error);
     if(!command){emit_status(error,false);continue;}
+    if(command->kind==WebCommandKind::Validation){
+      if(!active_validation_prompt_||pending_validation_command_||
+         !web_validation_command_allowed(*active_validation_prompt_,command->validation_text)){
+        emit_status("validation_command_unavailable",false,"validation");
+      }else{
+        pending_validation_command_=command->validation_text;
+        emit_status("command_accepted",true,"validation");
+      }
+      continue;
+    }
     apply_runtime_command(*command);
   }
   return false;
@@ -448,6 +464,20 @@ std::string WebInterface::wait_for_validation(const ValidationPrompt& prompt,
 
 std::string WebInterface::request_command(const ValidationPrompt& prompt) {
   return wait_for_validation(prompt,"validation_prompt",validation_prompt_json(prompt));
+}
+
+std::optional<std::string> WebInterface::poll_command(const ValidationPrompt& prompt) {
+  if(!active_validation_prompt_||!same_validation_prompt(*active_validation_prompt_,prompt)){
+    active_validation_prompt_=prompt;
+    pending_validation_command_.reset();
+    emit("validation_prompt",validation_prompt_json(prompt));
+  }
+  if(!drain_runtime_commands())return std::string{"q"};
+  if(!pending_validation_command_)return std::nullopt;
+  auto command=std::move(*pending_validation_command_);
+  pending_validation_command_.reset();
+  active_validation_prompt_.reset();
+  return command;
 }
 
 bool WebInterface::present_evolution_progress(const EvolutionProgress& progress) {

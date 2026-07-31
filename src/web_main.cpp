@@ -124,8 +124,8 @@ int main(int argc,char** argv) {
     if(enabled_from_env("WAIT_FOR_HUMAN_VALIDATION",true)){
       auto human_validation=std::make_shared<HumanValidation>(
           data_directory,std::cin,std::cerr,interface.get());
-      validation_gate=[human_validation](int day,int simulation_cycle){
-        return human_validation->review_window(day,simulation_cycle);
+      validation_gate=[human_validation](int day,int simulation_cycle,bool open_window){
+        return human_validation->advance_window(day,simulation_cycle,open_window);
       };
     }
     SimulationRunResult result;
