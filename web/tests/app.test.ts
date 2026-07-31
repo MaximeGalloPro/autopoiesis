@@ -4,6 +4,7 @@ import { BROWSER_TRANSPORT_PREFIX } from "../src/transport";
 import { createApp, createEventRelay } from "../server/app";
 import type { BackendProcessManager } from "../server/backend-process";
 import type { AiServiceController, AiServicesState } from "../server/ai-services";
+import { CardCycleCoordinator } from "../server/card-cycle";
 import { worldSnapshot } from "./fixtures";
 
 class FakeManager {
@@ -155,6 +156,46 @@ describe("BFF Elysia", () => {
       body: JSON.stringify({ type: "validation.decision", request_id: "request-1", decision: "approve" }),
     }));
     expect(response.status).toBe(403);
+    expect(manager.commands).toEqual([]);
+  });
+
+  test("expose les commandes strictes du cycle de cartes sans les confondre avec le moteur", async () => {
+    const manager = new FakeManager();
+    const cycle = new CardCycleCoordinator({ cooldownMs: 0 });
+    const generated = await cycle.requestNextBatch(async (context) => {
+      for (let call = 1; call <= 10; call += 1) {
+        await context.call(`appel-${call}`, async () => undefined);
+      }
+      return ["a", "b", "c"].map((id) => ({
+        id,
+        title: `Carte ${id}`,
+        need: "Besoin",
+        obstacle: "Obstacle",
+        proposed_change: "Changement",
+        mechanism: "Mécanisme",
+        acceptance_tests: ["Test"],
+      }));
+    });
+    expect(generated.kind).toBe("generated");
+    const app = createApp(manager as unknown as BackendProcessManager, {
+      serveStatic: false,
+      passwordAuth: false,
+      cardCycle: cycle,
+    });
+    const endpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/card-cycle`;
+    const send = (body: unknown) => app.handle(new Request(`${endpoint}/commands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }));
+
+    const snapshot = await app.handle(new Request(endpoint));
+    expect(snapshot.status).toBe(200);
+    expect(await snapshot.json()).toMatchObject({ total_api_calls: 10, phase: "call_alert" });
+    expect((await send({ type: "acknowledge_call_alert", extra: true })).status).toBe(422);
+    expect((await send({ type: "acknowledge_call_alert" })).status).toBe(202);
+    expect((await send({ type: "card_decision", card_id: "a", decision: "approve" })).status).toBe(202);
+    expect((await send({ type: "card_decision", card_id: "a", decision: "approve" })).status).toBe(409);
     expect(manager.commands).toEqual([]);
   });
 });
