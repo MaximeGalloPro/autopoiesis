@@ -21,7 +21,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useReducer, useState } from "react";
+import { CampfireCardsOverlay, campfireCardsFromPrompt, campfireOverlayReducer } from "./components/CampfireCardsOverlay";
 import { Inspector } from "./components/Inspector";
 import { ObservatoryNavigation, type ObservatoryView } from "./components/ObservatoryNavigation";
 import { ProgressDock } from "./components/ProgressDock";
@@ -34,6 +35,7 @@ import {
 import type { EntitySelection } from "./components/WorldScene";
 import { useSimulation } from "./hooks/useSimulation";
 import { seasonLabels } from "./lib/format";
+import { initialApiCallCounter, nextApiCallCounter } from "./lib/apiCallCounter";
 import { SIMULATION_SPEEDS, type AiServicesState, type EngineCommand, type SimulationSpeed } from "./protocol";
 
 const WorldScene = lazy(() => import("./components/WorldScene").then((module) => ({
@@ -140,10 +142,16 @@ export default function App() {
   // de la place qu'après une demande explicite via la navigation ou une entité.
   const [panelCollapsed, setPanelCollapsed] = useState(true);
   const [observationMode, setObservationMode] = useState(false);
+  const [campfireOverlay, dispatchCampfireOverlay] = useReducer(campfireOverlayReducer, { open: false });
+  const [apiCallCounter, setApiCallCounter] = useState(initialApiCallCounter);
 
   useEffect(() => {
     if (snapshot) setDelayDraft(snapshot.delay_ms);
   }, [snapshot?.delay_ms]);
+
+  useEffect(() => {
+    setApiCallCounter((current) => nextApiCallCounter(current, data.activity, snapshot?.total_api_calls));
+  }, [data.activity, snapshot?.total_api_calls]);
 
   useEffect(() => {
     if (!snapshot || selected) return;
@@ -196,6 +204,18 @@ export default function App() {
   const validationGuardKey = data.validation
     ? `validation:${data.validation.kind}:${data.validation.simulation_cycle}`
     : null;
+  const campfireCards = campfireCardsFromPrompt(data.validation);
+  const campfireHasAlert = campfireCards.length === 3;
+  const hasCallMilestone = (!snapshot?.call_alert?.acknowledged
+    && snapshot?.call_alert?.call_count === apiCallCounter.total)
+    || apiCallCounter.has_milestone_alert;
+  useEffect(() => {
+    if (!campfireHasAlert) dispatchCampfireOverlay({ type: "cards_closed" });
+  }, [campfireHasAlert]);
+  const chooseCampfireCard = (requestId: string) => {
+    dispatchCampfireOverlay({ type: "card_chosen" });
+    void sendCommand({ type: "validation.select", request_id: requestId });
+  };
   const completionGuardKey = data.evolution_completion
     ? `completion:${data.evolution_completion.request_id}:${data.evolution_completion.stage}`
     : null;
@@ -251,8 +271,19 @@ export default function App() {
             <div style={{ "--progress": `${dayProgress * 3.6}deg` } as React.CSSProperties}><span>{data.awaiting_dawn ? "☀" : snapshot?.phase === "night" ? "☾" : "☀"}</span></div>
             <p><strong>{data.awaiting_dawn ? "Aube" : `${Math.round(dayProgress)}%`}</strong><small>{data.awaiting_dawn ? "prochaine" : "de la journée"}</small></p>
           </div>
+          <div className={`world-overlay api-call-counter${hasCallMilestone ? " milestone" : ""}`} role="status" aria-label={`${apiCallCounter.total} appels IA effectués`}>
+            <Bot aria-hidden="true" /><span>Appels IA <strong>{apiCallCounter.total}</strong></span>
+            {hasCallMilestone && <small>Palier atteint</small>}
+          </div>
           <Suspense fallback={<div className="world-canvas" aria-label="Chargement de la scène tridimensionnelle" />}>
-            <WorldScene snapshot={snapshot} awaitingDawn={data.awaiting_dawn} selected={selected} onSelect={selectEntity} />
+            <WorldScene
+              snapshot={snapshot}
+              awaitingDawn={data.awaiting_dawn}
+              selected={selected}
+              onSelect={selectEntity}
+              campfireAlert={campfireHasAlert}
+              onCampfireClick={() => dispatchCampfireOverlay({ type: "campfire_clicked", has_alert: campfireHasAlert })}
+            />
           </Suspense>
           <div className="world-legend" aria-label="Légende du monde">
             <span><i className="food" />Nourriture</span><span><i className="wood" />Bois</span><span><i className="fiber" />Fibres</span><span><i className="shelter" />Abri</span><span><i className="fire" /><Flame />Feu</span><span><i className="stock" />Réserve commune</span>
@@ -331,7 +362,15 @@ export default function App() {
         evolution={data.evolution}
         recompilation={data.recompilation}
       />
-      {data.validation && validationGuardKey && (openGuardKey === validationGuardKey
+      {campfireOverlay.open && campfireHasAlert && (
+        <CampfireCardsOverlay
+          requests={campfireCards}
+          hasCallMilestone={hasCallMilestone}
+          onChoose={chooseCampfireCard}
+          onClose={() => dispatchCampfireOverlay({ type: "cards_closed" })}
+        />
+      )}
+      {data.validation && validationGuardKey && !campfireHasAlert && (openGuardKey === validationGuardKey
         ? <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
         : <ValidationReminder prompt={data.validation} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(validationGuardKey)} />)}
       {data.evolution_completion && completionGuardKey && (openGuardKey === completionGuardKey
