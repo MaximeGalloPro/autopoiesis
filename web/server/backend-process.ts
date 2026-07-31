@@ -111,6 +111,18 @@ export class BackendProcessManager {
   private runtime: RuntimeStatus = { ...DEFAULT_RUNTIME_STATUS };
   private latestEvent: BackendEvent | null = null;
   private engine: EngineInfo = initialEngine();
+  private apiCallCount = 0;
+  private readonly apiCallKeys = new Set<string>();
+
+  private withApiTelemetry(state: WorldSnapshot): WorldSnapshot {
+    return {
+      ...state,
+      total_api_calls: this.apiCallCount,
+      call_alert: this.apiCallCount > 0 && this.apiCallCount % 10 === 0
+        ? { call_count: this.apiCallCount, acknowledged: false }
+        : null,
+    };
+  }
 
   constructor(options: BackendProcessOptions = {}) {
     this.projectRoot = options.projectRoot ?? resolve(import.meta.dir, "../..");
@@ -205,7 +217,7 @@ export class BackendProcessManager {
         };
         break;
       case "state":
-        this.state = event.payload;
+        this.state = this.withApiTelemetry(event.payload);
         this.awaitingDawn = false;
         this.activity = null;
         this.validation = null;
@@ -214,7 +226,18 @@ export class BackendProcessManager {
         this.recompilation = null;
         break;
       case "dawn_wait": this.awaitingDawn = event.payload.active; break;
-      case "activity": this.activity = event.payload; break;
+      case "activity": {
+        if (!event.payload) break;
+        this.activity = event.payload;
+        const key = [event.payload.simulation_cycle ?? "stream", event.payload.kind,
+          event.payload.agent_id, event.payload.call_number].join(":");
+        if (!this.apiCallKeys.has(key)) {
+          this.apiCallKeys.add(key);
+          this.apiCallCount += 1;
+          if (this.state) this.state = this.withApiTelemetry(this.state);
+        }
+        break;
+      }
       case "validation":
         this.validation = event.payload;
         this.activity = null;
