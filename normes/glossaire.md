@@ -124,6 +124,10 @@ Le minerai de fer apparaît en gisements finis sur des cases praticables et occu
 
 Les huit compétences sont coupe du bois, extraction, fabrication, construction, cueillette, chasse, cuisine et sociabilité. Une action n'accorde de l'expérience que si son effet moteur a réussi. Cinq points d'expérience donnent un niveau, avec un maximum de dix ; les niveaux et les trois spécialisations dominantes sont persistants et observables. La coupe du bois augmente directement l'efficacité d'une réparation. Au même foyer, un mentor ayant au moins deux niveaux d'avance peut transmettre un point de la compétence choisie ; chaque personnage donne et reçoit au plus une leçon par journée.
 
+### Connaissance du foyer
+
+Le foyer conserve un catalogue déterministe et persistant de ses recettes consultables ainsi que le meilleur niveau observé pour chaque compétence. Deux personnages vivants ne peuvent transmettre leur carte que s'ils sont présents près du même foyer adopté. `share_map_knowledge` copie dans une seule transition les seules cases réellement mémorisées par la source ; elle ne copie ni visites, ni feux connus, ni état du monde. La transition refuse une carte invalide, reste bornée à la taille canonique du monde et ne modifie jamais la cible partiellement.
+
 ### Construction spatiale
 
 Une désignation associe une case et un type parmi mur, porte, lit, réserve et atelier. Le foyer vérifie puis réserve toutes les matières et pièces requises dans une seule transition ; un échec ne crée aucun chantier et ne consomme rien. Depuis une case adjacente, un personnage vivant muni d'une hache fournit une unité de travail, augmentée tous les trois niveaux de construction, et use l'outil uniquement si le travail réussit. Un mur achevé bloque la navigation, une porte reste praticable, un lit améliore le repos et un atelier proche améliore la réparation. État, avancement et effets survivent au checkpoint.

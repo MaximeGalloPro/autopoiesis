@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <deque>
 #include <map>
 #include <optional>
@@ -29,6 +30,10 @@ inline std::string building_type_name(BuildingType type) { switch(type){case Bui
 inline std::optional<BuildingType> building_type_from_name(const std::string& name) { for(const auto type:{BuildingType::Wall,BuildingType::Door,BuildingType::Bed,BuildingType::Stockpile,BuildingType::Workshop})if(building_type_name(type)==name)return type;return std::nullopt; }
 inline BuildingCost building_cost(BuildingType type) { switch(type){case BuildingType::Wall:return {2,0,0,{},3};case BuildingType::Door:return {1,0,0,{{CraftItem::WoodenHandle,1}},2};case BuildingType::Bed:return {2,0,0,{{CraftItem::Rope,1}},3};case BuildingType::Stockpile:return {2,0,0,{},3};case BuildingType::Workshop:return {3,0,0,{{CraftItem::IronIngot,1}},4};}return {}; }
 enum class Skill { Woodcutting, Mining, Crafting, Building, Foraging, Hunting, Cooking, Social };
+inline constexpr std::array<Skill, 8> all_skills() {
+  return {Skill::Woodcutting, Skill::Mining, Skill::Crafting, Skill::Building,
+          Skill::Foraging, Skill::Hunting, Skill::Cooking, Skill::Social};
+}
 struct SkillProgress {
   int experience{};
   int level{};

@@ -10,6 +10,7 @@ std::vector<std::string> available_actions(const Agent&, const World&, const std
 bool validate_decision(const Decision&, const Agent&, const World&, const std::vector<Agent>&,
                        std::string& error, int current_day = 0,
                        DayPhase phase = DayPhase::Day);
+json map_sharing_opportunities(const Agent&, const World&, const std::vector<Agent>&);
 bool parse_decision(const json& value, Decision& out, std::string& error);
 json decision_json(const Decision& d);
 }
