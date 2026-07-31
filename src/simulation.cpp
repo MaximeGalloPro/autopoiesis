@@ -873,6 +873,9 @@ void Simulation::load_checkpoint() {
   agents_=std::move(restored_agents);
   day_=state.at("day").get<int>();simulation_cycle_=state.at("simulation_cycle").get<int>();
   date_=date_from_absolute_day(std::max(1,day_));climate_=climate_for(date_);
+  validation_pending_=state.value("validation_pending",false);
+  validation_day_=state.value("validation_day",day_);
+  validation_cycle_=state.value("validation_cycle",simulation_cycle_);
   action_history_=state.value("action_history",decltype(action_history_){});
   planning_history_=state.value("planning_history",decltype(planning_history_){});
   next_agent_id_=state.value("next_agent_id",static_cast<int>(agents_.size())+1);
@@ -914,7 +917,9 @@ void Simulation::save_checkpoint() const {
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
       {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_},
-      {"dangers",std::move(dangers)},{"next_danger_id",next_danger_id_}};
+      {"dangers",std::move(dangers)},{"next_danger_id",next_danger_id_},
+      {"validation_pending",validation_pending_},{"validation_day",validation_day_},
+      {"validation_cycle",validation_cycle_}};
   const std::filesystem::path target(checkpoint_path_);
   if(!target.parent_path().empty())std::filesystem::create_directories(target.parent_path());
   const auto temporary=target.string()+".tmp";
@@ -1527,7 +1532,8 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
     if(!interface&&render_every_days>0&&day_%render_every_days==0)
       render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
 
-    if(period_complete){
+    bool opening_validation_window=false;
+    if(period_complete&&!validation_pending_){
       std::cout << "\n=== FENETRE IA : " << calendar_label(date_) << " / Jour absolu " << day_ << " / Cycle elementaire "
                 << simulation_cycle_ << " ===\n" << std::flush;
       if(!reporter_||!reporter_->enabled()){
@@ -1586,15 +1592,28 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
       }else{
         std::cout << "Tirage du Diable : aucune apparition cette fenêtre.\n" << std::flush;
       }
+      if(validation_gate){
+        validation_pending_=true;
+        validation_day_=day_;
+        validation_cycle_=simulation_cycle_;
+        opening_validation_window=true;
+      }
     }
     save_checkpoint();
-    if(period_complete&&validation_gate){
-      if(!validation_gate(day_,simulation_cycle_)){
-        logger_.message("Simulation mise en pause après la validation humaine.");
+    if(validation_gate&&validation_pending_){
+      const auto validation_state=validation_gate(validation_day_,validation_cycle_,opening_validation_window);
+      if(validation_state==ValidationWindowState::StopRequested){
+        logger_.message("Simulation arrêtée à la demande de la validation humaine.");
         break;
       }
-      if(interface)delay_ms=std::clamp(interface->simulation_delay_ms(delay_ms),0,10000);
-      if(interface&&interface->restart_requested())return {true,days-i-1};
+      if(validation_state==ValidationWindowState::Resolved){
+        validation_pending_=false;
+        validation_day_=0;
+        validation_cycle_=0;
+        save_checkpoint();
+        if(interface)delay_ms=std::clamp(interface->simulation_delay_ms(delay_ms),0,10000);
+        if(interface&&interface->restart_requested())return {true,days-i-1};
+      }
     }
     if(delay_ms>0){
       if(interface){if(!interface->idle_for(delay_ms)){logger_.message("Interface utilisateur fermée par l'utilisateur.");break;}}

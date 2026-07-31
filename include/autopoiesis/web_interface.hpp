@@ -41,6 +41,7 @@ class WebInterface final : public IUserInterface, public IValidationInterface {
   bool restart_requested() const override;
   bool present_recompilation(const RecompileProgress& progress) override;
   std::string request_command(const ValidationPrompt& prompt) override;
+  std::optional<std::string> poll_command(const ValidationPrompt& prompt) override;
   bool present_evolution_progress(const EvolutionProgress& progress) override;
   std::string request_evolution_completion(const EvolutionProgress& progress) override;
 
@@ -66,6 +67,8 @@ class WebInterface final : public IUserInterface, public IValidationInterface {
   bool api_available_{};
   bool api_enabled_{};
   std::size_t snapshot_count_{};
+  std::optional<ValidationPrompt> active_validation_prompt_;
+  std::optional<std::string> pending_validation_command_;
 
   void emit(std::string_view type,json payload);
   void emit_status(std::string message,std::optional<bool> accepted=std::nullopt,

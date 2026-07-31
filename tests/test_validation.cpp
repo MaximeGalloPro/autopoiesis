@@ -22,6 +22,13 @@ class ScriptedValidationInterface final : public IValidationInterface {
     commands_.pop();
     return command;
   }
+  std::optional<std::string> poll_command(const ValidationPrompt& prompt) override {
+    prompts.push_back(prompt);
+    assert(!commands_.empty());
+    const auto command=commands_.front();
+    commands_.pop();
+    return command;
+  }
 
   std::vector<ValidationPrompt> prompts;
 
@@ -37,6 +44,13 @@ class TrackingEvolutionInterface final : public IValidationInterface {
   std::string request_command(const ValidationPrompt& prompt) override {
     prompts.push_back(prompt);
     if(commands_.empty())return "q";
+    const auto command=commands_.front();
+    commands_.pop();
+    return command;
+  }
+  std::optional<std::string> poll_command(const ValidationPrompt& prompt) override {
+    prompts.push_back(prompt);
+    if(commands_.empty())return std::nullopt;
     const auto command=commands_.front();
     commands_.pop();
     return command;
@@ -57,6 +71,13 @@ class TrackingEvolutionInterface final : public IValidationInterface {
  private:
   std::queue<std::string> commands_;
 };
+
+ValidationWindowState advance_until_resolved(HumanValidation& validation,int day,int simulation_cycle) {
+  auto state=validation.advance_window(day,simulation_cycle,true);
+  while(state==ValidationWindowState::Pending)
+    state=validation.advance_window(day,simulation_cycle,false);
+  return state;
+}
 }
 
 int main() {
@@ -72,7 +93,7 @@ int main() {
   std::istringstream input("exit\n");
   std::ostringstream output;
   HumanValidation validation(directory.string(), input, output);
-  assert(!validation.review_window(3, 720));
+  assert(advance_until_resolved(validation,3,720)==ValidationWindowState::StopRequested);
   assert(output.str().find("request-1") != std::string::npos);
   assert(output.str().find("invalide") != std::string::npos);
 
@@ -83,12 +104,20 @@ int main() {
   valid_requests << R"({"id":"request-3","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a2","agent_name":"Borin","title":"Leave me pending","need":"Rest","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["rest"],"actions":["sleep"],"preconditions":["tired"],"deterministic_effects":["rested"]},"acceptance_tests":["It works"]})" << '\n';
   valid_requests << R"({"id":"request-3","status":"pending","day":3,"simulation_cycle":720,"agent_id":"a2","agent_name":"Borin","title":"Leave me pending","need":"Rest","obstacle":"None","proposed_change":"Test","mechanism":{"name":"test","summary":"Test","resources":["rest"],"actions":["sleep"],"preconditions":["tired"],"deterministic_effects":["rested"]},"acceptance_tests":["It works"]})" << '\n';
   valid_requests.close();
+
+  std::istringstream deferred_input;
+  std::ostringstream deferred_output;
+  HumanValidation deferred(directory.string(),deferred_input,deferred_output);
+  assert(deferred.advance_window(3,720,true)==ValidationWindowState::Pending);
+  assert(deferred.advance_window(4,960,false)==ValidationWindowState::Pending);
+  assert(deferred_output.str().find("proposition(s) disponibles")!=std::string::npos);
+
   setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
   setenv("GOD_WAIT_TIMEOUT_SECONDS", "1", 1);
   std::istringstream approval_input("1\na\no\n");
   std::ostringstream approval_output;
   HumanValidation approval(directory.string(), approval_input, approval_output);
-  assert(approval.review_window(3, 720));
+  assert(advance_until_resolved(approval,3,720)==ValidationWindowState::Resolved);
   assert(approval_output.str().find("doublon") != std::string::npos);
   std::ifstream approved(directory / "approved_feature_requests.jsonl");
   const std::string approved_content(std::istreambuf_iterator<char>(approved), {});
@@ -97,6 +126,7 @@ int main() {
   std::ifstream remaining(directory / "feature_requests.jsonl");
   assert(std::string(std::istreambuf_iterator<char>(remaining), {}).find("request-3") != std::string::npos);
   assert(std::filesystem::exists(directory / "evolution_runs/request-2/validation-record.json"));
+  assert(approval_output.str().find("=== SUIVI DE DIEU ===")==std::string::npos);
 
   std::filesystem::create_directories(directory / "evolution_runs/request-2");
   std::ofstream god_started(directory / "evolution_runs/request-2/god-started");
@@ -148,7 +178,7 @@ int main() {
   std::ostringstream integrated_output;
   HumanValidation integrated_validation(directory.string(),integrated_input,integrated_output,
                                         &integrated_tracking);
-  assert(integrated_validation.review_window(3,720));
+  assert(advance_until_resolved(integrated_validation,3,720)==ValidationWindowState::Resolved);
   assert(integrated_tracking.prompts.size()==2);
   assert(integrated_tracking.prompts[0].stage==ValidationStage::Choose);
   assert(integrated_tracking.prompts[1].stage==ValidationStage::Confirm);
@@ -208,7 +238,7 @@ int main() {
   std::istringstream recent_input("exit\n");
   std::ostringstream recent_output;
   HumanValidation recent(directory.string(), recent_input, recent_output);
-  assert(!recent.review_window(3, 720));
+  assert(advance_until_resolved(recent,3,720)==ValidationWindowState::StopRequested);
   assert(recent_output.str().find("historical") == std::string::npos);
   assert(recent_output.str().find("recent-2") != std::string::npos);
   assert(recent_output.str().find("recent-3") != std::string::npos);
@@ -222,7 +252,7 @@ int main() {
   std::istringstream devil_input("r\no\n");
   std::ostringstream devil_output;
   HumanValidation devil_validation(directory.string(), devil_input, devil_output);
-  assert(devil_validation.review_window(3, 720));
+  assert(advance_until_resolved(devil_validation,3,720)==ValidationWindowState::Resolved);
   assert(devil_output.str().find("APPARITION DU DIABLE") != std::string::npos);
   assert(devil_output.str().find("Le froid nocturne") != std::string::npos);
   std::ifstream devil_rejected(directory / "rejected_feature_requests.jsonl");
@@ -237,13 +267,11 @@ int main() {
   std::ostringstream web_devil_output;
   HumanValidation web_devil_validation(directory.string(),web_devil_input,web_devil_output,
                                        &web_devil);
-  assert(web_devil_validation.review_window(3,720));
-  assert(web_devil.prompts.size()==2);
+  assert(advance_until_resolved(web_devil_validation,3,720)==ValidationWindowState::Resolved);
+  assert(web_devil.prompts.size()==1);
   assert(web_devil.prompts.front().kind==ValidationPromptKind::Devil);
   assert(web_devil.prompts.front().stage==ValidationStage::Confirm);
   assert(web_devil.prompts.front().requests.size()==1);
-  assert(web_devil.prompts.back().kind==ValidationPromptKind::Feature);
-  assert(web_devil.prompts.back().stage==ValidationStage::Empty);
   std::ifstream web_devil_rejected(directory / "rejected_feature_requests.jsonl");
   const std::string web_devil_rejected_content(
       std::istreambuf_iterator<char>(web_devil_rejected),{});
@@ -257,7 +285,7 @@ int main() {
   std::istringstream automatic_input("o\n");
   std::ostringstream automatic_output;
   HumanValidation automatic(directory.string(), automatic_input, automatic_output);
-  assert(automatic.review_window(3, 720));
+  assert(advance_until_resolved(automatic,3,720)==ValidationWindowState::Resolved);
   assert(automatic_output.str().find("Approbation automatique") != std::string::npos);
   std::ifstream devil_approved(directory / "approved_feature_requests.jsonl");
   const std::string devil_approved_content(std::istreambuf_iterator<char>(devil_approved), {});
@@ -283,13 +311,12 @@ int main() {
   std::istringstream unused_input;
   std::ostringstream card_output;
   HumanValidation card_validation(directory.string(),unused_input,card_output,&cards);
-  assert(card_validation.review_window(3,720));
-  assert(cards.prompts.size()==3);
+  assert(advance_until_resolved(card_validation,3,720)==ValidationWindowState::Resolved);
+  assert(cards.prompts.size()==2);
   assert(cards.prompts[0].stage==ValidationStage::Choose);
   assert(cards.prompts[0].requests.size()==3);
   assert(cards.prompts[1].stage==ValidationStage::Confirm);
   assert(cards.prompts[1].selected_index==2);
-  assert(cards.prompts[2].stage==ValidationStage::Complete);
   std::ifstream card_rejected(directory / "rejected_feature_requests.jsonl");
   const std::string card_rejected_content(std::istreambuf_iterator<char>(card_rejected),{});
   assert(card_rejected_content.find("card-2")!=std::string::npos);

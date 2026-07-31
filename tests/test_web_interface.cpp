@@ -172,6 +172,24 @@ int main() {
   assert(saw_devil_prompt);
   assert(rejected_unavailable_command);
 
+  std::istringstream deferred_validation_input;
+  std::ostringstream deferred_validation_output;
+  WebInterface deferred_validation(deferred_validation_input,deferred_validation_output,500,0);
+  assert(!deferred_validation.poll_command(choose));
+  const auto deferred_validation_events=emitted_events(deferred_validation_output.str());
+  assert(deferred_validation_events.at(1).at("type")=="validation_prompt");
+  assert(!deferred_validation.stop_requested());
+
+  std::istringstream queued_validation_input(
+      R"({"version":1,"command":"validation","text":"1"})" "\n");
+  std::ostringstream queued_validation_output;
+  WebInterface queued_validation(queued_validation_input,queued_validation_output,500,0);
+  const auto queued_command=queued_validation.poll_command(choose);
+  assert(queued_command&&*queued_command=="1");
+  const auto queued_validation_events=emitted_events(queued_validation_output.str());
+  assert(queued_validation_events.at(1).at("type")=="validation_prompt");
+  assert(queued_validation_events.at(2).at("payload").value("accepted",false));
+
   const EvolutionProgress completed{EvolutionProgressStage::Complete,"request-1",
                                     "Active","Commit abc",12,true};
   std::istringstream completion_input(

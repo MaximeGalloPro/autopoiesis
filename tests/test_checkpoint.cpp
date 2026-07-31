@@ -167,15 +167,50 @@ int main() {
   Simulation legacy(42,legacy_decider,legacy_logger,nullptr,legacy_checkpoint.string());
   for(const auto& agent:legacy.agents())assert(agent.family_id=="foyer-principal");
 
+  const auto pending_checkpoint=root/"pending-validation.json";
+  std::mt19937 pending_rng(42);
+  LocalDecider pending_decider(pending_rng);
+  Logger pending_logger((root/"pending").string());
+  setenv("REPORT_EVERY_DAYS","1",1);
+  Simulation pending(42,pending_decider,pending_logger,nullptr,pending_checkpoint.string());
+  pending.run(1,0,0,[](int day,int simulation_cycle,bool open_window){
+    assert(day==1);
+    assert(simulation_cycle==4);
+    assert(open_window);
+    return ValidationWindowState::Pending;
+  });
+  {
+    std::ifstream input(pending_checkpoint);
+    json state;
+    input>>state;
+    assert(state.at("validation_pending")==true);
+    assert(state.at("validation_day")==1);
+    assert(state.at("validation_cycle")==4);
+  }
+  std::mt19937 resumed_pending_rng(999);
+  LocalDecider resumed_pending_decider(resumed_pending_rng);
+  Logger resumed_pending_logger((root/"pending-resumed").string());
+  Simulation resumed_pending(999,resumed_pending_decider,resumed_pending_logger,nullptr,
+                             pending_checkpoint.string());
+  assert(resumed_pending.restored_checkpoint());
+  resumed_pending.run(1,0,0,[](int day,int simulation_cycle,bool open_window){
+    assert(day==1);
+    assert(simulation_cycle==4);
+    assert(!open_window);
+    return ValidationWindowState::Resolved;
+  });
+  assert(resumed_pending.date().absolute_day==2);
+
   const auto restart_checkpoint=root/"restart-state.json";
   std::mt19937 restart_rng(42);
   LocalDecider restart_decider(restart_rng);
   Logger restart_logger((root/"restart").string());
-  setenv("REPORT_EVERY_DAYS","1",1);
   Simulation restart_simulation(42,restart_decider,restart_logger,nullptr,
                                 restart_checkpoint.string());
   RestartInterface interface;
-  const auto result=restart_simulation.run(3,0,0,[](int,int){return true;},&interface);
+  const auto result=restart_simulation.run(3,0,0,[](int,int,bool){
+    return ValidationWindowState::Resolved;
+  },&interface);
   assert(result.restart_requested);
   assert(result.remaining_days==2);
   assert(std::filesystem::exists(restart_checkpoint));
