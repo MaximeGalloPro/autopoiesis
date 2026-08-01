@@ -71,7 +71,8 @@ class Simulation {
   using ValidationGate = std::function<ValidationWindowState(
       int day, int simulation_cycle, bool open_window)>;
   Simulation(unsigned seed, IDecider& decider, Logger& logger, ICycleReporter* reporter = nullptr,
-             std::string checkpoint_path = {});
+             std::string checkpoint_path = {},
+             std::optional<WorldProfile> startup_profile = std::nullopt);
   SimulationRunResult run(int days, int delay_ms, int render_every_days,
                           const ValidationGate& validation_gate = {},
                           IUserInterface* interface = nullptr);
@@ -82,9 +83,8 @@ class Simulation {
   const ClimateState& climate() const { return climate_; }
   int simulation_cycle() const { return simulation_cycle_; }
   bool restored_checkpoint() const { return restored_checkpoint_; }
-  const std::vector<ActiveFeature>& active_features() const { return active_features_; }
+  const std::vector<ActiveFeature>& active_features() const { return group_.active_features(); }
   bool feature_active(const std::string& key, int version = 0) const;
-  bool activate_feature(const std::string& key, int version = 0);
   void save_checkpoint() const;
   friend struct SimulationTestAccess;
  private:
@@ -99,7 +99,6 @@ class Simulation {
   std::map<std::string,std::vector<std::string>> action_history_;
   std::map<std::string,json> planning_history_;
   std::string checkpoint_path_;
-  std::vector<ActiveFeature> active_features_;
   bool restored_checkpoint_{};
   bool validation_pending_{};
   int validation_day_{};

@@ -171,6 +171,9 @@ add_test(NAME deterministic_camp_knowledge COMMAND autopoiesis_camp_knowledge_te
 add_executable(autopoiesis_home_fallback_tests tests/test_home_fallback.cpp)
 target_link_libraries(autopoiesis_home_fallback_tests PRIVATE autopoiesis_core)
 add_test(NAME home_fallback COMMAND autopoiesis_home_fallback_tests)
+add_executable(autopoiesis_capability_profile_tests tests/test_capability_profiles.cpp)
+target_link_libraries(autopoiesis_capability_profile_tests PRIVATE autopoiesis_core)
+add_test(NAME versioned_capability_profiles COMMAND autopoiesis_capability_profile_tests)
 add_test(NAME reformulation_queue COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_reformulation.py)
 add_test(NAME docker_verification_ownership COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_docker_ownership.py)
 add_test(NAME macos_notifications COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/test_macos_notifications.py)
@@ -220,6 +223,7 @@ foreach(test_target
     autopoiesis_navigation_tests
     autopoiesis_group_base_tests
     autopoiesis_camp_knowledge_tests
-    autopoiesis_home_fallback_tests)
+    autopoiesis_home_fallback_tests
+    autopoiesis_capability_profile_tests)
   target_compile_options(${test_target} PRIVATE -UNDEBUG)
 endforeach()

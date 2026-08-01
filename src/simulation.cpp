@@ -898,8 +898,13 @@ static std::string generated_resident_name(int serial) {
 }
 
 Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter,
-                       std::string checkpoint_path):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",2400)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)),checkpoint_path_(std::move(checkpoint_path)){
-  active_features_=FeatureRegistry::defaults().default_activations();
+                       std::string checkpoint_path,
+                       std::optional<WorldProfile> startup_profile)
+    : world_(seed),
+      group_(std::string{primary_group_id},
+             startup_profile.value_or(FeatureRegistry::defaults().default_profile()),
+             FeatureRegistry::defaults()),
+      decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",2400)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)),checkpoint_path_(std::move(checkpoint_path)){
   agents_={initial_agent("a1","Ada",{3,2},45,20,{90,20,30,30,40},{55,65,50,45,50,45,70,60,75,80},25,
                          {"builder","Créer un foyer sûr et organisé",95,45,55,70,{FoodType::Berries,FoodType::Mushrooms}},
                          {"build_shelter","Préparer un abri durable",ProjectStatus::Active,0,0,2,"","",1,0}),
@@ -918,7 +923,27 @@ void Simulation::load_checkpoint() {
   json state;input>>state;
   if(state.at("version").get<int>()!=1)throw std::runtime_error("unsupported simulation checkpoint version");
   world_.restore_checkpoint(state.at("world"));
-  if (state.contains("group")) group_.restore_checkpoint(state.at("group"));
+  const auto& registry = FeatureRegistry::defaults();
+  std::optional<WorldProfile> legacy_profile;
+  const bool group_has_profile = state.contains("group") && state.at("group").is_object() &&
+                                 state.at("group").contains("world_profile");
+  if (!group_has_profile && state.contains("active_features")) {
+    json profile = {{"schema_version", 1}, {"active_features", json::array()}};
+    for (const auto& activation : state.at("active_features")) {
+      if (!activation.is_object() || !activation.contains("id"))
+        throw std::runtime_error("invalid active feature in simulation checkpoint");
+      profile["active_features"].push_back(
+          {{"id", activation.at("id")}, {"version", activation.value("version", 1)}});
+    }
+    legacy_profile = registry.profile_from_json(profile);
+  }
+  if (state.contains("group")) {
+    group_.restore_checkpoint(state.at("group"), registry, legacy_profile);
+  } else if (legacy_profile) {
+    auto legacy_group_state = group_.checkpoint(registry);
+    legacy_group_state.erase("world_profile");
+    group_.restore_checkpoint(legacy_group_state, registry, legacy_profile);
+  }
   std::vector<Agent> restored_agents;
   for(const auto& agent:state.at("agents"))restored_agents.push_back(restore_agent(agent));
   if(restored_agents.empty())throw std::runtime_error("simulation checkpoint has no agents");
@@ -931,15 +956,6 @@ void Simulation::load_checkpoint() {
   action_history_=state.value("action_history",decltype(action_history_){});
   planning_history_=state.value("planning_history",decltype(planning_history_){});
   next_agent_id_=state.value("next_agent_id",static_cast<int>(agents_.size())+1);
-  if (state.contains("active_features")) {
-    active_features_.clear();
-    for (const auto& value : state["active_features"]) {
-      const ActiveFeature activation{value.at("id").get<std::string>(), value.value("version", 1)};
-      if (!FeatureRegistry::defaults().valid_activation(activation, active_features_))
-        throw std::runtime_error("invalid active feature in simulation checkpoint: " + activation.key);
-      active_features_.push_back(activation);
-    }
-  }
   for(const auto& danger:state.value("dangers",json::array()))dangers_.push_back({
       danger.at("id").get<std::string>(),static_cast<DangerType>(danger.at("type").get<int>()),
       {danger.value("x",0),danger.value("y",0)},danger.value("severity",1),danger.value("warning_day",day_),
@@ -956,16 +972,12 @@ void Simulation::load_checkpoint() {
 void Simulation::save_checkpoint() const {
   if(checkpoint_path_.empty())return;
   json agents=json::array();for(const auto& agent:agents_)agents.push_back(agent_checkpoint(agent));
-  json active_features=json::array();
-  for(const auto& feature:active_features_)
-    active_features.push_back({{"id",feature.key},{"version",feature.version}});
   json dangers=json::array();for(const auto& danger:dangers_)dangers.push_back({
       {"id",danger.id},{"type",static_cast<int>(danger.type)},{"x",danger.position.x},{"y",danger.position.y},
       {"severity",danger.severity},{"warning_day",danger.warning_day},{"remaining_days",danger.remaining_days},
       {"cause",danger.cause},{"warning",danger.warning},{"mitigation",danger.mitigation}});
   const json state={{"version",1},{"day",day_},{"simulation_cycle",simulation_cycle_},
       {"world",world_.checkpoint()},{"group",group_.checkpoint()},{"agents",std::move(agents)},
-      {"active_features",std::move(active_features)},
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
       {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_},
@@ -986,18 +998,7 @@ void Simulation::save_checkpoint() const {
 }
 
 bool Simulation::feature_active(const std::string& key, int version) const {
-  return std::any_of(active_features_.begin(), active_features_.end(), [&](const auto& feature) {
-    return feature.key == key && (version == 0 || feature.version == version);
-  });
-}
-
-bool Simulation::activate_feature(const std::string& key, int version) {
-  const auto* definition=FeatureRegistry::defaults().feature(key,version);
-  if (!definition) return false;
-  const ActiveFeature activation{definition->key,definition->version};
-  if (!FeatureRegistry::defaults().valid_activation(activation,active_features_)) return false;
-  active_features_.push_back(activation);
-  return true;
+  return group_.feature_active(key, version);
 }
 
 Perception Simulation::perceive(Agent& a) {
@@ -1053,7 +1054,7 @@ Perception Simulation::perceive(Agent& a) {
   json craftable=json::array();if(const auto fire=world_.nearby_campfire(a.position))for(const auto& recipe:world_.craftable_recipes(*fire))craftable.push_back(recipe);
   json active_features=json::array();
   json active_cards=json::array();
-  for(const auto& activation:active_features_){
+  for(const auto& activation:group_.active_features()){
     const auto* feature=FeatureRegistry::defaults().feature(activation.key,activation.version);
     if(!feature)continue;
     active_features.push_back({{"id",feature->key},{"version",feature->version},{"title",feature->title}});

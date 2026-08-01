@@ -19,6 +19,32 @@ int non_negative(const json& value, const char* field, const std::string& recipe
   return value.get<int>();
 }
 
+std::string feature_kind_name(FeatureKind kind) {
+  switch (kind) {
+    case FeatureKind::PeopleMechanism:
+      return "people_mechanism";
+    case FeatureKind::IndividualSkill:
+      return "individual_skill";
+  }
+  return "unknown";
+}
+
+FeatureKind feature_kind_from_json(const json& value, int schema_version,
+                                   const std::string& feature) {
+  if (schema_version == 1 && value.is_null()) return FeatureKind::PeopleMechanism;
+  if (!value.is_string()) throw std::runtime_error("invalid feature kind " + feature);
+  if (value.get<std::string>() == "people_mechanism") return FeatureKind::PeopleMechanism;
+  if (value.get<std::string>() == "individual_skill") return FeatureKind::IndividualSkill;
+  throw std::runtime_error("invalid feature kind " + feature);
+}
+
+void canonicalize(WorldProfile& profile) {
+  std::sort(profile.active_features.begin(), profile.active_features.end(),
+            [](const ActiveFeature& left, const ActiveFeature& right) {
+              return left.key != right.key ? left.key < right.key : left.version < right.version;
+            });
+}
+
 CapabilityRegistry parse(json document) {
   if (!document.is_object() || document.value("schema_version", 0) != 1 ||
       !document.contains("recipes") || !document["recipes"].is_array())
@@ -163,7 +189,9 @@ FeatureRegistry FeatureRegistry::load(const std::filesystem::path& path) {
   if (!input) throw std::runtime_error("cannot open feature registry: " + path.string());
   json document;
   input >> document;
-  if (!document.is_object() || document.value("schema_version", 0) != 1 ||
+  if (!document.is_object()) throw std::runtime_error("invalid feature registry document");
+  const auto schema_version = document.value("schema_version", 0);
+  if ((schema_version != 1 && schema_version != 2) ||
       !document.contains("features") || !document["features"].is_array() ||
       document["features"].empty())
     throw std::runtime_error("invalid feature registry document");
@@ -176,9 +204,11 @@ FeatureRegistry FeatureRegistry::load(const std::filesystem::path& path) {
         value.value("version", 0) <= 0 || value.value("version", 0) > 1000000 ||
         !value.value("title", json{}).is_string())
       throw std::runtime_error("invalid feature definition");
-    FeatureDefinition feature{value["id"].get<std::string>(), value["version"].get<int>(),
-                              value["title"].get<std::string>(),
-                              value.value("default_active", false), {}, {}};
+    const auto key = value["id"].get<std::string>();
+    const auto kind = feature_kind_from_json(
+        value.contains("kind") ? value.at("kind") : json(nullptr), schema_version, key);
+    FeatureDefinition feature{key, value["version"].get<int>(), value["title"].get<std::string>(),
+                              value.value("default_active", false), kind, {}, {}};
     if (!std::all_of(features.begin(), features.end(), [&](const auto& candidate) {
           return candidate.key != feature.key || candidate.version != feature.version;
         }))
@@ -191,6 +221,9 @@ FeatureRegistry FeatureRegistry::load(const std::filesystem::path& path) {
     }
     const auto cards = value.value("cards", json::array());
     if (!cards.is_array()) throw std::runtime_error("invalid feature cards " + feature.key);
+    if (feature.kind == FeatureKind::IndividualSkill &&
+        (feature.default_active || !feature.dependencies.empty() || !cards.empty()))
+      throw std::runtime_error("individual skill feature cannot be globally activated " + feature.key);
     for (const auto& card : cards) {
       if (!card.is_object() || !positive_identifier(card.value("id", json{})) ||
           !card.value("type", json{}).is_string() || !card.value("title", json{}).is_string())
@@ -227,7 +260,10 @@ FeatureRegistry FeatureRegistry::load(const std::filesystem::path& path) {
           }))
         throw std::runtime_error("unknown feature card target " + card.target_feature);
   }
-  return FeatureRegistry(std::move(features));
+  FeatureRegistry registry(std::move(features));
+  if (!registry.valid_profile(registry.default_profile()))
+    throw std::runtime_error("invalid default feature profile");
+  return registry;
 }
 
 const FeatureRegistry& FeatureRegistry::defaults() {
@@ -236,10 +272,12 @@ const FeatureRegistry& FeatureRegistry::defaults() {
 }
 
 const FeatureDefinition* FeatureRegistry::feature(const std::string& key, int version) const {
-  const auto found = std::find_if(features_.begin(), features_.end(), [&](const auto& candidate) {
-    return candidate.key == key && (version == 0 || candidate.version == version);
-  });
-  return found == features_.end() ? nullptr : &*found;
+  const FeatureDefinition* selected = nullptr;
+  for (const auto& candidate : features_) {
+    if (candidate.key != key || (version != 0 && candidate.version != version)) continue;
+    if (!selected || candidate.version > selected->version) selected = &candidate;
+  }
+  return selected;
 }
 
 const FeatureCard* FeatureRegistry::card(const std::string& key) const {
@@ -252,27 +290,124 @@ const FeatureCard* FeatureRegistry::card(const std::string& key) const {
 std::vector<ActiveFeature> FeatureRegistry::default_activations() const {
   std::vector<ActiveFeature> result;
   for (const auto& feature : features_)
-    if (feature.default_active) result.push_back({feature.key, feature.version});
+    if (feature.default_active && feature.kind == FeatureKind::PeopleMechanism)
+      result.push_back({feature.key, feature.version});
+  std::sort(result.begin(), result.end(), [](const ActiveFeature& left, const ActiveFeature& right) {
+    return left.key != right.key ? left.key < right.key : left.version < right.version;
+  });
   return result;
+}
+
+WorldProfile FeatureRegistry::default_profile() const {
+  WorldProfile profile{1, default_activations()};
+  canonicalize(profile);
+  return profile;
+}
+
+bool FeatureRegistry::valid_profile(const WorldProfile& profile) const {
+  if (profile.schema_version != 1) return false;
+  std::set<std::string> active_keys;
+  for (const auto& activation : profile.active_features) {
+    const auto* definition = feature(activation.key, activation.version);
+    if (!definition || definition->kind != FeatureKind::PeopleMechanism ||
+        !active_keys.insert(activation.key).second)
+      return false;
+  }
+  for (const auto& activation : profile.active_features) {
+    const auto* definition = feature(activation.key, activation.version);
+    if (!definition || !std::all_of(definition->dependencies.begin(), definition->dependencies.end(),
+                                    [&](const std::string& dependency) {
+                                      return active_keys.contains(dependency);
+                                    }))
+      return false;
+  }
+  return true;
+}
+
+bool FeatureRegistry::profile_active(const WorldProfile& profile, const std::string& key,
+                                     int version) const {
+  return std::any_of(profile.active_features.begin(), profile.active_features.end(),
+                     [&](const ActiveFeature& activation) {
+                       return activation.key == key && (version == 0 || activation.version == version);
+                     });
+}
+
+bool FeatureRegistry::activate_for_startup(WorldProfile& profile, const std::string& key,
+                                           int version) const {
+  const auto* definition = feature(key, version);
+  if (!definition || definition->kind != FeatureKind::PeopleMechanism) return false;
+  WorldProfile candidate = profile;
+  if (profile_active(candidate, definition->key)) return false;
+  candidate.active_features.push_back({definition->key, definition->version});
+  canonicalize(candidate);
+  if (!valid_profile(candidate)) return false;
+  profile = std::move(candidate);
+  return true;
+}
+
+bool FeatureRegistry::deactivate_for_startup(WorldProfile& profile, const std::string& key,
+                                             int version) const {
+  WorldProfile candidate = profile;
+  const auto found = std::find_if(candidate.active_features.begin(), candidate.active_features.end(),
+                                  [&](const ActiveFeature& activation) {
+                                    return activation.key == key &&
+                                           (version == 0 || activation.version == version);
+                                  });
+  if (found == candidate.active_features.end()) return false;
+  candidate.active_features.erase(found);
+  canonicalize(candidate);
+  if (!valid_profile(candidate)) return false;
+  profile = std::move(candidate);
+  return true;
+}
+
+json FeatureRegistry::profile_json(const WorldProfile& profile) const {
+  if (!valid_profile(profile)) throw std::runtime_error("invalid world profile");
+  WorldProfile canonical = profile;
+  canonicalize(canonical);
+  json active = json::array();
+  for (const auto& activation : canonical.active_features)
+    active.push_back({{"id", activation.key}, {"version", activation.version}});
+  return {{"schema_version", canonical.schema_version}, {"active_features", std::move(active)}};
+}
+
+WorldProfile FeatureRegistry::profile_from_json(const json& state) const {
+  if (!state.is_object() || state.value("schema_version", 0) != 1 ||
+      !state.contains("active_features") || !state.at("active_features").is_array())
+    throw std::runtime_error("checkpoint world profile is invalid");
+  for (const auto& [key, value] : state.items()) {
+    (void)value;
+    if (key != "schema_version" && key != "active_features")
+      throw std::runtime_error("checkpoint world profile field is unknown");
+  }
+  WorldProfile profile;
+  for (const auto& value : state.at("active_features")) {
+    if (!value.is_object() || !positive_identifier(value.value("id", json{})) ||
+        !value.value("version", json{}).is_number_integer() ||
+        value.value("version", 0) <= 0 || value.value("version", 0) > 1000000)
+      throw std::runtime_error("checkpoint active feature is invalid");
+    for (const auto& [key, field] : value.items()) {
+      (void)field;
+      if (key != "id" && key != "version")
+        throw std::runtime_error("checkpoint active feature field is unknown");
+    }
+    profile.active_features.push_back({value.at("id").get<std::string>(),
+                                       value.at("version").get<int>()});
+  }
+  canonicalize(profile);
+  if (!valid_profile(profile)) throw std::runtime_error("checkpoint world profile is invalid");
+  return profile;
 }
 
 bool FeatureRegistry::valid_activation(const ActiveFeature& activation,
                                        const std::vector<ActiveFeature>& active) const {
-  const auto* definition = feature(activation.key, activation.version);
-  if (!definition) return false;
-  if (std::any_of(active.begin(), active.end(), [&](const auto& candidate) {
-        return candidate.key == activation.key;
-      })) return false;
-  return std::all_of(definition->dependencies.begin(), definition->dependencies.end(),
-                     [&](const auto& dependency) {
-                       return std::any_of(active.begin(), active.end(), [&](const auto& candidate) {
-                         return candidate.key == dependency;
-                       });
-                     });
+  WorldProfile candidate{1, active};
+  candidate.active_features.push_back(activation);
+  return valid_profile(candidate);
 }
 
 json FeatureRegistry::manifest() const {
-  json result = {{"schema_version", 1}, {"features", json::array()}};
+  json result = {{"schema_version", 2}, {"features", json::array()}};
   for (const auto& feature : features_) {
     json cards = json::array();
     for (const auto& card : feature.cards) {
@@ -284,6 +419,7 @@ json FeatureRegistry::manifest() const {
     result["features"].push_back({{"id", feature.key}, {"version", feature.version},
                                     {"title", feature.title},
                                     {"default_active", feature.default_active},
+                                    {"kind", feature_kind_name(feature.kind)},
                                     {"dependencies", feature.dependencies}, {"cards", std::move(cards)}});
   }
   return result;
