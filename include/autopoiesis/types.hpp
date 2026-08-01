@@ -16,6 +16,7 @@ inline constexpr std::string_view primary_family_id{"foyer-principal"};
 inline constexpr int founder_age_days{25};
 inline constexpr int adult_age_days{16};
 inline constexpr int maximum_lifespan_days{100};
+inline constexpr std::string_view civilization_restart_contract{"--new-world"};
 struct Position { int x{}; int y{}; friend bool operator==(const Position&, const Position&) = default; };
 enum class Terrain { Ground, Wall, Water, Tree, Bush };
 enum class FoodType { Berries, Roots, Mushrooms, Fish, Venison };
@@ -146,6 +147,14 @@ struct EcologyState {
   int total_predations{};
   friend bool operator==(const EcologyState&,const EcologyState&)=default;
 };
+enum class LifeStage { Newborn, Child, Adult };
+enum class CivilizationStatus { Active, Extinct };
+struct CivilizationState {
+  CivilizationStatus status{CivilizationStatus::Active};
+  int extinction_day{};
+  std::string restart_contract{std::string{civilization_restart_contract}};
+  friend bool operator==(const CivilizationState&,const CivilizationState&)=default;
+};
 struct Agent {
   std::string id, name; Position position; int health{100}, hunger{30}, fatigue{20};
   // Absolute simulation tick at which this character may choose its next action.
@@ -191,12 +200,49 @@ struct Agent {
   std::string origin{"founder"};
   int arrival_day{1};
   std::vector<std::string> parent_ids;
+  std::string partner_id;
+  int partnered_day{};
+  int last_birth_day{};
+  int last_parental_learning_day{};
   int departure_day{};
   std::string departure_reason;
   std::string death_cause;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
-inline bool is_adult(const Agent& agent) { return agent.age_days>=adult_age_days; }
+inline LifeStage life_stage(const Agent& agent) {
+  if(agent.age_days<=0)return LifeStage::Newborn;
+  return agent.age_days<adult_age_days?LifeStage::Child:LifeStage::Adult;
+}
+inline bool is_adult(const Agent& agent) { return life_stage(agent)==LifeStage::Adult; }
+inline bool is_dependent_child(const Agent& agent) { return life_stage(agent)!=LifeStage::Adult; }
+inline const Agent* agent_by_id(const std::vector<Agent>& agents,const std::string& id) {
+  const auto found=std::find_if(agents.begin(),agents.end(),[&](const Agent& agent){return agent.id==id;});
+  return found==agents.end()?nullptr:&*found;
+}
+inline Agent* mutable_agent_by_id(std::vector<Agent>& agents,const std::string& id) {
+  const auto found=std::find_if(agents.begin(),agents.end(),[&](const Agent& agent){return agent.id==id;});
+  return found==agents.end()?nullptr:&*found;
+}
+inline bool close_relatives(const Agent& left,const Agent& right,const std::vector<Agent>& agents) {
+  if(left.id.empty()||right.id.empty()||left.id==right.id)return true;
+  // A shared lineage is deliberately treated as too close. This stricter rule
+  // keeps the small initial population safe until unrelated lineages arrive.
+  if(!left.family_id.empty()&&left.family_id==right.family_id)return true;
+  const auto ancestors=[&](const Agent& agent){
+    std::set<std::string> result;
+    for(const auto& parent_id:agent.parent_ids){
+      result.insert(parent_id);
+      if(const auto* parent=agent_by_id(agents,parent_id))
+        result.insert(parent->parent_ids.begin(),parent->parent_ids.end());
+    }
+    return result;
+  };
+  const auto left_ancestors=ancestors(left),right_ancestors=ancestors(right);
+  if(left_ancestors.contains(right.id)||right_ancestors.contains(left.id))return true;
+  return std::any_of(left_ancestors.begin(),left_ancestors.end(),[&](const std::string& id){
+    return right_ancestors.contains(id);
+  });
+}
 inline HealthCondition& add_health_condition(Agent& agent,HealthConditionType type,int severity,const std::string& cause) { agent.conditions.push_back({agent.id+"-condition-"+std::to_string(agent.next_condition_id++),type,std::clamp(severity,1,100),0,false,cause});return agent.conditions.back(); }
 inline json health_conditions_json(const Agent& agent) { json result=json::array();for(const auto& condition:agent.conditions)result.push_back({{"id",condition.id},{"type",health_condition_name(condition.type)},{"severity",condition.severity},{"days",condition.days},{"treated",condition.treated},{"cause",condition.cause}});return result; }
 inline Emotion& add_emotion(Agent& agent,EmotionType type,int intensity,const std::string& cause,

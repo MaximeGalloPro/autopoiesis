@@ -57,32 +57,56 @@ int main() {
   assert(simulation.agents().size()==initial+1);
   const auto& newcomer=simulation.agents().back();
   assert(newcomer.origin=="arrival"&&newcomer.arrival_day==60&&newcomer.age_days>=18);
-  assert(newcomer.family_id=="foyer-principal");
+  assert(newcomer.family_id!="foyer-principal");
   assert(newcomer.name=="Daphné des Aulnes 4");
   assert(newcomer.generation==0);
   const auto newcomer_name=newcomer.name;
+  assert(life_stage(newcomer)==LifeStage::Adult);
 
-  SimulationTestAccess::agent(simulation,1).family_id="famille-externe";
-  SimulationTestAccess::agent(simulation,0).generation=2;
-  SimulationTestAccess::agent(simulation,2).generation=1;
+  const auto& first_parent=SimulationTestAccess::agent(simulation,0);
+  assert(first_parent.partner_id==newcomer.id);
+  assert(newcomer.partner_id==first_parent.id);
+  assert(first_parent.partnered_day==60&&newcomer.partnered_day==60);
+
+  auto& sibling_left=SimulationTestAccess::agent(simulation,1);
+  auto& sibling_right=SimulationTestAccess::agent(simulation,2);
+  sibling_left.family_id="branche-gauche";
+  sibling_right.family_id="branche-droite";
+  sibling_left.parent_ids={"grand-pere","grand-mere"};
+  sibling_right.parent_ids={"grand-pere","grand-mere"};
+  assert(close_relatives(sibling_left,sibling_right,simulation.agents()));
+
+  auto& skilled_parent=SimulationTestAccess::agent(simulation,0);
+  add_skill_experience(skilled_parent,Skill::Woodcutting,12);
+  skilled_parent.map_memory[{1,1}]=Terrain::Ground;
+  SimulationTestAccess::agent(simulation,3).map_memory[{2,1}]=Terrain::Tree;
   SimulationTestAccess::set_day(simulation,90);SimulationTestAccess::update_population(simulation);
   assert(simulation.agents().size()==initial+2);
   const auto& child=simulation.agents().back();
   assert(child.origin=="birth"&&child.age_days==0&&child.parent_ids.size()==2);
   assert(child.family_id=="foyer-principal");
-  assert((child.parent_ids==std::vector<std::string>{"a1","a3"}));
+  assert((child.parent_ids==std::vector<std::string>{"a1","a4"}));
   assert(child.name=="Éloi des Aulnes 5");
   assert(child.name!=newcomer_name);
-  assert(child.generation==3);
+  assert(child.generation==1);
+  assert(life_stage(child)==LifeStage::Newborn&&is_dependent_child(child));
+  assert(SimulationTestAccess::agent(simulation,1).partner_id.empty());
+  assert(SimulationTestAccess::agent(simulation,2).partner_id.empty());
   const auto child_actions=available_actions(child,world,simulation.agents(),90,DayPhase::Day);
   assert(std::ranges::find(child_actions,"hunt_animal")==child_actions.end());
   assert(std::ranges::find(child_actions,"confront")==child_actions.end());
   const auto child_parents=child.parent_ids;
 
-  auto& departing=SimulationTestAccess::agent(simulation,1);
-  departing.critical_hunger_days=4;departing.relationships.clear();
-  SimulationTestAccess::set_day(simulation,120);SimulationTestAccess::update_population(simulation);
-  assert(!departing.alive&&departing.departure_day==120&&!departing.departure_reason.empty());
+  SimulationTestAccess::set_day(simulation,91);SimulationTestAccess::update_population(simulation);
+  const auto& learning_child=simulation.agents().back();
+  assert(learning_child.age_days==1&&life_stage(learning_child)==LifeStage::Child);
+  assert(skill_experience(learning_child,Skill::Woodcutting)==1);
+  assert(skill_experience(learning_child,Skill::Woodcutting)<
+         skill_experience(SimulationTestAccess::agent(simulation,0),Skill::Woodcutting));
+  assert(learning_child.map_memory.contains({1,1}));
+  const auto encyclopedia=simulation.group().camp_knowledge_json();
+  assert(encyclopedia.at("learning").at("available_skills").size()==all_skills().size());
+  assert(encyclopedia.at("cartography").at("known_cells").get<int>()>=2);
 
   auto& elder=SimulationTestAccess::agent(simulation,0);elder.age_days=98;
   SimulationTestAccess::set_day(simulation,121);SimulationTestAccess::update_population(simulation);
@@ -90,14 +114,28 @@ int main() {
   SimulationTestAccess::set_day(simulation,122);SimulationTestAccess::update_population(simulation);
   assert(!elder.alive&&elder.death_cause=="vieillesse");
 
+  auto& second_parent=SimulationTestAccess::agent(simulation,3);
+  second_parent.alive=false;
+  SimulationTestAccess::set_day(simulation,123);SimulationTestAccess::update_population(simulation);
+  assert(!simulation.agents().back().alive);
+  assert(simulation.agents().back().death_cause=="absence de parent protecteur");
+
+  for(std::size_t index=0;index<simulation.agents().size();++index)
+    SimulationTestAccess::agent(simulation,index).alive=false;
+  SimulationTestAccess::set_day(simulation,124);SimulationTestAccess::update_population(simulation);
+  assert(simulation.civilization().status==CivilizationStatus::Extinct);
+  assert(simulation.civilization().extinction_day==124);
+  assert(simulation.civilization().restart_contract=="--new-world");
+
   simulation.save_checkpoint();
   Logger restored_logger(root.string());std::mt19937 restored_rng(7);LocalDecider restored_decider(restored_rng);
   Simulation restored(7,restored_decider,restored_logger,nullptr,checkpoint.string());
   assert(restored.agents().size()==simulation.agents().size());
   assert(std::ranges::any_of(restored.agents(),[&](const Agent& agent){
     return agent.origin=="birth"&&agent.parent_ids==child_parents&&
-        agent.name=="Éloi des Aulnes 5"&&agent.generation==3;
+        agent.name=="Éloi des Aulnes 5"&&agent.generation==1;
   }));
+  assert(restored.civilization()==simulation.civilization());
 
   setenv("CYCLES_PER_DAY","1",1);
   setenv("REPORT_EVERY_DAYS","1",1);

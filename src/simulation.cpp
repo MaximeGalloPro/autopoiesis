@@ -103,7 +103,10 @@ json agent_checkpoint(const Agent& agent) {
           {"last_help_day",agent.last_help_day},{"last_warning_day",agent.last_warning_day},
           {"age_days",agent.age_days},{"generation",agent.generation},{"family_id",agent.family_id},
           {"origin",agent.origin},{"arrival_day",agent.arrival_day},
-          {"parent_ids",agent.parent_ids},{"departure_day",agent.departure_day},
+          {"parent_ids",agent.parent_ids},{"partner_id",agent.partner_id},
+          {"partnered_day",agent.partnered_day},{"last_birth_day",agent.last_birth_day},
+          {"last_parental_learning_day",agent.last_parental_learning_day},
+          {"departure_day",agent.departure_day},
           {"departure_reason",agent.departure_reason},{"death_cause",agent.death_cause}};
 }
 
@@ -211,6 +214,10 @@ Agent restore_agent(const json& state) {
   if(agent.family_id.empty())agent.family_id=primary_family_id;
   agent.origin=state.value("origin","founder");agent.arrival_day=state.value("arrival_day",1);
   agent.parent_ids=state.value("parent_ids",std::vector<std::string>{});
+  agent.partner_id=state.value("partner_id","");
+  agent.partnered_day=state.value("partnered_day",0);
+  agent.last_birth_day=state.value("last_birth_day",0);
+  agent.last_parental_learning_day=state.value("last_parental_learning_day",0);
   agent.departure_day=state.value("departure_day",0);
   agent.departure_reason=state.value("departure_reason","");agent.death_cause=state.value("death_cause","");
   return agent;
@@ -926,6 +933,23 @@ void Simulation::load_checkpoint() {
   action_history_=state.value("action_history",decltype(action_history_){});
   planning_history_=state.value("planning_history",decltype(planning_history_){});
   next_agent_id_=state.value("next_agent_id",static_cast<int>(agents_.size())+1);
+  if(state.contains("civilization")){
+    const auto& civilization=state.at("civilization");
+    if(!civilization.is_object()||!civilization.value("status",json{}).is_number_integer()||
+       !civilization.value("extinction_day",json{}).is_number_integer()||
+       !civilization.value("restart_contract",json{}).is_string())
+      throw std::runtime_error("checkpoint civilization state is invalid");
+    const int status=civilization.at("status").get<int>();
+    if(status<static_cast<int>(CivilizationStatus::Active)||status>static_cast<int>(CivilizationStatus::Extinct)||
+       civilization.at("extinction_day").get<int>()<0||
+       civilization.at("restart_contract").get<std::string>()!=civilization_restart_contract)
+      throw std::runtime_error("checkpoint civilization state is invalid");
+    civilization_={static_cast<CivilizationStatus>(status),civilization.at("extinction_day").get<int>(),
+                   civilization.at("restart_contract").get<std::string>()};
+  }else if(std::none_of(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;})){
+    civilization_.status=CivilizationStatus::Extinct;
+    civilization_.extinction_day=std::max(1,day_);
+  }
   for(const auto& danger:state.value("dangers",json::array()))dangers_.push_back({
       danger.at("id").get<std::string>(),static_cast<DangerType>(danger.at("type").get<int>()),
       {danger.value("x",0),danger.value("y",0)},danger.value("severity",1),danger.value("warning_day",day_),
@@ -951,6 +975,9 @@ void Simulation::save_checkpoint() const {
       {"action_history",action_history_},{"planning_history",planning_history_},
       {"rng",rng_checkpoint(rng_)},{"devil_rng",devil_.rng_checkpoint()},
       {"decider",decider_.checkpoint()},{"next_agent_id",next_agent_id_},
+      {"civilization",{{"status",static_cast<int>(civilization_.status)},
+                         {"extinction_day",civilization_.extinction_day},
+                         {"restart_contract",civilization_.restart_contract}}},
       {"dangers",std::move(dangers)},{"next_danger_id",next_danger_id_},
       {"validation_pending",validation_pending_},{"validation_day",validation_day_},
       {"validation_cycle",validation_cycle_}};
@@ -1086,48 +1113,164 @@ void Simulation::update_emotions(Agent& agent) {
 }
 
 void Simulation::update_population() {
+  const auto primary_camp=world_.primary_campfire();
+  group_.observe_camp_skills(agents_);
+  group_.observe_camp_cartography(agents_,World::width,World::height);
+
   for(auto& agent:agents_)if(agent.alive){
     ++agent.age_days;
     if(agent.age_days>=maximum_lifespan_days){agent.alive=false;agent.death_cause="vieillesse";agent.remember("Ma vie s'achève après cent jours.");logger_.message(agent.name+" meurt de vieillesse.");}
   }
-  if(day_%30!=0)return;
-  for(auto& agent:agents_)if(agent.alive){
+
+  for(auto& child:agents_)if(child.alive&&is_dependent_child(child)){
+    std::vector<const Agent*> parents;
+    for(const auto& parent_id:child.parent_ids)
+      if(const auto* parent=agent_by_id(agents_,parent_id);parent&&parent->alive)parents.push_back(parent);
+    std::sort(parents.begin(),parents.end(),[](const Agent* left,const Agent* right){return left->id<right->id;});
+    if(parents.empty()){
+      child.alive=false;child.death_cause="absence de parent protecteur";
+      child.remember("Je ne peux pas survivre sans parent protecteur.");
+      logger_.message(child.name+" meurt sans parent protecteur.");
+      continue;
+    }
+    for(const auto* parent:parents){
+      auto& parent_link=mutable_agent_by_id(agents_,parent->id)->relationships[child.id];
+      parent_link.trust=std::max(parent_link.trust,80);parent_link.affinity=std::max(parent_link.affinity,80);
+      auto& child_link=child.relationships[parent->id];
+      child_link.trust=std::max(child_link.trust,80);child_link.affinity=std::max(child_link.affinity,80);
+    }
+    if(child.last_parental_learning_day!=day_){
+      std::optional<Skill> selected;
+      int greatest_gap{};
+      for(const auto skill:all_skills()){
+        int source_experience=group_.camp_skill_knowledge(skill).experience;
+        for(const auto* parent:parents)source_experience=std::max(source_experience,skill_experience(*parent,skill));
+        const int gap=source_experience-skill_experience(child,skill);
+        if(gap>greatest_gap){greatest_gap=gap;selected=skill;}
+      }
+      if(selected)add_skill_experience(child,*selected);
+
+      bool map_taught=false;
+      for(const auto* parent:parents)for(const auto& [coordinates,terrain]:parent->map_memory)
+        if(!child.map_memory.contains(coordinates)){
+          child.map_memory.emplace(coordinates,terrain);map_taught=true;break;
+        }
+      if(!map_taught)if(const auto lesson=group_.next_camp_map_lesson(child))
+        child.map_memory.emplace(std::pair{lesson->first.x,lesson->first.y},lesson->second);
+      child.last_parental_learning_day=day_;
+    }
+    if(primary_camp&&child.hunger>=70&&world_.nearby_campfire(child.position)==primary_camp&&
+       std::any_of(parents.begin(),parents.end(),[&](const Agent* parent){
+         return world_.nearby_campfire(parent->position)==primary_camp;
+       })){
+      FoodItem food;
+      if(world_.take_stored_food(*primary_camp,&food,parents.front()->behavior.preferred_foods)){
+        child.hunger=clamp_stat(child.hunger-food.nutrition);
+        child.remember("Un parent m'a nourri avec la réserve du foyer.");
+      }
+    }
+  }
+
+  for(auto& agent:agents_)if(!agent.partner_id.empty()){
+    const auto* partner=agent_by_id(agents_,agent.partner_id);
+    if(!agent.alive||!partner||!partner->alive||partner->partner_id!=agent.id||
+       close_relatives(agent,*partner,agents_)){
+      agent.partner_id.clear();agent.partnered_day=0;
+    }
+  }
+
+  if(day_%30==0)for(auto& agent:agents_)if(agent.alive){
     int belonging=0;for(const auto&[_,relationship]:agent.relationships)belonging+=relationship.trust+relationship.affinity;
     if((agent.critical_hunger_days>=4||agent.critical_thirst_days>=3)&&belonging<10){
       agent.alive=false;agent.departure_day=day_;agent.departure_reason="détresse vitale sans soutien";
       agent.remember("J'ai quitté le foyer faute de ressources et de soutien.");logger_.message(agent.name+" quitte le foyer.");
     }
   }
-  const auto camp=world_.primary_campfire();
-  if(!camp)return;
-  const auto sheltered=[&]{if(world_.shelter_level(*camp)>0)return true;for(const auto neighbor:world_.neighbors(*camp))if(world_.shelter_level(neighbor)>0)return true;return world_.has_completed_building(BuildingType::Bed);}();
-  int residents=static_cast<int>(std::count_if(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;}));
-  auto consume_reserves=[&](int amount){for(int index=0;index<amount;++index)if(!world_.take_stored_food(*camp))return false;return true;};
-  auto make_resident=[&](std::string origin,int age,std::vector<std::string> parents,
-                         std::string family_id,int generation){
-    const int serial=next_agent_id_++;Agent newcomer;
-    newcomer.id="a"+std::to_string(serial);newcomer.name=generated_resident_name(serial);
-    newcomer.position=world_.neighbors(*camp).front();newcomer.age_days=age;newcomer.origin=std::move(origin);
-    newcomer.arrival_day=day_;newcomer.generation=generation;newcomer.family_id=std::move(family_id);newcomer.parent_ids=std::move(parents);newcomer.hunger=25;newcomer.thirst=20;newcomer.fatigue=20;
-    newcomer.personality={50,55,55,55,60};newcomer.attributes={45,50,50,45,55,55,50,55,50,50};
-    newcomer.behavior={"resident","Contribuer à la continuité du foyer",50,60,45,65,{FoodType::Roots,FoodType::Berries}};
-    newcomer.project={"join_camp","Trouver sa place dans le foyer",ProjectStatus::Active,0,0,3,"","",day_,simulation_cycle_};
-    newcomer.home_camp=*camp;newcomer.known_campfires.insert({camp->x,camp->y});agents_.push_back(std::move(newcomer));
-  };
-  if(sheltered&&day_%60==0&&residents<8&&world_.stored_food(*camp)>=residents*4+4&&consume_reserves(4)){
-    make_resident("arrival",20+((day_/60)%20),{},std::string{primary_family_id},0);++residents;logger_.message(agents_.back().name+" rejoint le foyer.");
+
+  if(primary_camp&&day_%30==0){
+    const auto sheltered=[&]{if(world_.shelter_level(*primary_camp)>0)return true;for(const auto neighbor:world_.neighbors(*primary_camp))if(world_.shelter_level(neighbor)>0)return true;return world_.has_completed_building(BuildingType::Bed);}();
+    int residents=static_cast<int>(std::count_if(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;}));
+    auto consume_reserves=[&](int amount){
+      if(world_.stored_food(*primary_camp)<amount)return false;
+      for(int index=0;index<amount;++index)if(!world_.take_stored_food(*primary_camp))return false;
+      return true;
+    };
+    auto make_resident=[&](std::string origin,int age,std::vector<std::string> parents,
+                           std::string family_id,int generation){
+      int serial=std::max(1,next_agent_id_);
+      const auto occupied=[&](int candidate){
+        const std::string id=std::string{"a"}+std::to_string(candidate);
+        const auto name=generated_resident_name(candidate);
+        return std::any_of(agents_.begin(),agents_.end(),[&](const Agent& agent){
+          return agent.id==id||agent.name==name;
+        });
+      };
+      while(occupied(serial))++serial;
+      next_agent_id_=serial+1;
+      Agent newcomer;
+      newcomer.id="a"+std::to_string(serial);newcomer.name=generated_resident_name(serial);
+      newcomer.position=world_.neighbors(*primary_camp).front();newcomer.age_days=age;newcomer.origin=std::move(origin);
+      newcomer.arrival_day=day_;newcomer.generation=generation;newcomer.family_id=std::move(family_id);newcomer.parent_ids=std::move(parents);newcomer.hunger=25;newcomer.thirst=20;newcomer.fatigue=20;
+      newcomer.personality={50,55,55,55,60};newcomer.attributes={45,50,50,45,55,55,50,55,50,50};
+      newcomer.behavior={"resident","Contribuer à la continuité du foyer",50,60,45,65,{FoodType::Roots,FoodType::Berries}};
+      newcomer.project={"join_camp","Trouver sa place dans le foyer",ProjectStatus::Active,0,0,3,"","",day_,simulation_cycle_};
+      newcomer.home_camp=*primary_camp;newcomer.known_campfires.insert({primary_camp->x,primary_camp->y});agents_.push_back(std::move(newcomer));
+      auto& created=agents_.back();
+      for(const auto& parent_id:created.parent_ids)if(auto* parent=mutable_agent_by_id(agents_,parent_id)){
+        auto& parent_link=parent->relationships[created.id];parent_link.trust=80;parent_link.affinity=80;
+        auto& child_link=created.relationships[parent->id];child_link.trust=80;child_link.affinity=80;
+      }
+    };
+    if(sheltered&&day_%60==0&&residents<8&&world_.stored_food(*primary_camp)>=residents*4+4&&consume_reserves(4)){
+      const auto arrival_family="arrivee-"+std::to_string(next_agent_id_);
+      make_resident("arrival",20+((day_/60)%20),{},arrival_family,0);++residents;logger_.message(agents_.back().name+" rejoint le foyer.");
+    }
+
+    std::vector<Agent*> adults;
+    for(auto& agent:agents_)if(agent.alive&&is_adult(agent)&&agent.partner_id.empty()&&
+        world_.nearby_campfire(agent.position)==primary_camp)adults.push_back(&agent);
+    std::sort(adults.begin(),adults.end(),[](const Agent* left,const Agent* right){return left->id<right->id;});
+    for(std::size_t first=0;first<adults.size();++first){
+      if(!adults[first]->partner_id.empty())continue;
+      for(std::size_t second=first+1;second<adults.size();++second){
+        if(!adults[second]->partner_id.empty()||close_relatives(*adults[first],*adults[second],agents_))continue;
+        adults[first]->partner_id=adults[second]->id;adults[second]->partner_id=adults[first]->id;
+        adults[first]->partnered_day=day_;adults[second]->partnered_day=day_;
+        auto& outgoing=adults[first]->relationships[adults[second]->id];++outgoing.interactions;outgoing.trust=std::max(outgoing.trust,55);outgoing.affinity=std::max(outgoing.affinity,55);
+        auto& incoming=adults[second]->relationships[adults[first]->id];++incoming.interactions;incoming.trust=std::max(incoming.trust,55);incoming.affinity=std::max(incoming.affinity,55);
+        logger_.message(adults[first]->name+" et "+adults[second]->name+" forment un couple.");
+        break;
+      }
+    }
+
+    if(sheltered&&day_%90==0&&residents<10&&world_.stored_food(*primary_camp)>=residents*6+6){
+      std::vector<Agent*> partnered_adults;
+      for(auto& agent:agents_)if(agent.alive&&is_adult(agent)&&!agent.partner_id.empty())partnered_adults.push_back(&agent);
+      std::sort(partnered_adults.begin(),partnered_adults.end(),[](const Agent* left,const Agent* right){return left->id<right->id;});
+      for(auto* first_parent:partnered_adults){
+        if(first_parent->id>first_parent->partner_id)continue;
+        auto* second_parent=mutable_agent_by_id(agents_,first_parent->partner_id);
+        if(!second_parent||!second_parent->alive||second_parent->partner_id!=first_parent->id||
+           !is_adult(*second_parent)||close_relatives(*first_parent,*second_parent,agents_)||
+           (first_parent->last_birth_day>0&&day_-first_parent->last_birth_day<90)||
+           (second_parent->last_birth_day>0&&day_-second_parent->last_birth_day<90))continue;
+        std::vector<std::string> parents{first_parent->id,second_parent->id};std::sort(parents.begin(),parents.end());
+        const auto family=first_parent->family_id;
+        const int generation=std::max(first_parent->generation,second_parent->generation)+1;
+        if(!consume_reserves(6))break;
+        first_parent->last_birth_day=day_;second_parent->last_birth_day=day_;
+        make_resident("birth",0,std::move(parents),family,generation);
+        logger_.message("Naissance de "+agents_.back().name+".");
+        break;
+      }
+    }
   }
-  std::vector<const Agent*> adults;for(const auto& agent:agents_)if(agent.alive&&is_adult(agent))adults.push_back(&agent);
-  const Agent* first_parent=nullptr;
-  const Agent* second_parent=nullptr;
-  for(std::size_t first=0;first<adults.size()&&!first_parent;++first)
-    for(std::size_t second=first+1;second<adults.size();++second)
-      if(adults[first]->family_id==adults[second]->family_id){
-        first_parent=adults[first];second_parent=adults[second];break;
-  }
-  if(sheltered&&day_%90==0&&residents<10&&first_parent&&second_parent&&world_.stored_food(*camp)>=residents*6+6&&consume_reserves(6)){
-    make_resident("birth",0,{first_parent->id,second_parent->id},first_parent->family_id,
-                  std::max(first_parent->generation,second_parent->generation)+1);logger_.message("Naissance de "+agents_.back().name+".");
+
+  if(std::none_of(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;})&&
+     civilization_.status!=CivilizationStatus::Extinct){
+    civilization_.status=CivilizationStatus::Extinct;civilization_.extinction_day=std::max(1,day_);
+    civilization_.restart_contract=std::string{civilization_restart_contract};
+    logger_.message("Civilisation éteinte : seul --new-world peut démarrer une nouvelle civilisation.");
   }
 }
 
@@ -1775,6 +1918,11 @@ bool Simulation::advance_validation(const ValidationGate& validation_gate,IUserI
 SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
                                     const ValidationGate& validation_gate,
                                     IUserInterface* interface){
+  if(civilization_.status==CivilizationStatus::Extinct){
+    logger_.message("Civilisation déjà éteinte : redémarrage refusé sans --new-world.");
+    save_checkpoint();
+    return {false,0};
+  }
   for(int i=0;i<days;++i){
     if(!advance_reporting(interface))break;
     if(!run_day(interface))break;

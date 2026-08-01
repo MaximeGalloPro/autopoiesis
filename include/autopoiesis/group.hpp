@@ -29,6 +29,30 @@ class CampKnowledge {
     }
   }
 
+  void observe_cartography(const std::vector<Agent>& agents,int width,int height) {
+    if(width<=0||height<=0)return;
+    for(const auto& agent:agents) {
+      if(!agent.alive)continue;
+      for(const auto& [position,terrain]:agent.map_memory) {
+        if(position.first<0||position.first>=width||position.second<0||position.second>=height)
+          continue;
+        cartography_.emplace(position,terrain);
+      }
+    }
+  }
+
+  std::optional<std::pair<Position,Terrain>> next_map_lesson(const Agent& learner) const {
+    for(const auto& [coordinates,terrain]:cartography_)
+      if(!learner.map_memory.contains(coordinates))
+        return std::pair{Position{coordinates.first,coordinates.second},terrain};
+    return std::nullopt;
+  }
+
+  SkillProgress skill_knowledge(Skill skill) const {
+    const auto found=skills_.find(skill);
+    return found==skills_.end()?SkillProgress{}:found->second;
+  }
+
   json view() const {
     json recipes = json::array();
     for (const auto& recipe : crafting_recipes()) {
@@ -47,7 +71,15 @@ class CampKnowledge {
       const SkillProgress progress = found == skills_.end() ? SkillProgress{} : found->second;
       skills[skill_name(skill)] = {{"experience", progress.experience}, {"level", progress.level}};
     }
-    return {{"recipes", std::move(recipes)}, {"skills", std::move(skills)}};
+    json available_skills=json::array();
+    for(const auto skill:all_skills())available_skills.push_back(skill_name(skill));
+    json cells=json::array();
+    for(const auto& [position,terrain]:cartography_)
+      cells.push_back({{"x",position.first},{"y",position.second},
+                       {"terrain",static_cast<int>(terrain)}});
+    return {{"recipes", std::move(recipes)}, {"skills", std::move(skills)},
+            {"learning", {{"available_skills",std::move(available_skills)}}},
+            {"cartography", {{"known_cells",cartography_.size()},{"cells",std::move(cells)}}}};
   }
 
   void restore(const json& state) {
@@ -84,13 +116,37 @@ class CampKnowledge {
       if (!skill_from_name(key)) throw std::runtime_error("checkpoint camp skill is unknown");
     }
 
+    std::map<std::pair<int,int>,Terrain> restored_cartography;
+    if(state.contains("cartography")) {
+      const auto& cartography=state.at("cartography");
+      if(!cartography.is_object()||!cartography.contains("known_cells")||
+         !cartography.at("known_cells").is_number_unsigned()||!cartography.contains("cells")||
+         !cartography.at("cells").is_array())
+        throw std::runtime_error("checkpoint camp cartography is invalid");
+      for(const auto& cell:cartography.at("cells")) {
+        if(!cell.is_object()||!cell.value("x",json{}).is_number_integer()||
+           !cell.value("y",json{}).is_number_integer()||!cell.value("terrain",json{}).is_number_integer())
+          throw std::runtime_error("checkpoint camp map cell is invalid");
+        const int x=cell.at("x").get<int>(),y=cell.at("y").get<int>(),
+                  terrain=cell.at("terrain").get<int>();
+        if(x<0||x>=40||y<0||y>=24||terrain<static_cast<int>(Terrain::Ground)||
+           terrain>static_cast<int>(Terrain::Bush)||
+           !restored_cartography.emplace(std::pair{x,y},static_cast<Terrain>(terrain)).second)
+          throw std::runtime_error("checkpoint camp map cell is invalid");
+      }
+      if(cartography.at("known_cells").get<std::size_t>()!=restored_cartography.size())
+        throw std::runtime_error("checkpoint camp cartography count is invalid");
+    }
+
     recipes_ = std::move(restored_recipes);
     skills_ = std::move(restored_skills);
+    cartography_ = std::move(restored_cartography);
   }
 
  private:
   std::set<std::string> recipes_;
   std::map<Skill, SkillProgress> skills_;
+  std::map<std::pair<int,int>,Terrain> cartography_;
 };
 
 enum class BaseKind { Campfire };
@@ -164,6 +220,15 @@ class Group {
   const CampKnowledge& camp_knowledge() const { return camp_knowledge_; }
   json camp_knowledge_json() const { return camp_knowledge_.view(); }
   void observe_camp_skills(const std::vector<Agent>& agents) { camp_knowledge_.observe_skills(agents); }
+  void observe_camp_cartography(const std::vector<Agent>& agents,int width,int height) {
+    camp_knowledge_.observe_cartography(agents,width,height);
+  }
+  std::optional<std::pair<Position,Terrain>> next_camp_map_lesson(const Agent& learner) const {
+    return camp_knowledge_.next_map_lesson(learner);
+  }
+  SkillProgress camp_skill_knowledge(Skill skill) const {
+    return camp_knowledge_.skill_knowledge(skill);
+  }
 
   int infrastructure_level(BaseInfrastructure type) const {
     const auto* definition = base_infrastructure(type);
@@ -193,7 +258,8 @@ class Group {
     for (const auto& recipe : knowledge.at("recipes")) recipes.push_back(recipe.at("id"));
     return {{"id", id_},
             {"primary_base", {{"kind", "campfire"}, {"infrastructure_levels", std::move(levels)}}},
-            {"camp_knowledge", {{"recipes", std::move(recipes)}, {"skills", knowledge.at("skills")}}},
+            {"camp_knowledge", {{"recipes", std::move(recipes)}, {"skills", knowledge.at("skills")},
+                                {"cartography", knowledge.at("cartography")}}},
             {"world_profile", registry.profile_json(world_profile_)}};
   }
 

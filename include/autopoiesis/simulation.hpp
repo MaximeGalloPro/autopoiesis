@@ -84,6 +84,7 @@ class Simulation {
   const Group& group() const { return group_; }
   const CalendarDate& date() const { return date_; }
   const ClimateState& climate() const { return climate_; }
+  const CivilizationState& civilization() const { return civilization_; }
   int simulation_cycle() const { return simulation_cycle_; }
   bool restored_checkpoint() const { return restored_checkpoint_; }
   const std::vector<ActiveFeature>& active_features() const { return group_.active_features(); }
@@ -132,6 +133,7 @@ class Simulation {
   int cycles_per_day_{2400}; int report_every_days_{1}; int day_{0}; int simulation_cycle_{0};
   int cycle_in_day_{1};
   int next_agent_id_{4};
+  CivilizationState civilization_;
   std::vector<DangerEvent> dangers_;
   int next_danger_id_{1};
   std::map<std::string,std::vector<std::string>> action_history_;
