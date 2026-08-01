@@ -183,6 +183,17 @@ class Group {
     return true;
   }
 
+  // Checkpoints written before collective infrastructure was recorded still
+  // carry the completed world buildings. Reconstruct only that missing group
+  // state; normal transitions must continue through evolve().
+  void migrate_completed_infrastructure(bool stockpile_complete, bool workshop_complete) {
+    if (workshop_complete) stockpile_complete = true;
+    if (stockpile_complete)
+      infrastructure_levels_[catalog_index(*base_infrastructure(BaseInfrastructure::Stockpile))] = 1;
+    if (workshop_complete)
+      infrastructure_levels_[catalog_index(*base_infrastructure(BaseInfrastructure::Workshop))] = 1;
+  }
+
   json checkpoint(const FeatureRegistry& registry = FeatureRegistry::defaults()) const {
     json levels = json::object();
     const auto& catalog = base_infrastructure_catalog();

@@ -36,7 +36,8 @@ int main() {
   auto& builder=SimulationTestAccess::agent(simulation);
   const Position fire{13,2};
   assert(world.place_campfire(fire));
-  assert(world.store_materials(fire,15,3,2));
+  assert(world.store_materials(fire,17,5,2));
+  assert(world.upgrade_camp_chest(fire));
   assert(world.craft(fire,"wooden_handle"));
   assert(world.craft(fire,"charcoal"));
   assert(world.craft(fire,"rope"));
@@ -55,20 +56,21 @@ int main() {
   assert(designation.action=="designate_building");
   assert(designation.parameters["building"]=="wall");
   assert(SimulationTestAccess::execute(simulation,builder,designation)=="designe wall");
-  for(std::size_t index=1;index<projects.size();++index){
+  for(std::size_t index=1;index<projects.size()-1;++index){
     const auto&[type,site]=projects[index];
     assert(world.can_designate_building(site,fire,type));
     assert(world.designate_building(site,fire,type));
     const auto building=world.building(site);
     assert(building&&building->type==type&&!building->complete&&building->progress==0);
   }
-  assert(world.stored_wood(fire)==2);
+  assert(world.stored_wood(fire)==5);
   assert(world.stored_item(fire,CraftItem::WoodenHandle)==0);
   assert(world.stored_item(fire,CraftItem::Rope)==0);
-  assert(world.stored_item(fire,CraftItem::IronIngot)==0);
+  assert(world.stored_item(fire,CraftItem::IronIngot)==1);
 
   int successful_work=0;
-  for(const auto&[type,site]:projects){
+  for(std::size_t index=0;index<projects.size()-1;++index){
+    const auto&[type,site]=projects[index];
     builder.position=world.neighbors(site).front();
     auto actions=available_actions(builder,world,simulation.agents());
     assert(std::ranges::find(actions,"work_on_building")!=actions.end());
@@ -79,6 +81,18 @@ int main() {
     }
     assert(world.building(site)->type==type);
   }
+  const auto&[workshop_type,workshop_site]=projects.back();
+  assert(workshop_type==BuildingType::Workshop);
+  assert(world.can_designate_building(workshop_site,fire,workshop_type));
+  assert(world.designate_building(workshop_site,fire,workshop_type));
+  assert(world.stored_item(fire,CraftItem::IronIngot)==0);
+  builder.position=world.neighbors(workshop_site).front();
+  while(!world.building(workshop_site)->complete){
+    assert(SimulationTestAccess::execute(simulation,builder,
+        action("work_on_building",{{"x",workshop_site.x},{"y",workshop_site.y}})).starts_with("travaille sur "));
+    ++successful_work;
+  }
+  assert(world.building(workshop_site)->type==workshop_type);
   assert(builder.equipped_tool->durability==20-successful_work);
   assert(!world.passable(projects[0].second));
   assert(world.passable(projects[1].second));

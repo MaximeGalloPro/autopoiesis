@@ -10,7 +10,8 @@
       "dependencies": [],
       "cards": [
         {"id": "collect_branch", "type": "action", "title": "Ramasser une branche", "action": "collect_branch"},
-        {"id": "craft_camp_item", "type": "action", "title": "Fabriquer au foyer", "action": "craft_camp_item"}
+        {"id": "craft_camp_item", "type": "action", "title": "Fabriquer au foyer", "action": "craft_camp_item"},
+        {"id": "upgrade_camp_chest", "type": "action", "title": "Agrandir le coffre du foyer", "action": "upgrade_camp_chest"}
       ]
     },
     {
