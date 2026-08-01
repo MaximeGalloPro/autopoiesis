@@ -111,6 +111,9 @@ add_test(NAME shared_camp_stockpile COMMAND autopoiesis_camp_stockpile_tests)
 add_executable(autopoiesis_camp_chest_tests tests/test_camp_chest.cpp)
 target_link_libraries(autopoiesis_camp_chest_tests PRIVATE autopoiesis_core)
 add_test(NAME bounded_camp_chest COMMAND autopoiesis_camp_chest_tests)
+add_executable(autopoiesis_camp_progression_tests tests/test_camp_progression.cpp)
+target_link_libraries(autopoiesis_camp_progression_tests PRIVATE autopoiesis_core)
+add_test(NAME persistent_camp_progression COMMAND autopoiesis_camp_progression_tests)
 add_executable(autopoiesis_web_interface_tests tests/test_web_interface.cpp)
 target_link_libraries(autopoiesis_web_interface_tests PRIVATE autopoiesis_core)
 add_test(NAME web_stdio_protocol COMMAND autopoiesis_web_interface_tests)
@@ -204,6 +207,7 @@ foreach(test_target
     autopoiesis_campfire_tests
     autopoiesis_camp_stockpile_tests
     autopoiesis_camp_chest_tests
+    autopoiesis_camp_progression_tests
     autopoiesis_web_interface_tests
     autopoiesis_collective_camp_tests
     autopoiesis_inventory_tests

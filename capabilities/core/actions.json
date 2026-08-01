@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "actions": [
-    {"id": "craft_camp_item", "operation": "craft_recipe"}
+    {"id": "craft_camp_item", "operation": "craft_recipe"},
+    {"id": "upgrade_camp_chest", "operation": "upgrade_camp_chest"}
   ]
 }

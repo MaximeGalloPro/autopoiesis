@@ -165,7 +165,8 @@ ActionRegistry ActionRegistry::load(const std::filesystem::path& path) {
       throw std::runtime_error("invalid capability action entry");
     const auto id = value["id"].get<std::string>();
     const auto operation = value["operation"].get<std::string>();
-    if (operation != "craft_recipe") throw std::runtime_error("unknown capability action operation " + operation);
+    if (operation != "craft_recipe" && operation != "upgrade_camp_chest")
+      throw std::runtime_error("unknown capability action operation " + operation);
     if (std::any_of(actions.begin(), actions.end(), [&](const auto& candidate) { return candidate.id == id; }))
       throw std::runtime_error("duplicate capability action " + id);
     actions.push_back({id, operation});

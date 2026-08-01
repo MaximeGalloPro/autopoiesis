@@ -53,8 +53,10 @@ class World {
   int camp_chest_level(Position campfire_position) const;
   int camp_chest_capacity(Position campfire_position) const;
   int camp_chest_occupation(Position campfire_position) const;
+  bool can_upgrade_camp_chest(Position campfire_position) const;
   bool upgrade_camp_chest(Position campfire_position);
   int stored_food(Position campfire_position) const;
+  bool can_store_food(Position campfire_position, const FoodItem& food) const;
   bool store_food(Position campfire_position, const FoodItem& food);
   bool take_stored_food(Position campfire_position, FoodItem* food = nullptr,
                         const std::vector<FoodType>& preferences = {});
@@ -64,6 +66,8 @@ class World {
   int age_stored_food();
   int stored_wood(Position campfire_position) const;
   int stored_branches(Position campfire_position) const;
+  bool can_store_materials(Position campfire_position, int wood, int branches,
+                           int iron_ore = 0) const;
   bool store_materials(Position campfire_position, int wood, int branches, int iron_ore = 0);
   int stored_iron_ore(Position campfire_position) const;
   bool consume_stored_wood(Position campfire_position, int amount);
