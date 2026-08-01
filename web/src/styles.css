@@ -256,38 +256,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 
 .progress-dock { position: fixed; z-index: 40; right: 24px; bottom: 105px; display: flex; flex-direction: column; gap: 8px; width: min(560px, calc(100vw - 48px)); pointer-events: none; }
 .progress-dock > section { border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(9,16,13,.94); box-shadow: 0 16px 50px rgba(0,0,0,.38); backdrop-filter: blur(15px); }
-.activity-progress { gap: 12px; padding: 12px 14px; }
-.progress-icon { position: relative; display: grid; place-items: center; flex: 0 0 34px; height: 34px; border: 1px solid rgba(216,175,97,.3); border-radius: 50%; color: var(--accent); }
-.progress-icon span { position: absolute; right: 0; bottom: 2px; width: 7px; height: 7px; border-radius: 50%; background: #81c495; animation: pulse 1.2s infinite; }
-.progress-copy { flex: 1; min-width: 0; }
-.progress-copy strong { display: block; margin-top: 3px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.thin-progress { height: 2px; margin-top: 8px; }
-.activity-progress time, .recompile-progress time, .god-progress time { color: var(--muted); font: 10px ui-monospace, monospace; }
-.god-progress { padding: 14px; }
-.god-progress header { display: flex; align-items: center; justify-content: space-between; }
-.god-progress header > div { gap: 9px; }
-.god-progress header svg { color: var(--accent); }
-.god-progress header span { display: flex; flex-direction: column; }
-.god-progress header small { color: var(--accent); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
-.god-progress header strong { margin-top: 2px; font-size: 11px; }
-.god-progress ol { display: grid; grid-template-columns: repeat(8, 1fr); gap: 0; margin: 13px 0 0; padding: 0; list-style: none; }
-.god-progress li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; color: #4f5c56; font-size: 7px; text-align: center; }
-.god-progress li::before { content: ""; position: absolute; z-index: 0; top: 6px; right: 50%; width: 100%; height: 1px; background: #293630; }
-.god-progress li:first-child::before { display: none; }
-.god-progress li svg { position: relative; z-index: 1; width: 12px; height: 12px; fill: #0d1713; }
-.god-progress li.active, .god-progress li.done { color: var(--accent-bright); }
-.god-progress li.active svg, .god-progress li.done svg { color: var(--accent); }
-.god-progress > p { display: flex; gap: 7px; margin: 10px 0 0; padding-top: 9px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
-.workflow-detail { align-items: flex-start; line-height: 1.45; }
-.workflow-detail > span { flex: 0 0 auto; color: var(--faint); font-size: 7px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.god-progress.failed { border-color: rgba(211,111,99,.35); }
-.recompile-progress { gap: 11px; padding: 13px 14px; }
-.recompile-progress > svg { color: var(--accent); }
-.recompile-progress > div { flex: 1; display: flex; flex-direction: column; }
-.recompile-progress strong { margin-top: 3px; font-size: 11px; }
-.recompile-progress p { margin: 3px 0 0; color: var(--muted); font-size: 9px; }
-.recompile-progress.ready > svg { color: var(--green); }
-.recompile-progress.failed > svg { color: var(--red); }
+.progress-status { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 9px 12px; }
+.progress-status-icon { display: grid; flex: 0 0 30px; place-items: center; width: 30px; height: 30px; border: 1px solid rgba(216,175,97,.3); border-radius: 50%; color: var(--accent); }
+.progress-status-icon svg { width: 15px; height: 15px; }
+.progress-status-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.progress-status-copy span { color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.progress-status-copy strong { overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.progress-status time { color: var(--muted); font: 10px ui-monospace, monospace; }
+.progress-status.failed { border-color: rgba(211,111,99,.42); }
+.progress-status.failed .progress-status-icon, .progress-status.failed .progress-status-copy span { color: #e49a8d; }
 .recent-events { padding: 12px 14px; }
 .recent-events header { display: flex; align-items: baseline; gap: 8px; }
 .recent-events header strong { font-size: 11px; }
@@ -304,24 +281,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .recent-event-card.warning { border-color: rgba(211,111,99,.3); }
 .recent-event-card.warning > svg, .recent-event-card.warning span { color: #e49a8d; }
 
-.guard-reminder { position: fixed; z-index: 80; right: 24px; bottom: 105px; display: flex; align-items: center; gap: 12px; width: min(620px, calc(100vw - 48px)); padding: 12px 14px; border: 1px solid rgba(216,175,97,.35); border-radius: 12px; background: rgba(12,21,17,.97); box-shadow: 0 18px 55px rgba(0,0,0,.5); backdrop-filter: blur(16px); }
-.guard-reminder.devil { border-color: rgba(210,94,61,.4); background: rgba(31,20,16,.97); }
-.guard-reminder-icon { display: grid; flex: 0 0 38px; place-items: center; height: 38px; border: 1px solid rgba(216,175,97,.3); border-radius: 50%; color: var(--accent); }
-.guard-reminder.devil .guard-reminder-icon { border-color: rgba(210,94,61,.35); color: #dc765c; }
-.guard-reminder-icon svg { width: 18px; }
-.guard-reminder-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
-.guard-reminder-copy > span { color: var(--accent); font-size: 8px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
-.guard-reminder-copy strong { overflow: hidden; font-family: Georgia, serif; font-size: 15px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.guard-reminder-copy small { color: var(--muted); font-size: 9px; }
-.guard-reminder-actions { display: flex; gap: 7px; }
-.guard-reminder-actions button, .guard-minimize { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 11px; border-radius: 7px; cursor: pointer; }
-.guard-reminder-actions button svg, .guard-minimize svg { width: 14px; }
-.guard-resume { border: 1px solid rgba(118,182,139,.5); background: #6fa181; color: #09110d; font-weight: 800; }
-.guard-open, .guard-minimize { border: 1px solid var(--line-strong); background: rgba(255,255,255,.04); color: #c4cbc7; }
-.guard-open:hover, .guard-minimize:hover { background: rgba(255,255,255,.08); }
-
-.guard-layer { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 30px; pointer-events: none; background: radial-gradient(circle at 50% 100%, rgba(3,8,6,.72), transparent 72%); }
-.guard-layer .validation-modal { pointer-events: auto; }
 .campfire-cards-overlay { position: fixed; z-index: 95; right: 24px; bottom: 92px; left: 24px; padding: 14px; border: 1px solid rgba(216,175,97,.36); border-radius: 14px; background: linear-gradient(160deg, rgba(22,32,27,.98), rgba(9,15,12,.98)); box-shadow: 0 24px 70px rgba(0,0,0,.52); backdrop-filter: blur(18px); }
 .campfire-cards-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .campfire-cards-heading > div { display: flex; align-items: center; gap: 9px; }
@@ -339,15 +298,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .campfire-call-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 .campfire-cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .campfire-decision-card .request-card { width: 100%; min-height: 215px; }
-.validation-modal { width: min(1080px, 100%); max-height: calc(100dvh - 60px); overflow-y: auto; padding: 28px; border: 1px solid rgba(216,175,97,.24); border-radius: 16px; background: linear-gradient(145deg, #14201b, #0b1310 75%); box-shadow: 0 30px 100px rgba(0,0,0,.7); }
-.validation-modal.devil { border-color: rgba(205,100,69,.35); background: radial-gradient(circle at 90% 0%, rgba(157,64,44,.15), transparent 38%), linear-gradient(145deg, #211813, #100e0c 75%); }
+.campfire-validation-overlay { position: fixed; z-index: 96; right: 24px; bottom: 92px; width: min(720px, calc(100vw - 48px)); max-height: calc(100dvh - 184px); overflow-y: auto; padding: 18px; border: 1px solid rgba(216,175,97,.36); border-radius: 14px; background: linear-gradient(145deg, rgba(20,32,27,.98), rgba(9,15,12,.98)); box-shadow: 0 24px 70px rgba(0,0,0,.52); backdrop-filter: blur(18px); }
+.campfire-validation-overlay.devil { border-color: rgba(205,100,69,.4); background: radial-gradient(circle at 90% 0%, rgba(157,64,44,.15), transparent 38%), linear-gradient(145deg, rgba(33,24,19,.98), rgba(16,14,12,.98)); }
 .validation-heading { align-items: flex-start; gap: 15px; padding-bottom: 21px; border-bottom: 1px solid var(--line); }
 .validation-heading-copy { flex: 1; min-width: 0; }
-.guard-minimize { flex: 0 0 auto; }
 .validation-icon { display: grid; flex: 0 0 46px; place-items: center; height: 46px; border: 1px solid rgba(216,175,97,.32); border-radius: 50%; color: var(--accent); }
 .devil .validation-icon { border-color: rgba(210,94,61,.35); color: #dc765c; }
 .validation-heading h2 { margin: 5px 0 5px; font-family: Georgia, serif; font-size: clamp(24px, 3vw, 34px); font-weight: 500; }
-.validation-heading p { margin: 0; color: var(--muted); font-size: 11px; }
 .request-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; margin: 21px 0; }
 .request-card { min-height: 276px; display: flex; flex-direction: column; align-items: flex-start; padding: 19px; border: 1px solid var(--line-strong); border-radius: 11px; background: rgba(255,255,255,.025); text-align: left; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, background 180ms ease; }
 .request-card:hover { transform: translateY(-3px); border-color: rgba(216,175,97,.55); background: rgba(216,175,97,.055); }
@@ -375,7 +332,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .approve-button { border: 1px solid rgba(118,182,139,.5); background: #6fa181; color: #09110d; font-weight: 800; }
 .reject-button { border: 1px solid rgba(211,111,99,.4); background: rgba(211,111,99,.12); color: #e69a90; font-weight: 800; }
 .decision-panel button { flex-wrap: wrap; }
-.decision-panel button small { flex-basis: 100%; color: currentColor; font-size: 8px; font-weight: 500; opacity: .7; }
 .confirmation-layout { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(260px,.65fr); gap: 20px; margin-top: 21px; }
 .confirmation-card { padding: 21px; border: 1px solid var(--line-strong); border-radius: 11px; background: rgba(255,255,255,.024); }
 .confirmation-card h3 { margin: 8px 0 20px; font-family: Georgia, serif; font-size: 27px; font-weight: 500; }
@@ -387,11 +343,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-brig
 .acceptance-tests ul { margin: 7px 0 0; padding-left: 16px; color: #aeb6b1; font-size: 9px; line-height: 1.6; }
 .devil-detail { color: #c68978; font-size: 10px; }
 .decision-panel { display: flex; flex-direction: column; gap: 9px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; }
-.decision-panel > p { margin: 0 0 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
-.completion-choice { display: flex; flex-direction: column; align-items: center; padding: 48px 20px 20px; text-align: center; }
-.completion-choice > svg { color: var(--accent); }
-.completion-choice h3 { margin: 12px 0 6px; font-family: Georgia, serif; font-size: 28px; font-weight: 500; }
-.completion-choice > p { margin: 0 0 20px; color: var(--muted); font-size: 11px; }
 
 .shortcut-popover { position: fixed; z-index: 120; top: 68px; right: 22px; width: 300px; padding: 15px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(12,20,17,.97); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
 .service-popover { position: fixed; z-index: 120; top: 68px; right: 64px; width: min(390px, calc(100vw - 28px)); padding: 15px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(12,20,17,.98); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
@@ -455,7 +406,6 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .delay-control { grid-column: 1 / -1; border-top: 1px solid var(--line); padding: 10px 16px; }
   .population { display: none; }
   .progress-dock { bottom: 150px; }
-  .guard-reminder { bottom: 150px; }
 }
 
 @media (max-width: 620px) {
@@ -481,21 +431,12 @@ kbd { display: inline-block; min-width: 22px; padding: 3px 5px; border: 1px soli
   .delay-control { grid-template-columns: 125px 1fr; }
   .request-grid { grid-template-columns: 1fr; }
   .request-card { min-height: 0; }
-  .guard-reminder { right: 12px; bottom: 155px; gap: 9px; width: calc(100vw - 24px); padding: 10px; }
-  .guard-reminder-icon { flex-basis: 34px; height: 34px; }
-  .guard-reminder-copy small { display: none; }
-  .guard-reminder-actions { gap: 5px; }
-  .guard-reminder-actions button { min-height: 34px; padding: 7px 9px; font-size: 9px; }
-  .guard-layer { place-items: end center; padding: 0; background: linear-gradient(to top, rgba(3,8,6,.78), transparent 82%); }
-  .guard-layer .validation-modal { width: 100%; max-height: 76dvh; padding: 17px 16px calc(17px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 18px 18px 0 0; }
+  .campfire-validation-overlay { right: 12px; bottom: 74px; width: calc(100vw - 24px); max-height: calc(100dvh - 148px); padding: 16px; }
   .validation-heading { gap: 10px; }
   .validation-icon { flex-basis: 37px; height: 37px; }
   .validation-icon svg { width: 19px; }
-  .guard-minimize { width: 36px; min-height: 36px; padding: 0; }
-  .guard-minimize span { display: none; }
   .confirmation-layout { grid-template-columns: 1fr; }
   .confirmation-card dl, .devil-context { grid-template-columns: 1fr; }
-  .god-progress ol { grid-template-columns: repeat(4, 1fr); gap: 8px 0; }
   .progress-dock { right: 12px; width: calc(100vw - 24px); }
   .shortcut-popover { top: 62px; right: 10px; width: calc(100vw - 20px); }
   .toast { right: 12px; bottom: 155px; max-width: calc(100vw - 24px); }

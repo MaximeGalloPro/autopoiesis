@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { EvolutionCompletionOverlay, EvolutionCompletionReminder, ValidationOverlay, ValidationReminder } from "../src/components/ValidationOverlay";
+import { automaticContinuationKey, ValidationOverlay } from "../src/components/ValidationOverlay";
 import type { EvolutionCompletion, ValidationPrompt } from "../src/protocol";
 
 const request = {
@@ -17,23 +18,34 @@ const request = {
 };
 
 describe("interface de validation", () => {
-  test("rappelle qu’une seule proposition est traitée et offre aucune/arrêt", () => {
+  test("ne conserve aucune couche de garde qui capte la carte entière", () => {
+    const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+    expect(styles).toContain(".campfire-validation-overlay { position: fixed;");
+    expect(styles).not.toContain(".guard-layer");
+    expect(styles).not.toContain(".validation-modal");
+  });
+
+  test("garde la confirmation dans un panneau refermable, sans garde plein écran ni reprise", () => {
     const prompt: ValidationPrompt = {
       kind: "feature",
-      stage: "choose",
+      stage: "confirm",
       day: 3,
       simulation_cycle: 7200,
       requests: [request],
-      allowed_commands: ["1", "n", "q"],
+      selected_request_id: request.request_id,
+      allowed_commands: ["a", "r", "b", "q"],
     };
-    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} onMinimize={() => undefined} />);
-    expect(html).toContain("Les autres resteront pending");
-    expect(html).toContain("Aucune évolution");
-    expect(html).toContain("Arrêter le run");
-    expect(html).toContain("Nouvelle demande · Ada");
+    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} onClose={() => undefined} />);
+    expect(html).toContain("campfire-validation-overlay");
+    expect(html).toContain("Fermer la validation");
+    expect(html).toContain("Approuver");
+    expect(html).toContain("Refuser");
+    expect(html).toContain("Arrêter");
     expect(html).toContain("Changement proposé");
-    expect(html).toContain("Réduire la fenêtre de décision");
-    expect(html).not.toContain("aria-modal=\"true\"");
+    expect(html).not.toContain("guard-layer");
+    expect(html).not.toContain("Reprendre");
+    expect(html).not.toContain("Le moteur reste en pause");
   });
 
   test("présente le fondement et la pression du Diable sans option aucune", () => {
@@ -47,32 +59,28 @@ describe("interface de validation", () => {
       real_world_basis: "Le froid réduit les rendements.",
       future_pressure: "Préparer une isolation testable.",
     };
-    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} onMinimize={() => undefined} />);
+    const html = renderToStaticMarkup(<ValidationOverlay prompt={prompt} sendCommand={async () => true} onClose={() => undefined} />);
     expect(html).toContain("Fondement réel");
     expect(html).toContain("Pression future");
     expect(html).not.toContain("Aucune évolution");
   });
 
-  test("propose une reprise compacte sans masquer le monde", () => {
-    const prompt: ValidationPrompt = {
+  test("reprend automatiquement une fenêtre résolue mais jamais une garde non résolue", () => {
+    const complete: ValidationPrompt = {
       kind: "feature",
-      stage: "empty",
+      stage: "complete",
       day: 3,
       simulation_cycle: 7200,
       requests: [],
       allowed_commands: ["o", "q"],
     };
-    const html = renderToStaticMarkup(
-      <ValidationReminder prompt={prompt} sendCommand={async () => true} onOpen={() => undefined} />,
-    );
-    expect(html).toContain("Simulation en attente");
-    expect(html).toContain("Le monde reste entièrement consultable");
-    expect(html).toContain("Reprendre");
-    expect(html).toContain("Détails");
-    expect(html).not.toContain("role=\"dialog\"");
+    const waiting = { ...complete, stage: "confirm" as const, selected_request_id: request.request_id, requests: [request], allowed_commands: ["a", "r", "q"] };
+
+    expect(automaticContinuationKey(complete, null)).toBe("validation:feature:7200:complete");
+    expect(automaticContinuationKey(waiting, null)).toBeNull();
   });
 
-  test("explique clairement un délai dépassé sans présenter une évolution comme active", () => {
+  test("reprend aussi après une évolution terminale, sans offrir un bouton de reprise", () => {
     const completion: EvolutionCompletion = {
       stage: "timed_out",
       request_id: "request-1",
@@ -82,31 +90,7 @@ describe("interface de validation", () => {
       successful: false,
       allowed_commands: ["o", "q"],
     };
-    const html = renderToStaticMarkup(
-      <EvolutionCompletionOverlay completion={completion} sendCommand={async () => true} onMinimize={() => undefined} />,
-    );
-    expect(html).toContain("L’évolution n’a pas été activée");
-    expect(html).toContain("Aucun changement n’est actif");
-    expect(html).toContain("Reprendre la partie");
-    expect(html).toContain("Arrêter la partie");
-    expect(html).not.toContain("Recompiler et reprendre");
-    expect(html).not.toContain("Voulez-vous passer à l’étape suivante");
-  });
-
-  test("réserve la recompilation au transfert réellement réussi", () => {
-    const completion: EvolutionCompletion = {
-      stage: "complete",
-      request_id: "request-1",
-      message: "La nouvelle évolution est active",
-      detail: "Une version vérifiée est prête.",
-      elapsed_seconds: 12,
-      successful: true,
-      allowed_commands: ["o", "q"],
-    };
-    const html = renderToStaticMarkup(
-      <EvolutionCompletionReminder completion={completion} sendCommand={async () => true} onOpen={() => undefined} />,
-    );
-    expect(html).toContain("Recompiler et reprendre");
-    expect(html).toContain("Nouvelle évolution prête");
+    expect(automaticContinuationKey(null, completion)).toBe("completion:request-1:timed_out");
+    expect(automaticContinuationKey(null, { ...completion, allowed_commands: ["q"] })).toBeNull();
   });
 });

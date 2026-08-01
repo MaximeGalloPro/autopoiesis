@@ -21,22 +21,18 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useReducer, useState } from "react";
+import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
 import {
   CampfireCallAlert,
   CampfireCardsOverlay,
   campfireCardsFromPrompt,
+  campfireNeedsAttention,
   campfireOverlayReducer,
 } from "./components/CampfireCardsOverlay";
 import { Inspector } from "./components/Inspector";
 import { ObservatoryNavigation, type ObservatoryView } from "./components/ObservatoryNavigation";
 import { ProgressDock } from "./components/ProgressDock";
-import {
-  EvolutionCompletionOverlay,
-  EvolutionCompletionReminder,
-  ValidationOverlay,
-  ValidationReminder,
-} from "./components/ValidationOverlay";
+import { automaticContinuationKey, ValidationOverlay } from "./components/ValidationOverlay";
 import type { EntitySelection } from "./components/WorldScene";
 import { useSimulation } from "./hooks/useSimulation";
 import { seasonLabels } from "./lib/format";
@@ -150,7 +146,6 @@ export default function App() {
   const [delayDraft, setDelayDraft] = useState(500);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showServices, setShowServices] = useState(false);
-  const [openGuardKey, setOpenGuardKey] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ObservatoryView>("characters");
   // La carte est le plan principal. Les informations secondaires ne prennent
   // de la place qu'après une demande explicite via la navigation ou une entité.
@@ -158,6 +153,7 @@ export default function App() {
   const [observationMode, setObservationMode] = useState(false);
   const [campfireOverlay, dispatchCampfireOverlay] = useReducer(campfireOverlayReducer, { open: false });
   const [apiCallCounter, setApiCallCounter] = useState(initialApiCallCounter);
+  const continuedGuards = useRef(new Set<string>());
 
   useEffect(() => {
     if (snapshot) setDelayDraft(snapshot.delay_ms);
@@ -170,6 +166,15 @@ export default function App() {
       data.card_cycle?.total_api_calls ?? snapshot?.total_api_calls,
     ));
   }, [data.activity, data.card_cycle?.total_api_calls, snapshot?.total_api_calls]);
+
+  const continuationKey = automaticContinuationKey(data.validation, data.evolution_completion);
+  useEffect(() => {
+    if (!continuationKey || continuedGuards.current.has(continuationKey)) return;
+    continuedGuards.current.add(continuationKey);
+    void sendCommand({ type: "simulation.resume" }).then((accepted) => {
+      if (!accepted) continuedGuards.current.delete(continuationKey);
+    });
+  }, [continuationKey, sendCommand]);
 
   useEffect(() => {
     if (!snapshot || selected) return;
@@ -219,16 +224,13 @@ export default function App() {
   }, [snapshot, data.engine.status, observationMode, sendCommand]);
 
   const dayProgress = snapshot ? Math.max(0, Math.min(100, (snapshot.cycle_in_day / snapshot.cycles_per_day) * 100)) : 0;
-  const validationGuardKey = data.validation
-    ? `validation:${data.validation.kind}:${data.validation.simulation_cycle}`
-    : null;
   const campfireCards = campfireCardsFromPrompt(data.validation);
   const campfireHasAlert = campfireCards.length === 3;
   const hasCallMilestone = data.card_cycle
     ? !!data.card_cycle.call_alert && !data.card_cycle.call_alert.acknowledged
     : (!snapshot?.call_alert?.acknowledged && snapshot?.call_alert?.call_count === apiCallCounter.total)
       || apiCallCounter.has_milestone_alert;
-  const campfireSignal = campfireHasAlert || hasCallMilestone;
+  const campfireSignal = campfireNeedsAttention(data.validation) || hasCallMilestone;
   useEffect(() => {
     if (!campfireSignal) dispatchCampfireOverlay({ type: "cards_closed" });
   }, [campfireSignal]);
@@ -236,9 +238,6 @@ export default function App() {
     dispatchCampfireOverlay({ type: "card_chosen" });
     void sendCommand({ type: "validation.select", request_id: requestId });
   };
-  const completionGuardKey = data.evolution_completion
-    ? `completion:${data.evolution_completion.request_id}:${data.evolution_completion.stage}`
-    : null;
   const selectEntity = (selection: EntitySelection) => {
     setSelected(selection);
     setActiveView("characters");
@@ -379,8 +378,10 @@ export default function App() {
 
       <ProgressDock
         activity={data.activity}
+        validation={data.validation}
         evolution={data.evolution}
         recompilation={data.recompilation}
+        completion={data.evolution_completion}
       />
       {campfireOverlay.open && campfireHasAlert && (
         <CampfireCardsOverlay
@@ -391,18 +392,19 @@ export default function App() {
           onClose={() => dispatchCampfireOverlay({ type: "cards_closed" })}
         />
       )}
-      {campfireOverlay.open && !campfireHasAlert && hasCallMilestone && (
+      {campfireOverlay.open && !campfireHasAlert && campfireNeedsAttention(data.validation) && data.validation && (
+        <ValidationOverlay
+          prompt={data.validation}
+          sendCommand={sendCommand}
+          onClose={() => dispatchCampfireOverlay({ type: "cards_closed" })}
+        />
+      )}
+      {campfireOverlay.open && !campfireNeedsAttention(data.validation) && hasCallMilestone && (
         <CampfireCallAlert
           onAcknowledge={() => void sendCardCycleCommand({ type: "acknowledge_call_alert" })}
           onClose={() => dispatchCampfireOverlay({ type: "cards_closed" })}
         />
       )}
-      {data.validation && validationGuardKey && !campfireHasAlert && (openGuardKey === validationGuardKey
-        ? <ValidationOverlay prompt={data.validation} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
-        : <ValidationReminder prompt={data.validation} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(validationGuardKey)} />)}
-      {data.evolution_completion && completionGuardKey && (openGuardKey === completionGuardKey
-        ? <EvolutionCompletionOverlay completion={data.evolution_completion} sendCommand={sendCommand} onMinimize={() => setOpenGuardKey(null)} />
-        : <EvolutionCompletionReminder completion={data.evolution_completion} sendCommand={sendCommand} onOpen={() => setOpenGuardKey(completionGuardKey)} />)}
       {showShortcuts && <ShortcutHelp onClose={() => setShowShortcuts(false)} />}
       {showServices && <ServiceControls services={services} onToggle={(service, enabled) => void setService(service, enabled)} onClose={() => setShowServices(false)} />}
       {commandError && <div className="toast error" role="alert"><TriangleAlert />{commandError}<button onClick={dismissCommandError} aria-label="Fermer">×</button></div>}
