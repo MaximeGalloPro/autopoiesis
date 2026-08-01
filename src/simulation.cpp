@@ -1947,26 +1947,17 @@ bool Simulation::advance_validation(const ValidationGate& validation_gate,IUserI
 SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
                                     const ValidationGate& validation_gate,
                                     IUserInterface* interface){
-  if(civilization_.status==CivilizationStatus::Extinct){
-    logger_.message("Civilisation déjà éteinte : redémarrage refusé sans --new-world.");
-    save_checkpoint();
-    return {false,0};
-  }
   for(int i=0;i<days;++i){
     if(!advance_reporting(interface))break;
     if(!run_day(interface))break;
     const bool period_complete=day_%report_every_days_==0;
-    bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
-    if(all_dead){
-      logger_.message("Simulation arrêtée : tous les personnages sont morts.");
-      if(!interface)render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
-      save_checkpoint();
-      break;
-    }
     if(!interface&&render_every_days>0&&day_%render_every_days==0)
       render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
 
-    if(period_complete)schedule_ai_window(static_cast<bool>(validation_gate));
+    // Une civilisation éteinte reste observable et son monde continue d'évoluer,
+    // mais elle ne peut plus produire de demandes IA faute de porte-parole vivant.
+    if(period_complete&&civilization_.status==CivilizationStatus::Active)
+      schedule_ai_window(static_cast<bool>(validation_gate));
     if(!advance_reporting(interface))break;
     save_checkpoint();
     if(!advance_validation(validation_gate,interface,delay_ms))break;

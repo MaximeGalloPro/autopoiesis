@@ -14,6 +14,7 @@ struct SimulationTestAccess {
   static Agent& agent(Simulation& simulation,std::size_t index) { return simulation.agents_.at(index); }
   static void update_population(Simulation& simulation) { simulation.update_population(); }
   static void set_day(Simulation& simulation,int day) { simulation.day_=day;simulation.date_=date_from_absolute_day(day); }
+  static void set_cycles_per_day(Simulation& simulation,int cycles) { simulation.cycles_per_day_=cycles; }
 };
 }
 
@@ -127,6 +128,15 @@ int main() {
   assert(simulation.civilization().extinction_day==124);
   assert(simulation.civilization().restart_contract=="--new-world");
 
+  // L'extinction termine une civilisation, pas l'horloge ni l'écologie du monde.
+  SimulationTestAccess::set_cycles_per_day(simulation,1);
+  const int extinct_cycle=simulation.simulation_cycle();
+  const int extinct_day=simulation.date().absolute_day;
+  simulation.run(1,0,0);
+  assert(simulation.simulation_cycle()==extinct_cycle+1);
+  assert(simulation.date().absolute_day==extinct_day+1);
+  assert(simulation.civilization().status==CivilizationStatus::Extinct);
+
   simulation.save_checkpoint();
   Logger restored_logger(root.string());std::mt19937 restored_rng(7);LocalDecider restored_decider(restored_rng);
   Simulation restored(7,restored_decider,restored_logger,nullptr,checkpoint.string());
@@ -147,8 +157,9 @@ int main() {
     SimulationTestAccess::agent(final_day,index).age_days=99;
 
   final_day.run(3,0,0);
-  assert(final_day.simulation_cycle()==1);
+  assert(final_day.simulation_cycle()==3);
   assert(std::ranges::none_of(final_day.agents(),[](const Agent& agent){return agent.alive;}));
+  assert(final_day.civilization().status==CivilizationStatus::Extinct);
   assert(reporter.reports==0&&reporter.requests==0);
   assert(std::filesystem::exists(root/"final-day-state.json"));
 

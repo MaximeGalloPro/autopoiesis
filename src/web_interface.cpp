@@ -55,7 +55,9 @@ json agent_json(const Agent& agent) {
   if(agent.shelter_construction)
     shelter_construction={{"position",position_json(agent.shelter_construction->position)},
                           {"progress",agent.shelter_construction->progress}};
-  return {{"id",agent.id},{"name",agent.name},{"family_id",agent.family_id},{"position",position_json(agent.position)},
+  return {{"id",agent.id},{"name",agent.name},{"family_id",agent.family_id},
+          {"age_days",agent.age_days},{"generation",agent.generation},
+          {"position",position_json(agent.position)},
           {"health",agent.health},{"hunger",agent.hunger},{"thirst",agent.thirst},
           {"fatigue",agent.fatigue},{"personality",personality_json(agent.personality)},
           {"attributes",attributes_json(agent.attributes)},{"memories",std::move(memories)},
