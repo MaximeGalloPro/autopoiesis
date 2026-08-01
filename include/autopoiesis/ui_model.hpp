@@ -22,6 +22,10 @@ struct UiCell {
   int iron_ore{};
   int stored_iron_ore{};
   std::optional<Building> building;
+  std::optional<Position> camp_chest_position;
+  int camp_chest_level{};
+  int camp_chest_occupation{};
+  int camp_chest_capacity{};
 };
 
 struct UiAgent {

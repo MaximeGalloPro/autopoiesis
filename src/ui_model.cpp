@@ -67,7 +67,9 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                               world.stored_wood(position),world.stored_branches(position),
                               world.cooked_stored_food(position),world.stored_crafted_items(position),
                               world.iron_ore(position),world.stored_iron_ore(position),
-                              world.building(position)});
+                              world.building(position),world.camp_chest_position(position),
+                              world.camp_chest_level(position),world.camp_chest_occupation(position),
+                              world.camp_chest_capacity(position)});
   }
   snapshot.agents.reserve(agents.size());
   for(const auto& agent:agents)

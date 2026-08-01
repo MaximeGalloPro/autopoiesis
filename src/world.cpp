@@ -324,10 +324,12 @@ void World::restore_checkpoint(const json& state) {
       const Position camp{value.at("x").get<int>(),value.at("y").get<int>()};
       const Position chest_position{chest.at("x").get<int>(),chest.at("y").get<int>()};
       const int chest_level=chest.value("level",1);
-      if(!cell.campfire||!in_bounds(chest_position)||distance(camp,chest_position)!=1||
-         chest_level<1||chest_level>2)throw std::runtime_error("checkpoint camp chest is invalid");
-      cell.camp_chest_position=chest_position;
-      cell.camp_chest_level=chest_level;
+      if(cell.campfire){
+        if(!in_bounds(chest_position)||distance(camp,chest_position)!=1||
+           chest_level<1||chest_level>2)throw std::runtime_error("checkpoint camp chest is invalid");
+        cell.camp_chest_position=chest_position;
+        cell.camp_chest_level=chest_level;
+      }
     }
     for(const auto& crafted:value.value("crafted_stockpile",json::array())) {
       const auto& item=crafted.at("item");

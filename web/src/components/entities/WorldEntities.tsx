@@ -423,9 +423,19 @@ export function WorldEntities({
   campfireAlert?: boolean;
   onCampfireClick?: () => void;
 }) {
+  const chests = snapshot.cells.filter((cell) => cell.camp_chest).map((cell) => {
+    const chest = cell.camp_chest!;
+    return (
+      <group key={`chest-${cell.position.x}-${cell.position.y}`} position={worldPosition(chest.position, 0.16)}>
+        <mesh position={[0, 0.16, 0]}><boxGeometry args={[0.48, 0.28, 0.38]} /><meshStandardMaterial color={chest.level > 1 ? "#9a693b" : "#725033"} roughness={0.9} /></mesh>
+        <mesh position={[0, 0.32, 0]}><boxGeometry args={[0.5, 0.08, 0.4]} /><meshStandardMaterial color={chest.level > 1 ? "#d29a50" : "#a8753e"} roughness={0.8} /></mesh>
+      </group>
+    );
+  });
   return <>
     <ShelterModels cells={snapshot.cells} />
     <ResourceMarkers cells={snapshot.cells} />
+    {chests}
     <CampfireModels cells={snapshot.cells} hasAlert={campfireAlert} onCampfireClick={onCampfireClick} />
     <AgentModels agents={snapshot.agents} selected={selected} onSelect={onSelect} />
     <AnimalModels animals={snapshot.animals} selected={selected} onSelect={onSelect} />

@@ -45,8 +45,8 @@ class World {
   std::optional<Position> nearby_campfire(Position p) const;
   std::optional<Position> primary_campfire() const { return primary_campfire_; }
   bool place_campfire(Position p);
-  static constexpr int initial_camp_chest_capacity = 24;
-  static constexpr int upgraded_camp_chest_capacity = 48;
+  static constexpr int initial_camp_chest_capacity = 48;
+  static constexpr int upgraded_camp_chest_capacity = 96;
   static constexpr int camp_chest_upgrade_wood_cost = 2;
   static constexpr int camp_chest_upgrade_branch_cost = 2;
   std::optional<Position> camp_chest_position(Position campfire_position) const;

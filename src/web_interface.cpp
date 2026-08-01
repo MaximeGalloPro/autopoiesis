@@ -255,7 +255,11 @@ json web_snapshot_json(const UiSnapshot& snapshot) {
                      {"terrain",terrain_name(cell.terrain)},{"food",cell.food},
                      {"wood",cell.wood},{"fibers",cell.fibers},
                      {"shelter_level",cell.shelter_level},{"branches",cell.branches},
-                     {"campfire",cell.campfire},{"stored_food",cell.stored_food}});
+                     {"campfire",cell.campfire},{"stored_food",cell.stored_food},
+                     {"camp_chest",cell.camp_chest_position?json{
+                       {"position",position_json(*cell.camp_chest_position)},
+                       {"level",cell.camp_chest_level},{"occupation",cell.camp_chest_occupation},
+                       {"capacity",cell.camp_chest_capacity}}:json(nullptr)}});
   json agents=json::array();
   for(const auto& agent:snapshot.agents)
     agents.push_back({{"state",agent_json(agent.state)},{"mood",agent.mood},

@@ -70,6 +70,7 @@ export interface WorldCell {
   branches: number;
   campfire: boolean;
   stored_food: number;
+  camp_chest?: { position: Position; level: number; occupation: number; capacity: number } | null;
 }
 
 export interface Personality {
