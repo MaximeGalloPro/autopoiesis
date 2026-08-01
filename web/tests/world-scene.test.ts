@@ -31,5 +31,7 @@ describe("scène du monde", () => {
     expect(entitiesSource).toContain("agent-info-card");
     expect(entitiesSource).toContain('<div className="agent-info-card__name">{agent.name}</div>');
     expect(entitiesSource).toContain('<div className="agent-info-card__action">{actionWordFor(agent)}</div>');
+    expect(entitiesSource).toContain('if (agent.project.status === "blocked") return "Retour";');
+    expect(entitiesSource).not.toContain('marker === "blocked"');
   });
 });

@@ -254,13 +254,13 @@ function CampfireModels({
   ));
 }
 
-type AgentMarker = "rest" | "provisions" | "materials" | "project" | "blocked" | null;
+type AgentMarker = "rest" | "provisions" | "materials" | "project" | null;
 
 function actionWordFor(agent: AgentState): string {
   if (agent.sleeping_days > 0 || agent.fatigue >= 85) return "Repos";
   if (agent.carried_food) return "Retour";
   if (agent.wood_inventory > 0 || agent.branch_inventory > 0) return "Transport";
-  if (agent.project.status === "blocked") return "Bloqué";
+  if (agent.project.status === "blocked") return "Retour";
   if (agent.project.status === "active") return "Construire";
   return "Observer";
 }
@@ -269,7 +269,6 @@ function markerFor(agent: AgentState): AgentMarker {
   if (agent.sleeping_days > 0 || agent.fatigue >= 85) return "rest";
   if (agent.carried_food) return "provisions";
   if (agent.wood_inventory > 0 || agent.branch_inventory > 0) return "materials";
-  if (agent.project.status === "blocked") return "blocked";
   if (agent.project.status === "active") return "project";
   return null;
 }
@@ -278,8 +277,7 @@ function AgentActivityMarker({ agent }: { agent: AgentState }) {
   const marker = markerFor(agent);
   if (!marker) return null;
   const color = marker === "rest" ? "#94c6db"
-    : marker === "blocked" ? "#d89062"
-      : marker === "materials" ? "#b78558"
+    : marker === "materials" ? "#b78558"
         : marker === "provisions" ? "#e98562" : "#f0cb70";
   return (
     <Float speed={2.2} rotationIntensity={0.08} floatIntensity={0.12}>
@@ -291,7 +289,6 @@ function AgentActivityMarker({ agent }: { agent: AgentState }) {
         {marker === "materials" && <mesh rotation={[0, 0, Math.PI / 2]}><boxGeometry args={[0.22, 0.07, 0.07]} /><meshStandardMaterial color={color} roughness={0.8} /></mesh>}
         {marker === "provisions" && <mesh><sphereGeometry args={[0.1, 8, 6]} /><meshStandardMaterial color={color} roughness={0.55} /></mesh>}
         {marker === "project" && <mesh rotation={[0, Math.PI / 4, 0]}><octahedronGeometry args={[0.11, 0]} /><meshStandardMaterial color={color} emissive="#695015" emissiveIntensity={0.25} roughness={0.5} /></mesh>}
-        {marker === "blocked" && <mesh rotation={[0, 0, Math.PI / 4]}><boxGeometry args={[0.13, 0.13, 0.08]} /><meshStandardMaterial color={color} roughness={0.72} /></mesh>}
       </group>
     </Float>
   );
