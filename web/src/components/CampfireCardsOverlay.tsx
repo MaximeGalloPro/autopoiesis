@@ -23,6 +23,11 @@ export function campfireCardsFromPrompt(prompt: ValidationPrompt | null): Evolut
   return prompt.requests.every((request) => request.status === "pending") ? prompt.requests : [];
 }
 
+/** Toute décision humaine ouverte est signalée au foyer, sans imposer d'écran. */
+export function campfireNeedsAttention(prompt: ValidationPrompt | null): boolean {
+  return prompt?.stage === "choose" || prompt?.stage === "confirm";
+}
+
 export function campfireOverlayReducer(
   state: CampfireOverlayState,
   action: CampfireOverlayAction,
@@ -52,7 +57,7 @@ export function CampfireCardsOverlay({
     <section className="campfire-cards-overlay" role="dialog" aria-label="Choisir une proposition au feu de camp">
       <header className="campfire-cards-heading">
         <div><Flame aria-hidden="true" /><span><small>Feu de camp</small><strong>Choisir une proposition</strong></span></div>
-        {onClose && <button type="button" className="campfire-cards-close" onClick={onClose}>Observer le monde</button>}
+        {onClose && <button type="button" className="campfire-cards-close" onClick={onClose}>Fermer</button>}
       </header>
       {hasCallMilestone && (
         <div className="campfire-call-alert" role="status">
@@ -80,7 +85,7 @@ export function CampfireCallAlert({ onAcknowledge, onClose }: {
     <section className="campfire-cards-overlay campfire-call-only" role="dialog" aria-label="Alerte d’appels IA au feu de camp">
       <header className="campfire-cards-heading">
         <div><Flame aria-hidden="true" /><span><small>Feu de camp</small><strong>Palier d’appels atteint</strong></span></div>
-        <button type="button" className="campfire-cards-close" onClick={onClose}>Observer le monde</button>
+        <button type="button" className="campfire-cards-close" onClick={onClose}>Fermer</button>
       </header>
       <p>Aucune règle du monde n’est modifiée. Confirmez simplement avoir pris connaissance du palier avant la prochaine demande de cartes.</p>
       <div className="campfire-call-actions"><button type="button" onClick={onAcknowledge}>J’ai pris connaissance</button></div>

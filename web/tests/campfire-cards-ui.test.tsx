@@ -6,6 +6,7 @@ import {
   CampfireCallAlert,
   CampfireCardsOverlay,
   campfireCardsFromPrompt,
+  campfireNeedsAttention,
   campfireOverlayReducer,
 } from "../src/components/CampfireCardsOverlay";
 import {
@@ -42,6 +43,21 @@ describe("cartes au feu de camp", () => {
     expect(campfireCardsFromPrompt(prompt([card(1), card(2), card(3)]))).toHaveLength(CAMPFIRE_CARD_COUNT);
     expect(campfireCardsFromPrompt(prompt([card(1), card(2)]))).toEqual([]);
     expect(campfireCardsFromPrompt({ ...prompt([card(1), card(2), card(3)]), kind: "devil" })).toEqual([]);
+  });
+
+  test("la même alerte du feu mène aux cartes, à la confirmation ou à la contrainte", () => {
+    const cards = prompt([card(1), card(2), card(3)]);
+    const confirmation: ValidationPrompt = {
+      ...cards,
+      stage: "confirm",
+      selected_request_id: "card-1",
+      allowed_commands: ["a", "r", "q"],
+    };
+
+    expect(campfireNeedsAttention(cards)).toBe(true);
+    expect(campfireNeedsAttention(confirmation)).toBe(true);
+    expect(campfireNeedsAttention({ ...cards, kind: "devil", requests: [card(1)] })).toBe(true);
+    expect(campfireNeedsAttention({ ...cards, stage: "complete", requests: [], allowed_commands: ["o", "q"] })).toBe(false);
   });
 
   test("ouvre l'overlay au clic de l'alerte du feu et le referme dès le choix", () => {
