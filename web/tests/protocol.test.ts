@@ -72,6 +72,28 @@ describe("protocole du moteur", () => {
     });
   });
 
+  test("transmet la preuve autoritaire d’extinction sans l’inférer du client", () => {
+    const snapshot = worldSnapshot({
+      civilization: {
+        status: "extinct",
+        extinction_day: 124,
+        restart_contract: "--new-world",
+      },
+    });
+
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "snapshot", payload: snapshot })}`))
+      .toMatchObject({
+        type: "state",
+        payload: { civilization: { status: "extinct", extinction_day: 124, restart_contract: "--new-world" } },
+      });
+
+    expect(parseBackendEvent(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "snapshot",
+      payload: { ...snapshot, civilization: { status: "extinct", extinction_day: "124", restart_contract: "--new-world" } },
+    })}`)).toBeNull();
+  });
+
   test("ignore les métadonnées facultatives de population invalides", () => {
     const snapshot = worldSnapshot();
     const rawSnapshot = {

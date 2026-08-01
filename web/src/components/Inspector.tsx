@@ -131,7 +131,7 @@ function AnimalView({ animal }: { animal: AnimalState }) {
   );
 }
 
-function CampView({ snapshot }: { snapshot: WorldSnapshot }) {
+function CampView({ snapshot, onNewCivilization }: { snapshot: WorldSnapshot; onNewCivilization?: () => void }) {
   const campfires = snapshot.cells.filter((cell) => cell.campfire);
   const storedFood = snapshot.cells.reduce((total, cell) => total + cell.stored_food, 0);
   const residents = snapshot.agents.filter((agent) => agent.alive);
@@ -185,7 +185,12 @@ function CampView({ snapshot }: { snapshot: WorldSnapshot }) {
       {campStatus.population.extinct && <section className="detail-section extinction-state" aria-label="État d’extinction">
         <div className="section-title"><Users size={15} /> Extinction constatée</div>
         <p>La simulation est terminée ; son état reste seulement observable.</p>
-        <button type="button" disabled aria-describedby="new-civilization-unavailable">Nouvelle civilisation</button>
+        <button
+          type="button"
+          disabled={!campStatus.newCivilization.available || !onNewCivilization}
+          onClick={campStatus.newCivilization.available ? onNewCivilization : undefined}
+          aria-describedby="new-civilization-unavailable"
+        >Nouvelle civilisation</button>
         <small id="new-civilization-unavailable">{campStatus.newCivilization.reason}</small>
       </section>}
       <section className="detail-section camp-encyclopedia" aria-label="Encyclopédie du foyer">
@@ -286,11 +291,12 @@ function WorldView({ snapshot }: { snapshot: WorldSnapshot }) {
   );
 }
 
-export function Inspector({ snapshot, selected, onSelect, view }: {
+export function Inspector({ snapshot, selected, onSelect, view, onNewCivilization }: {
   snapshot: WorldSnapshot;
   selected: EntitySelection | null;
   onSelect: (selection: EntitySelection) => void;
   view: ObservatoryView;
+  onNewCivilization?: () => void;
 }) {
   const [tab, setTab] = useState<"vitals" | "profile" | "social" | "events">("vitals");
   const agent = selected?.kind === "agent" ? snapshot.agents.find((candidate) => candidate.id === selected.id) : undefined;
@@ -348,7 +354,7 @@ export function Inspector({ snapshot, selected, onSelect, view }: {
         )}
       </div>
       </>}
-      {view === "camp" && <div className="inspector-content"><CampView snapshot={snapshot} /></div>}
+      {view === "camp" && <div className="inspector-content"><CampView snapshot={snapshot} onNewCivilization={onNewCivilization} /></div>}
       {view === "history" && <div className="inspector-content"><HistoryView snapshot={snapshot} /></div>}
       {view === "maps" && <div className="inspector-content"><MapsView snapshot={snapshot} selected={selected} /></div>}
       {view === "world" && <div className="inspector-content"><WorldView snapshot={snapshot} /></div>}

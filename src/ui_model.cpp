@@ -46,11 +46,13 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                             const std::vector<Agent>& agents,
                             const std::vector<std::string>& recent_events,
                             int cycle_in_day, int cycles_per_day,
-                            const std::vector<DangerEvent>& dangers) {
+                            const std::vector<DangerEvent>& dangers,
+                            const CivilizationState& civilization) {
   UiSnapshot snapshot;
   snapshot.date=date;
   snapshot.simulation_cycle=simulation_cycle;
   snapshot.climate=climate;
+  snapshot.civilization=civilization;
   snapshot.ecology=world.ecology();
   snapshot.cycle_in_day=cycle_in_day;
   snapshot.cycles_per_day=cycles_per_day;

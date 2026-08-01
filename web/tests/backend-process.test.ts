@@ -100,6 +100,86 @@ describe("processus backend", () => {
     expect(manager.snapshot().engine).toMatchObject({ status: "stopped", restarts: 0, last_error: null });
   });
 
+  test("ne crée un nouveau monde qu’après une extinction attestée et un arrêt propre", async () => {
+    let finishFirst!: (code: number) => void;
+    const firstExit = new Promise<number>((resolve) => { finishFirst = resolve; });
+    const launchedArguments: string[][] = [];
+    const writes: string[] = [];
+    let launch = 0;
+    const manager = new BackendProcessManager({
+      autoRestart: true,
+      spawn: (_binaryPath, _projectRoot, binaryArgs) => {
+        launchedArguments.push(binaryArgs);
+        launch += 1;
+        return {
+          pid: launch,
+          stdin: {
+            write(data) { writes.push(String(data)); return String(data).length; },
+            flush() { return 0; },
+            end() {},
+          },
+          stdout: new ReadableStream({ start(controller) { controller.close(); } }),
+          stderr: new ReadableStream({ start(controller) { controller.close(); } }),
+          exited: launch === 1 ? firstExit : new Promise(() => undefined),
+          kill() {},
+        };
+      },
+    });
+
+    await manager.start();
+    expect(manager.requestNewWorldRestart()).toBe(false);
+    expect(writes).toEqual([]);
+
+    manager.acceptStdout(`AUTOPOIESIS_EVENT ${JSON.stringify({
+      version: 1,
+      type: "snapshot",
+      payload: worldSnapshot({
+        agents: [{
+          state: { id: "ada", name: "Ada", alive: false },
+          mood: "Sans vie",
+          available_actions: [],
+        }] as unknown as ReturnType<typeof worldSnapshot>["agents"],
+        civilization: { status: "extinct", extinction_day: 124, restart_contract: "--new-world" },
+      }),
+    })}`);
+    expect(manager.requestNewWorldRestart()).toBe(true);
+    expect(writes).toEqual(["{\"version\":1,\"command\":\"stop\"}\n"]);
+
+    finishFirst(0);
+    await Bun.sleep(1);
+    expect(launchedArguments).toEqual([[], ["--new-world"]]);
+    expect(manager.snapshot().engine.status).toBe("running");
+  });
+
+  test("n’ajoute jamais --new-world à une relance automatique", async () => {
+    let finish!: (code: number) => void;
+    const exited = new Promise<number>((resolve) => { finish = resolve; });
+    const launchedArguments: string[][] = [];
+    let launch = 0;
+    const manager = new BackendProcessManager({
+      binaryArgs: ["--new-world"],
+      autoRestart: true,
+      restartDelayMs: 1,
+      spawn: (_binaryPath, _projectRoot, binaryArgs) => {
+        launchedArguments.push(binaryArgs);
+        launch += 1;
+        return {
+          pid: launch,
+          stdin: { write: () => 0, flush: () => 0, end() {} },
+          stdout: new ReadableStream({ start(controller) { controller.close(); } }),
+          stderr: new ReadableStream({ start(controller) { controller.close(); } }),
+          exited: launch === 1 ? exited : new Promise(() => undefined),
+          kill() {},
+        };
+      },
+    });
+
+    await manager.start();
+    finish(1);
+    await Bun.sleep(5);
+    expect(launchedArguments).toEqual([["--new-world"], []]);
+  });
+
   test("projette le cycle persistant sans reboucler sa propre publication", async () => {
     const manager = new BackendProcessManager({ autoRestart: false });
     const bridge = new BackendCardCycleBridge(manager, new CardCycleCoordinator());

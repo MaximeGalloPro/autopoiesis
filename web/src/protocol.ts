@@ -62,6 +62,13 @@ export interface ClimateState {
   condition: string;
 }
 
+/** Preuve de cycle de vie fournie par le moteur C++ dans son instantané. */
+export interface CivilizationState {
+  status: "active" | "extinct";
+  extinction_day: number;
+  restart_contract: "--new-world";
+}
+
 export interface WorldCell {
   position: Position;
   terrain: Terrain;
@@ -170,6 +177,8 @@ export interface WorldSnapshot {
   date: CalendarDate;
   simulation_cycle: number;
   climate: ClimateState;
+  /** Absente seulement avec un ancien backend : elle n'autorise alors jamais un redémarrage. */
+  civilization?: CivilizationState;
   phase: DayPhase;
   cycle_in_day: number;
   cycles_per_day: number;
@@ -330,7 +339,9 @@ export type EngineCommand =
   | { type: "validation.back" }
   | { type: "validation.none" }
   | { type: "simulation.resume" }
-  | { type: "simulation.stop" };
+  | { type: "simulation.stop" }
+  /** Commande humaine du BFF ; elle n'est jamais envoyée directement au moteur courant. */
+  | { type: "civilization.new_world" };
 
 export const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {
   state: "running",
@@ -352,6 +363,7 @@ export function isWorldSnapshot(value: unknown): value is WorldSnapshot {
       && candidate.call_alert.call_count % 10 === 0
       && candidate.call_alert.call_count <= candidate.total_api_calls
       && typeof candidate.call_alert.acknowledged === "boolean");
+  const civilizationValid = candidate.civilization === undefined || isCivilizationState(candidate.civilization);
   return candidate.width === WORLD_WIDTH && candidate.height === WORLD_HEIGHT
     && Array.isArray(candidate.cells) && Array.isArray(candidate.agents)
     && Array.isArray(candidate.animals) && Array.isArray(candidate.recent_events)
@@ -359,11 +371,30 @@ export function isWorldSnapshot(value: unknown): value is WorldSnapshot {
     && typeof candidate.paused === "boolean"
     && SIMULATION_SPEEDS.includes(candidate.speed as SimulationSpeed)
     && Number.isInteger(candidate.delay_ms) && (candidate.delay_ms ?? -1) >= 0 && (candidate.delay_ms ?? 10_001) <= 10_000
-    && totalApiCallsValid && callAlertValid;
+    && totalApiCallsValid && callAlertValid && civilizationValid;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isCivilizationState(value: unknown): value is CivilizationState {
+  return isRecord(value)
+    && (value.status === "active" || value.status === "extinct")
+    && Number.isSafeInteger(value.extinction_day)
+    && Number(value.extinction_day) >= 0
+    && value.restart_contract === "--new-world";
+}
+
+function normalizeCivilizationState(value: unknown): CivilizationState | null {
+  if (!isCivilizationState(value)) return null;
+  if (value.status === "active" && value.extinction_day !== 0) return null;
+  if (value.status === "extinct" && value.extinction_day <= 0) return null;
+  return {
+    status: value.status,
+    extinction_day: Number(value.extinction_day),
+    restart_contract: "--new-world",
+  };
 }
 
 function normalizedSeason(value: unknown): Season | null {
@@ -421,11 +452,14 @@ function normalizeSnapshot(value: unknown, runtime: RuntimeStatus): WorldSnapsho
     });
   }
 
-  const { camp_stage: rawCampStage, ...snapshotWithoutCampStage } = value;
+  const { camp_stage: rawCampStage, civilization: rawCivilization, ...snapshotWithoutOptionalMetadata } = value;
   const campStage = normalizedCampStage(rawCampStage);
+  const civilization = rawCivilization === undefined ? undefined : normalizeCivilizationState(rawCivilization);
+  if (rawCivilization !== undefined && civilization === null) return null;
   const snapshot = {
-    ...snapshotWithoutCampStage,
+    ...snapshotWithoutOptionalMetadata,
     ...(campStage === undefined ? {} : { camp_stage: campStage }),
+    ...(civilization === undefined ? {} : { civilization }),
     date: { ...value.date, season },
     agents,
     paused: runtime.paused,

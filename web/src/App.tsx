@@ -327,7 +327,13 @@ export default function App() {
           >{panelCollapsed ? <PanelRightOpen /> : <X />}<span>{panelCollapsed ? "Ouvrir" : "Fermer"}</span></button>
           <div id="observatory-inspector" className="side-panel-content" hidden={panelCollapsed}>
             {snapshot
-              ? <Inspector snapshot={snapshot} selected={selected} onSelect={selectEntity} view={activeView} />
+              ? <Inspector
+                  snapshot={snapshot}
+                  selected={selected}
+                  onSelect={selectEntity}
+                  view={activeView}
+                  onNewCivilization={() => dispatch({ type: "civilization.new_world" })}
+                />
               : <EmptyInspector error={data.engine.last_error} />}
           </div>
         </section>
