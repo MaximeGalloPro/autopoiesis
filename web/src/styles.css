@@ -738,6 +738,21 @@ html, body, #root { height: 100%; overflow: hidden; }
 .camp-summary > span { display: flex; flex-direction: column; gap: 4px; padding: 11px; background: #131e19; }
 .camp-summary small, .world-grid small { color: var(--faint); font-size: 8px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .camp-summary strong { color: var(--accent-bright); font-size: 13px; font-weight: 650; }
+.camp-summary .status-living { color: #8ec7a0; }
+.camp-summary .status-extinct { color: #e18c81; }
+.camp-population .section-title { margin-bottom: 9px; }
+.camp-cohorts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.camp-cohorts > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.camp-cohorts > div + div { padding-left: 10px; border-left: 1px solid var(--line); }
+.camp-cohorts small { color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.camp-cohorts span { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; color: var(--muted); font-size: 9px; }
+.camp-cohorts span strong { color: #d8dfda; font: 10px ui-monospace, monospace; }
+.camp-cohorts .muted { margin: 0; font-size: 9px; line-height: 1.35; }
+.extinction-state { border-color: rgba(211,111,99,.34); background: rgba(211,111,99,.06); }
+.extinction-state .section-title, .extinction-state .section-title svg { color: #e18c81; }
+.extinction-state p { margin: 0 0 10px; color: #cfaaa5; font-size: 10px; line-height: 1.45; }
+.extinction-state button { width: 100%; padding: 8px 10px; border: 1px solid rgba(211,111,99,.3); border-radius: 7px; background: rgba(211,111,99,.08); color: #d99a92; font-size: 10px; font-weight: 750; cursor: not-allowed; opacity: .72; }
+.extinction-state > small { display: block; margin-top: 7px; color: #b8847d; font-size: 9px; line-height: 1.4; }
 .resident-list { display: flex; flex-direction: column; gap: 2px; }
 .resident-list .section-title { margin-bottom: 6px; }
 .resident-list > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 1px; border-bottom: 1px solid var(--line); color: #d5ddd6; font-size: 11px; }

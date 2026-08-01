@@ -48,6 +48,52 @@ describe("protocole du moteur", () => {
     });
   });
 
+  test("conserve les métadonnées de population facultatives lorsqu’elles sont fournies", () => {
+    const snapshot = worldSnapshot();
+    const rawSnapshot = {
+      ...snapshot,
+      camp_stage: "Foyer établi",
+      agents: [{
+        state: { id: "ada", name: "Ada", age_days: 25, generation: 2 },
+        mood: "curieuse",
+        available_actions: ["explore"],
+      }],
+    };
+
+    const event = parseBackendEvent(
+      `AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "snapshot", payload: rawSnapshot })}`,
+    );
+    expect(event).toMatchObject({
+      type: "state",
+      payload: {
+        camp_stage: "Foyer établi",
+        agents: [{ age_days: 25, generation: 2 }],
+      },
+    });
+  });
+
+  test("ignore les métadonnées facultatives de population invalides", () => {
+    const snapshot = worldSnapshot();
+    const rawSnapshot = {
+      ...snapshot,
+      camp_stage: { label: "non valide" },
+      agents: [{
+        state: { id: "ada", name: "Ada", age_days: -1, generation: "deux" },
+        mood: "curieuse",
+        available_actions: ["explore"],
+      }],
+    };
+
+    const event = parseBackendEvent(
+      `AUTOPOIESIS_EVENT ${JSON.stringify({ version: 1, type: "snapshot", payload: rawSnapshot })}`,
+    );
+    expect(event).toMatchObject({ type: "state", payload: { agents: [{}] } });
+    if (event?.type !== "state") throw new Error("instantané rejeté à tort");
+    expect(event.payload.camp_stage).toBeUndefined();
+    expect(event.payload.agents[0]?.age_days).toBeUndefined();
+    expect(event.payload.agents[0]?.generation).toBeUndefined();
+  });
+
   test("mesure la distance sur le tore 40 × 24", () => {
     expect(toricDistance({ x: 0, y: 0 }, { x: 39, y: 0 })).toBe(1);
     expect(toricDistance({ x: 4, y: 0 }, { x: 4, y: 23 })).toBe(1);

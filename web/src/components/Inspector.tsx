@@ -2,6 +2,7 @@ import { Activity, BookOpenText, Brain, CalendarDays, CloudRain, Flame, Heart, M
 import { useState } from "react";
 import type { AgentState, AnimalState, WorldSnapshot } from "../protocol";
 import { campEncyclopediaFromSnapshot } from "../lib/campEncyclopedia";
+import { campStatusFromSnapshot } from "../lib/campStatus";
 import { actionLabels, animalLabels, attributeLabels, clampPercent } from "../lib/format";
 import { observatoryViewLabel, type ObservatoryView } from "./ObservatoryNavigation";
 import type { EntitySelection } from "./WorldScene";
@@ -133,41 +134,60 @@ function AnimalView({ animal }: { animal: AnimalState }) {
 function CampView({ snapshot }: { snapshot: WorldSnapshot }) {
   const campfires = snapshot.cells.filter((cell) => cell.campfire);
   const storedFood = snapshot.cells.reduce((total, cell) => total + cell.stored_food, 0);
-  const shelters = snapshot.cells.filter((cell) => cell.shelter_level > 0);
   const residents = snapshot.agents.filter((agent) => agent.alive);
   const focalFire = campfires[0];
   const encyclopedia = campEncyclopediaFromSnapshot(snapshot);
+  const campStatus = campStatusFromSnapshot(snapshot);
   const residentNames = (names: string[]) => names.join(", ");
 
   return (
     <div className="panel-stack section-view">
       <section className="inspector-intro camp-intro">
         <span className="section-kicker"><Flame size={14} /> Vie collective</span>
-        <h3>{campfires.length > 0 ? "Le foyer rassemble le vivant." : "Aucun foyer n’est encore allumé."}</h3>
-        <p>{campfires.length > 0
+        <h3>{campStatus.population.extinct ? "Le foyer ne compte plus aucun vivant." : campfires.length > 0 ? "Le foyer rassemble le vivant." : "Aucun foyer n’est encore allumé."}</h3>
+        <p>{campStatus.population.extinct
+          ? "Le monde reste consultable : l’interface ne relance jamais une simulation sans commande du moteur."
+          : campfires.length > 0
           ? "Les stocks et abris ci-dessous sont les éléments actuellement observables par le moteur."
           : "La première flamme persistante deviendra le point de ralliement de la communauté."}</p>
       </section>
       <section className="detail-section camp-summary" aria-label="État du foyer">
-        <span><small>Feux connus</small><strong>{campfires.length}</strong></span>
-        <span><small>Réserve commune</small><strong>{storedFood} rations</strong></span>
-        <span><small>Abris</small><strong>{shelters.length}</strong></span>
-        <span><small>Résidents</small><strong>{residents.length}</strong></span>
+        <span><small>Stade</small><strong>{campStatus.stage}</strong></span>
+        <span><small>Coffre</small><strong>{campStatus.chest ? `${campStatus.chest.occupation} / ${campStatus.chest.capacity}` : "Absent"}</strong></span>
+        <span><small>Population</small><strong>{campStatus.population.living} vivant{campStatus.population.living > 1 ? "s" : ""}</strong></span>
+        <span><small>État</small><strong className={campStatus.population.extinct ? "status-extinct" : "status-living"}>{campStatus.population.extinct ? "Extinction" : "Vivante"}</strong></span>
       </section>
       <section className="detail-section key-values">
         <div className="section-title"><Flame size={15} /> Point de ralliement</div>
         {focalFire ? <>
           <span>Position <strong>{focalFire.position.x} · {focalFire.position.y}</strong></span>
           <span>Provisions observées <strong>{focalFire.stored_food}</strong></span>
+          <span>Réserve commune <strong>{storedFood} rations</strong></span>
+          <span>Coffre <strong>{campStatus.chest ? `Niveau ${campStatus.chest.level} · ${campStatus.chest.occupation} / ${campStatus.chest.capacity}` : "Non construit"}</strong></span>
           <span>Abri local <strong>{focalFire.shelter_level > 0 ? `Niveau ${focalFire.shelter_level}` : "À construire"}</strong></span>
         </> : <p className="muted">Les habitants cherchent encore à constituer un premier feu de camp.</p>}
+      </section>
+      <section className="detail-section camp-population" aria-label="Population par âge et génération">
+        <div className="section-title"><Users size={15} /> Population</div>
+        <div className="camp-cohorts">
+          <div><small>Âge</small>{campStatus.population.ages.map((cohort) => <span key={cohort.label}>{cohort.label}<strong>{cohort.count}</strong></span>)}</div>
+          <div><small>Génération</small>{campStatus.population.generations.length === 0
+            ? <p className="muted">Aucune population vivante.</p>
+            : campStatus.population.generations.map((cohort) => <span key={cohort.label}>{cohort.label}<strong>{cohort.count}</strong></span>)}</div>
+        </div>
       </section>
       <section className="detail-section resident-list">
         <div className="section-title"><Users size={15} /> Autour du foyer</div>
         {residents.length === 0 ? <p className="muted">Aucun personnage vivant à observer.</p> : residents.map((resident) => (
-          <div key={resident.id}><span>{resident.name}</span><small>{resident.behavior.archetype || "habitant"}</small></div>
+          <div key={resident.id}><span>{resident.name}</span><small>{resident.behavior.archetype || "habitant"}{resident.age_days === undefined ? "" : ` · ${resident.age_days} j`}{resident.generation === undefined ? "" : ` · gén. ${resident.generation}`}</small></div>
         ))}
       </section>
+      {campStatus.population.extinct && <section className="detail-section extinction-state" aria-label="État d’extinction">
+        <div className="section-title"><Users size={15} /> Extinction constatée</div>
+        <p>La simulation est terminée ; son état reste seulement observable.</p>
+        <button type="button" disabled aria-describedby="new-civilization-unavailable">Nouvelle civilisation</button>
+        <small id="new-civilization-unavailable">{campStatus.newCivilization.reason}</small>
+      </section>}
       <section className="detail-section camp-encyclopedia" aria-label="Encyclopédie du foyer">
         <div className="section-title"><BookOpenText size={15} /> Encyclopédie du foyer</div>
         <div className="camp-encyclopedia-group">
