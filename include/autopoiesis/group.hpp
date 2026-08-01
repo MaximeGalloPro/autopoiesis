@@ -136,12 +136,31 @@ inline const BaseInfrastructureDefinition* base_infrastructure(BuildingType buil
 
 class Group {
  public:
-  explicit Group(std::string id = std::string{primary_group_id}) : id_(std::move(id)) {
+  explicit Group(std::string id = std::string{primary_group_id})
+      : Group(std::move(id), FeatureRegistry::defaults().default_profile(),
+              FeatureRegistry::defaults()) {}
+
+  Group(std::string id, const WorldProfile& startup_profile,
+        const FeatureRegistry& registry)
+      : id_(std::move(id)) {
     if (id_.empty()) throw std::invalid_argument("group id must not be empty");
+    if (!registry.valid_profile(startup_profile))
+      throw std::invalid_argument("startup world profile is invalid");
+    world_profile_ = startup_profile;
   }
 
   const std::string& id() const { return id_; }
   const GroupBase& primary_base() const { return primary_base_; }
+  const WorldProfile& world_profile() const { return world_profile_; }
+  const std::vector<ActiveFeature>& active_features() const {
+    return world_profile_.active_features;
+  }
+  bool feature_active(const std::string& key, int version = 0) const {
+    return std::any_of(world_profile_.active_features.begin(), world_profile_.active_features.end(),
+                       [&](const ActiveFeature& feature) {
+                         return feature.key == key && (version == 0 || feature.version == version);
+                       });
+  }
   const CampKnowledge& camp_knowledge() const { return camp_knowledge_; }
   json camp_knowledge_json() const { return camp_knowledge_.view(); }
   void observe_camp_skills(const std::vector<Agent>& agents) { camp_knowledge_.observe_skills(agents); }
@@ -164,7 +183,7 @@ class Group {
     return true;
   }
 
-  json checkpoint() const {
+  json checkpoint(const FeatureRegistry& registry = FeatureRegistry::defaults()) const {
     json levels = json::object();
     const auto& catalog = base_infrastructure_catalog();
     for (std::size_t index = 0; index < catalog.size(); ++index)
@@ -174,10 +193,13 @@ class Group {
     for (const auto& recipe : knowledge.at("recipes")) recipes.push_back(recipe.at("id"));
     return {{"id", id_},
             {"primary_base", {{"kind", "campfire"}, {"infrastructure_levels", std::move(levels)}}},
-            {"camp_knowledge", {{"recipes", std::move(recipes)}, {"skills", knowledge.at("skills")}}}};
+            {"camp_knowledge", {{"recipes", std::move(recipes)}, {"skills", knowledge.at("skills")}}},
+            {"world_profile", registry.profile_json(world_profile_)}};
   }
 
-  void restore_checkpoint(const json& state) {
+  void restore_checkpoint(const json& state,
+                          const FeatureRegistry& registry = FeatureRegistry::defaults(),
+                          const std::optional<WorldProfile>& legacy_profile = std::nullopt) {
     const auto id = state.at("id").get<std::string>();
     if (id.empty()) throw std::runtime_error("checkpoint group id is empty");
     const auto& base = state.at("primary_base");
@@ -211,10 +233,19 @@ class Group {
     CampKnowledge restored_knowledge;
     if (state.contains("camp_knowledge")) restored_knowledge.restore(state.at("camp_knowledge"));
 
+    // Checkpoints written before world profiles leave the startup profile in
+    // place. Simulation migrates its former top-level activation list first.
+    WorldProfile restored_profile = world_profile_;
+    if (state.contains("world_profile"))
+      restored_profile = registry.profile_from_json(state.at("world_profile"));
+    else if (legacy_profile)
+      restored_profile = *legacy_profile;
+
     id_ = id;
     primary_base_ = GroupBase{BaseKind::Campfire};
     infrastructure_levels_ = restored_levels;
     camp_knowledge_ = std::move(restored_knowledge);
+    world_profile_ = std::move(restored_profile);
   }
 
  private:
@@ -239,5 +270,6 @@ class Group {
   GroupBase primary_base_;
   std::array<int, 2> infrastructure_levels_{};
   CampKnowledge camp_knowledge_;
+  WorldProfile world_profile_;
 };
 }  // namespace apo

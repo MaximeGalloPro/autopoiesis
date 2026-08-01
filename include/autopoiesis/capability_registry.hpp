@@ -30,11 +30,16 @@ struct FeatureCard {
   std::string target_feature;
 };
 
+// A people mechanism is selected once for the whole world. An individual skill
+// is deliberately not selectable here: its progress remains on each Agent.
+enum class FeatureKind { PeopleMechanism, IndividualSkill };
+
 struct FeatureDefinition {
   std::string key;
   int version{1};
   std::string title;
   bool default_active{};
+  FeatureKind kind{FeatureKind::PeopleMechanism};
   std::vector<std::string> dependencies;
   std::vector<FeatureCard> cards;
 };
@@ -42,6 +47,15 @@ struct FeatureDefinition {
 struct ActiveFeature {
   std::string key;
   int version{1};
+  friend bool operator==(const ActiveFeature&, const ActiveFeature&) = default;
+};
+
+// This is a declarative, version-pinned startup configuration. It never
+// contains code or an action to execute and is immutable once a world starts.
+struct WorldProfile {
+  int schema_version{1};
+  std::vector<ActiveFeature> active_features;
+  friend bool operator==(const WorldProfile&, const WorldProfile&) = default;
 };
 
 class FeatureRegistry {
@@ -54,6 +68,19 @@ class FeatureRegistry {
   const FeatureDefinition* feature(const std::string& key, int version = 0) const;
   const FeatureCard* card(const std::string& key) const;
   std::vector<ActiveFeature> default_activations() const;
+
+  WorldProfile default_profile() const;
+  bool valid_profile(const WorldProfile& profile) const;
+  bool profile_active(const WorldProfile& profile, const std::string& key,
+                      int version = 0) const;
+  bool activate_for_startup(WorldProfile& profile, const std::string& key,
+                            int version = 0) const;
+  bool deactivate_for_startup(WorldProfile& profile, const std::string& key,
+                              int version = 0) const;
+  json profile_json(const WorldProfile& profile) const;
+  WorldProfile profile_from_json(const json& state) const;
+
+  // Kept for callers migrating from the former append-only activation list.
   bool valid_activation(const ActiveFeature& activation,
                         const std::vector<ActiveFeature>& active) const;
   json manifest() const;

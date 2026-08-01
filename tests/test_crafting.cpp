@@ -83,12 +83,12 @@ int main() {
   Logger logger("/tmp/autopoiesis-crafting-tests");
   std::mt19937 rng(42);
   LocalDecider decider(rng);
-  Simulation simulation(42,decider,logger,nullptr,registry_root/"checkpoint.json");
+  auto startup_profile=features.default_profile();
+  assert(features.activate_for_startup(startup_profile,"camp_cooking"));
+  Simulation simulation(42,decider,logger,nullptr,(registry_root/"checkpoint.json").string(),
+                        startup_profile);
   assert(simulation.feature_active("core_survival",1));
-  assert(!simulation.feature_active("camp_cooking"));
-  assert(simulation.activate_feature("camp_cooking"));
   assert(simulation.feature_active("camp_cooking",1));
-  assert(!simulation.activate_feature("camp_cooking",1));
   auto& world=SimulationTestAccess::world(simulation);
   auto& crafter=SimulationTestAccess::agent(simulation);
   const Position fire{13,2};
@@ -151,6 +151,33 @@ int main() {
   assert(restored_simulation.restored_checkpoint());
   assert(restored_simulation.feature_active("core_survival",1));
   assert(restored_simulation.feature_active("camp_cooking",1));
+
+  json legacy_profile_checkpoint;
+  {
+    std::ifstream input(registry_root/"checkpoint.json");
+    input>>legacy_profile_checkpoint;
+  }
+  assert(legacy_profile_checkpoint.at("group").contains("world_profile"));
+  assert(!legacy_profile_checkpoint.contains("active_features"));
+  // Feature packages predate the persistent Group model: this is the former
+  // top-level representation used by existing saves.
+  legacy_profile_checkpoint.erase("group");
+  legacy_profile_checkpoint["active_features"]={
+      {{"id","core_survival"},{"version",1}},
+      {{"id","camp_cooking"},{"version",1}}};
+  const auto legacy_profile_path=registry_root/"legacy-profile-checkpoint.json";
+  {
+    std::ofstream output(legacy_profile_path);
+    output<<legacy_profile_checkpoint;
+  }
+  std::mt19937 legacy_profile_rng(9);
+  LocalDecider legacy_profile_decider(legacy_profile_rng);
+  Logger legacy_profile_logger("/tmp/autopoiesis-crafting-legacy-profile");
+  Simulation legacy_profile_simulation(9,legacy_profile_decider,legacy_profile_logger,nullptr,
+                                       legacy_profile_path.string());
+  assert(legacy_profile_simulation.restored_checkpoint());
+  assert(legacy_profile_simulation.feature_active("core_survival",1));
+  assert(legacy_profile_simulation.feature_active("camp_cooking",1));
   unsetenv("AUTOPOIESIS_CAPABILITY_ROOT");
   std::filesystem::remove_all(registry_root);
 }

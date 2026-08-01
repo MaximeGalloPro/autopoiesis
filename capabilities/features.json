@@ -1,10 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "features": [
     {
       "id": "core_survival",
       "version": 1,
       "title": "Survie fondamentale",
+      "kind": "people_mechanism",
       "default_active": true,
       "dependencies": [],
       "cards": [
@@ -16,11 +17,84 @@
       "id": "camp_cooking",
       "version": 1,
       "title": "Cuisine au foyer",
+      "kind": "people_mechanism",
       "default_active": false,
       "dependencies": ["core_survival"],
       "cards": [
         {"id": "unlock_camp_cooking", "type": "feature_unlock", "title": "Découvrir la cuisine", "target_feature": "camp_cooking"}
       ]
+    },
+    {
+      "id": "woodcutting",
+      "version": 1,
+      "title": "Coupe du bois",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "mining",
+      "version": 1,
+      "title": "Extraction",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "crafting",
+      "version": 1,
+      "title": "Fabrication",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "building",
+      "version": 1,
+      "title": "Construction",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "foraging",
+      "version": 1,
+      "title": "Cueillette",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "hunting",
+      "version": 1,
+      "title": "Chasse",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "cooking",
+      "version": 1,
+      "title": "Cuisine",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
+    },
+    {
+      "id": "social",
+      "version": 1,
+      "title": "Sociabilité",
+      "kind": "individual_skill",
+      "default_active": false,
+      "dependencies": [],
+      "cards": []
     }
   ]
 }
