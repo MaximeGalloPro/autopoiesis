@@ -1863,6 +1863,16 @@ void Simulation::start_next_reporter_task(){
 }
 
 void Simulation::complete_reporter_task(ReporterResult result){
+  // A report captured before the last death can return after extinction. It is
+  // no longer allowed to start its paired evolution request (nor the rest of
+  // its stale window): there is no living spokesperson. This only discards
+  // asynchronous AI work; run_day() keeps advancing the deterministic world.
+  if(civilization_.status==CivilizationStatus::Extinct){
+    reporter_queue_.clear();
+    active_ai_window_.reset();
+    deferred_ai_window_.reset();
+    return;
+  }
   const auto& task=result.task;
   const auto label=task.kind==ReporterTaskKind::PeriodReport?"bilan de ":"demande d'évolution pour ";
   std::cout << "Appel " << task.call_number << "/" << task.total_calls << " — " << label
