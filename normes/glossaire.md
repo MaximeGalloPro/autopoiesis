@@ -150,7 +150,7 @@ Une relation conserve confiance, affinité, nombre d'interactions et conflit act
 
 ### Population évolutive
 
-Chaque résident conserve son âge en jours, son origine, son jour d'arrivée, ses éventuels parents et la cause d'un départ ou décès. Le vieillissement est quotidien. Une arrivée peut survenir tous les 60 jours si le foyer est abrité, sous huit résidents et possède quatre rations au-delà de sa réserve minimale. Une naissance peut survenir tous les 90 jours avec deux adultes, un abri, six rations dédiées et moins de dix résidents. Ces événements consomment les rations. Tous les 30 jours, une détresse vitale durable sans lien de soutien entraîne un départ. À 80 ans, le décès naturel est explicite. Un enfant ne peut exécuter les métiers et interactions réservés aux adultes.
+Chaque résident conserve son âge en jours, son origine, son jour d'arrivée, sa génération, ses éventuels parents et la cause d'un départ ou décès. Le vieillissement est quotidien et le décès naturel est explicite au centième jour. Une arrivée peut survenir tous les 60 jours si le foyer est abrité, sous huit résidents et possède quatre rations au-delà de sa réserve minimale. Une naissance peut survenir tous les 90 jours avec deux adultes, un abri, six rations dédiées et moins de dix résidents. Ces événements consomment les rations. Chaque nouvel individu reçoit un nom unique déterministe issu de son identifiant persistant ; une naissance prend la génération suivant celle de ses parents. Tous les 30 jours, une détresse vitale durable sans lien de soutien entraîne un départ. Un enfant ne peut exécuter les métiers et interactions réservés aux adultes.
 
 ### Dangers actifs
 

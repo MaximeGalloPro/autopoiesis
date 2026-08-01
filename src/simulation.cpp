@@ -131,7 +131,7 @@ json agent_checkpoint(const Agent& agent) {
           {"emotions",std::move(emotions)},{"next_emotion_id",agent.next_emotion_id},
           {"companion_id",agent.companion_id},{"companion_until_day",agent.companion_until_day},
           {"last_help_day",agent.last_help_day},{"last_warning_day",agent.last_warning_day},
-          {"age_days",agent.age_days},{"family_id",agent.family_id},
+          {"age_days",agent.age_days},{"generation",agent.generation},{"family_id",agent.family_id},
           {"origin",agent.origin},{"arrival_day",agent.arrival_day},
           {"parent_ids",agent.parent_ids},{"departure_day",agent.departure_day},
           {"departure_reason",agent.departure_reason},{"death_cause",agent.death_cause}};
@@ -232,7 +232,11 @@ Agent restore_agent(const json& state) {
   agent.companion_until_day=state.value("companion_until_day",0);
   agent.last_help_day=state.value("last_help_day",0);
   agent.last_warning_day=state.value("last_warning_day",0);
-  agent.age_days=state.value("age_days",25*360);
+  if(state.contains("age_days")){
+    agent.age_days=state.at("age_days").get<int>();
+    if(!state.contains("generation"))agent.age_days=std::clamp(agent.age_days/360,0,maximum_lifespan_days);
+  }
+  agent.generation=state.value("generation",0);
   agent.family_id=state.value("family_id",std::string{primary_family_id});
   if(agent.family_id.empty())agent.family_id=primary_family_id;
   agent.origin=state.value("origin","founder");agent.arrival_day=state.value("arrival_day",1);
@@ -881,6 +885,18 @@ static Agent initial_agent(std::string id,std::string name,Position position,int
   return agent;
 }
 
+static std::string generated_resident_name(int serial) {
+  static constexpr std::array<std::string_view,12> given_names{{
+      "Ariane","Basile","Céleste","Daphné","Éloi","Flore",
+      "Gaspard","Hermine","Ismaël","Jade","Léandre","Mina"}};
+  static constexpr std::array<std::string_view,12> lineages{{
+      "des Aulnes","des Brumes","des Cèdres","des Dunes","des Étangs","des Falaises",
+      "des Genêts","des Hautes-Terres","des Îles","des Jardins","des Landes","des Moulins"}};
+  const auto index=static_cast<std::size_t>(std::max(1,serial)-1);
+  return std::string(given_names[index%given_names.size()])+" "+
+      std::string(lineages[(index/given_names.size())%lineages.size()])+" "+std::to_string(serial);
+}
+
 Simulation::Simulation(unsigned seed,IDecider& d,Logger& l,ICycleReporter* reporter,
                        std::string checkpoint_path):world_(seed),decider_(d),logger_(l),reporter_(reporter),rng_(seed),devil_(seed,positive_int_from_env("DEVIL_CHANCE_ONE_IN",10)),cycles_per_day_(positive_int_from_env("CYCLES_PER_DAY",2400)),report_every_days_(positive_int_from_env("REPORT_EVERY_DAYS",3)),checkpoint_path_(std::move(checkpoint_path)){
   active_features_=FeatureRegistry::defaults().default_activations();
@@ -1101,7 +1117,7 @@ void Simulation::update_emotions(Agent& agent) {
 void Simulation::update_population() {
   for(auto& agent:agents_)if(agent.alive){
     ++agent.age_days;
-    if(agent.age_days>=80*360){agent.alive=false;agent.death_cause="vieillesse";agent.remember("Ma vie s'achève après un grand âge.");logger_.message(agent.name+" meurt de vieillesse.");}
+    if(agent.age_days>=maximum_lifespan_days){agent.alive=false;agent.death_cause="vieillesse";agent.remember("Ma vie s'achève après cent jours.");logger_.message(agent.name+" meurt de vieillesse.");}
   }
   if(day_%30!=0)return;
   for(auto& agent:agents_)if(agent.alive){
@@ -1117,18 +1133,18 @@ void Simulation::update_population() {
   int residents=static_cast<int>(std::count_if(agents_.begin(),agents_.end(),[](const Agent& agent){return agent.alive;}));
   auto consume_reserves=[&](int amount){for(int index=0;index<amount;++index)if(!world_.take_stored_food(*camp))return false;return true;};
   auto make_resident=[&](std::string origin,int age,std::vector<std::string> parents,
-                         std::string family_id){
+                         std::string family_id,int generation){
     const int serial=next_agent_id_++;Agent newcomer;
-    newcomer.id="a"+std::to_string(serial);newcomer.name=origin=="birth"?"Enfant "+std::to_string(serial):"Voyageur "+std::to_string(serial);
+    newcomer.id="a"+std::to_string(serial);newcomer.name=generated_resident_name(serial);
     newcomer.position=world_.neighbors(*camp).front();newcomer.age_days=age;newcomer.origin=std::move(origin);
-    newcomer.arrival_day=day_;newcomer.family_id=std::move(family_id);newcomer.parent_ids=std::move(parents);newcomer.hunger=25;newcomer.thirst=20;newcomer.fatigue=20;
+    newcomer.arrival_day=day_;newcomer.generation=generation;newcomer.family_id=std::move(family_id);newcomer.parent_ids=std::move(parents);newcomer.hunger=25;newcomer.thirst=20;newcomer.fatigue=20;
     newcomer.personality={50,55,55,55,60};newcomer.attributes={45,50,50,45,55,55,50,55,50,50};
     newcomer.behavior={"resident","Contribuer à la continuité du foyer",50,60,45,65,{FoodType::Roots,FoodType::Berries}};
     newcomer.project={"join_camp","Trouver sa place dans le foyer",ProjectStatus::Active,0,0,3,"","",day_,simulation_cycle_};
     newcomer.home_camp=*camp;newcomer.known_campfires.insert({camp->x,camp->y});agents_.push_back(std::move(newcomer));
   };
   if(sheltered&&day_%60==0&&residents<8&&world_.stored_food(*camp)>=residents*4+4&&consume_reserves(4)){
-    make_resident("arrival",20*360+((day_/60)%20)*360,{},std::string{primary_family_id});++residents;logger_.message("Un nouveau voyageur rejoint le foyer.");
+    make_resident("arrival",20+((day_/60)%20),{},std::string{primary_family_id},0);++residents;logger_.message(agents_.back().name+" rejoint le foyer.");
   }
   std::vector<const Agent*> adults;for(const auto& agent:agents_)if(agent.alive&&is_adult(agent))adults.push_back(&agent);
   const Agent* first_parent=nullptr;
@@ -1137,9 +1153,10 @@ void Simulation::update_population() {
     for(std::size_t second=first+1;second<adults.size();++second)
       if(adults[first]->family_id==adults[second]->family_id){
         first_parent=adults[first];second_parent=adults[second];break;
-      }
+  }
   if(sheltered&&day_%90==0&&residents<10&&first_parent&&second_parent&&world_.stored_food(*camp)>=residents*6+6&&consume_reserves(6)){
-    make_resident("birth",0,{first_parent->id,second_parent->id},first_parent->family_id);logger_.message("Une naissance agrandit le foyer.");
+    make_resident("birth",0,{first_parent->id,second_parent->id},first_parent->family_id,
+                  std::max(first_parent->generation,second_parent->generation)+1);logger_.message("Naissance de "+agents_.back().name+".");
   }
 }
 

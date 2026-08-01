@@ -13,6 +13,9 @@
 namespace apo {
 using json = nlohmann::json;
 inline constexpr std::string_view primary_family_id{"foyer-principal"};
+inline constexpr int founder_age_days{25};
+inline constexpr int adult_age_days{16};
+inline constexpr int maximum_lifespan_days{100};
 struct Position { int x{}; int y{}; friend bool operator==(const Position&, const Position&) = default; };
 enum class Terrain { Ground, Wall, Water, Tree, Bush };
 enum class FoodType { Berries, Roots, Mushrooms, Fish, Venison };
@@ -182,7 +185,8 @@ struct Agent {
   int companion_until_day{};
   int last_help_day{};
   int last_warning_day{};
-  int age_days{25*360};
+  int age_days{founder_age_days};
+  int generation{};
   std::string family_id{primary_family_id};
   std::string origin{"founder"};
   int arrival_day{1};
@@ -192,7 +196,7 @@ struct Agent {
   std::string death_cause;
   void remember_map(Position p, Terrain terrain) { map_memory[{p.x,p.y}] = terrain; }
 };
-inline bool is_adult(const Agent& agent) { return agent.age_days>=16*360; }
+inline bool is_adult(const Agent& agent) { return agent.age_days>=adult_age_days; }
 inline HealthCondition& add_health_condition(Agent& agent,HealthConditionType type,int severity,const std::string& cause) { agent.conditions.push_back({agent.id+"-condition-"+std::to_string(agent.next_condition_id++),type,std::clamp(severity,1,100),0,false,cause});return agent.conditions.back(); }
 inline json health_conditions_json(const Agent& agent) { json result=json::array();for(const auto& condition:agent.conditions)result.push_back({{"id",condition.id},{"type",health_condition_name(condition.type)},{"severity",condition.severity},{"days",condition.days},{"treated",condition.treated},{"cause",condition.cause}});return result; }
 inline Emotion& add_emotion(Agent& agent,EmotionType type,int intensity,const std::string& cause,

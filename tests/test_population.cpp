@@ -49,23 +49,31 @@ int main() {
   assert(world.create_shelter({14,2}));stock_food(world,camp,40);
   for(const auto& agent:simulation.agents())assert(agent.family_id=="foyer-principal");
   for(std::size_t index=0;index<simulation.agents().size();++index){
-    auto& agent=SimulationTestAccess::agent(simulation,index);agent.position={14,2};agent.age_days=25*360;
+    auto& agent=SimulationTestAccess::agent(simulation,index);agent.position={14,2};agent.age_days=25;
   }
 
   const auto initial=simulation.agents().size();
   SimulationTestAccess::set_day(simulation,60);SimulationTestAccess::update_population(simulation);
   assert(simulation.agents().size()==initial+1);
   const auto& newcomer=simulation.agents().back();
-  assert(newcomer.origin=="arrival"&&newcomer.arrival_day==60&&newcomer.age_days>=18*360);
+  assert(newcomer.origin=="arrival"&&newcomer.arrival_day==60&&newcomer.age_days>=18);
   assert(newcomer.family_id=="foyer-principal");
+  assert(newcomer.name=="Daphné des Aulnes 4");
+  assert(newcomer.generation==0);
+  const auto newcomer_name=newcomer.name;
 
   SimulationTestAccess::agent(simulation,1).family_id="famille-externe";
+  SimulationTestAccess::agent(simulation,0).generation=2;
+  SimulationTestAccess::agent(simulation,2).generation=1;
   SimulationTestAccess::set_day(simulation,90);SimulationTestAccess::update_population(simulation);
   assert(simulation.agents().size()==initial+2);
   const auto& child=simulation.agents().back();
   assert(child.origin=="birth"&&child.age_days==0&&child.parent_ids.size()==2);
   assert(child.family_id=="foyer-principal");
   assert((child.parent_ids==std::vector<std::string>{"a1","a3"}));
+  assert(child.name=="Éloi des Aulnes 5");
+  assert(child.name!=newcomer_name);
+  assert(child.generation==3);
   const auto child_actions=available_actions(child,world,simulation.agents(),90,DayPhase::Day);
   assert(std::ranges::find(child_actions,"hunt_animal")==child_actions.end());
   assert(std::ranges::find(child_actions,"confront")==child_actions.end());
@@ -76,8 +84,10 @@ int main() {
   SimulationTestAccess::set_day(simulation,120);SimulationTestAccess::update_population(simulation);
   assert(!departing.alive&&departing.departure_day==120&&!departing.departure_reason.empty());
 
-  auto& elder=SimulationTestAccess::agent(simulation,0);elder.age_days=80*360-1;
+  auto& elder=SimulationTestAccess::agent(simulation,0);elder.age_days=98;
   SimulationTestAccess::set_day(simulation,121);SimulationTestAccess::update_population(simulation);
+  assert(elder.alive&&elder.age_days==99);
+  SimulationTestAccess::set_day(simulation,122);SimulationTestAccess::update_population(simulation);
   assert(!elder.alive&&elder.death_cause=="vieillesse");
 
   simulation.save_checkpoint();
@@ -85,7 +95,8 @@ int main() {
   Simulation restored(7,restored_decider,restored_logger,nullptr,checkpoint.string());
   assert(restored.agents().size()==simulation.agents().size());
   assert(std::ranges::any_of(restored.agents(),[&](const Agent& agent){
-    return agent.origin=="birth"&&agent.parent_ids==child_parents;
+    return agent.origin=="birth"&&agent.parent_ids==child_parents&&
+        agent.name=="Éloi des Aulnes 5"&&agent.generation==3;
   }));
 
   setenv("CYCLES_PER_DAY","1",1);
@@ -95,7 +106,7 @@ int main() {
   std::mt19937 final_day_rng(99);LocalDecider final_day_decider(final_day_rng);
   Simulation final_day(99,final_day_decider,final_day_logger,&reporter,(root/"final-day-state.json").string());
   for(std::size_t index=0;index<final_day.agents().size();++index)
-    SimulationTestAccess::agent(final_day,index).age_days=80*360-1;
+    SimulationTestAccess::agent(final_day,index).age_days=99;
 
   final_day.run(3,0,0);
   assert(final_day.simulation_cycle()==1);

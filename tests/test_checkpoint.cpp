@@ -37,6 +37,7 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
   assert(left.size()==right.size());
   for(std::size_t index=0;index<left.size();++index){
     assert(left[index].id==right[index].id);
+    assert(left[index].name==right[index].name);
     assert(left[index].position==right[index].position);
     assert(left[index].health==right[index].health);
     assert(left[index].hunger==right[index].hunger);
@@ -72,6 +73,7 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].last_help_day==right[index].last_help_day);
     assert(left[index].last_warning_day==right[index].last_warning_day);
     assert(left[index].age_days==right[index].age_days);
+    assert(left[index].generation==right[index].generation);
     assert(left[index].family_id==right[index].family_id);
     assert(left[index].origin==right[index].origin);
     assert(left[index].arrival_day==right[index].arrival_day);
@@ -124,6 +126,7 @@ int main() {
   Logger uninterrupted_logger((root/"uninterrupted").string());
   Simulation uninterrupted(42,uninterrupted_decider,uninterrupted_logger);
   SimulationTestAccess::agent(uninterrupted,0).family_id="famille-checkpoint";
+  SimulationTestAccess::agent(uninterrupted,0).generation=2;
   uninterrupted.run(3,0,0);
 
   std::mt19937 first_rng(42);
@@ -131,6 +134,7 @@ int main() {
   Logger first_logger((root/"split").string());
   Simulation first(42,first_decider,first_logger,nullptr,checkpoint.string());
   SimulationTestAccess::agent(first,0).family_id="famille-checkpoint";
+  SimulationTestAccess::agent(first,0).generation=2;
   first.run(2,0,0);
   assert(std::filesystem::exists(checkpoint));
   assert(first.date().absolute_day==2);
@@ -155,7 +159,11 @@ int main() {
     std::ifstream input(checkpoint);
     input>>legacy_state;
   }
-  for(auto& agent:legacy_state["agents"])agent.erase("family_id");
+  for(auto& agent:legacy_state["agents"]){
+    agent.erase("family_id");
+    agent.erase("generation");
+    agent["age_days"]=agent.at("age_days").get<int>()*360;
+  }
   const auto legacy_checkpoint=root/"legacy-state.json";
   {
     std::ofstream output(legacy_checkpoint);
@@ -165,7 +173,11 @@ int main() {
   LocalDecider legacy_decider(legacy_rng);
   Logger legacy_logger((root/"legacy").string());
   Simulation legacy(42,legacy_decider,legacy_logger,nullptr,legacy_checkpoint.string());
-  for(const auto& agent:legacy.agents())assert(agent.family_id=="foyer-principal");
+  for(std::size_t index=0;index<legacy.agents().size();++index){
+    assert(legacy.agents()[index].family_id=="foyer-principal");
+    assert(legacy.agents()[index].generation==0);
+    assert(legacy.agents()[index].age_days==resumed.agents()[index].age_days);
+  }
 
   const auto pending_checkpoint=root/"pending-validation.json";
   std::mt19937 pending_rng(42);
