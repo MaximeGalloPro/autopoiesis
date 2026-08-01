@@ -118,6 +118,10 @@ std::string recompile_stage_name(RecompileStage stage) {
   return "compiling";
 }
 
+std::string civilization_status_name(CivilizationStatus status) {
+  return status==CivilizationStatus::Extinct?"extinct":"active";
+}
+
 json evolution_progress_json(const EvolutionProgress& progress) {
   return {{"stage",evolution_stage_name(progress.stage)},
           {"request_id",progress.request_id},{"message",progress.message},
@@ -274,6 +278,9 @@ json web_snapshot_json(const UiSnapshot& snapshot) {
   return {{"date",calendar_json(snapshot.date)},
           {"simulation_cycle",snapshot.simulation_cycle},
           {"climate",climate_json(snapshot.climate)},
+          {"civilization",{{"status",civilization_status_name(snapshot.civilization.status)},
+                             {"extinction_day",snapshot.civilization.extinction_day},
+                             {"restart_contract",snapshot.civilization.restart_contract}}},
           {"phase",day_phase_name(snapshot.phase)},
           {"cycle_in_day",snapshot.cycle_in_day},{"cycles_per_day",snapshot.cycles_per_day},
           {"width",snapshot.width},{"height",snapshot.height},{"cells",std::move(cells)},

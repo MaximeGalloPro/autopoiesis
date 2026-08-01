@@ -89,7 +89,8 @@ function bunSpawn(binaryPath: string, projectRoot: string, binaryArgs: string[])
 export class BackendProcessManager {
   readonly projectRoot: string;
   readonly binaryPath: string;
-  private readonly binaryArgs: string[];
+  private readonly initialBinaryArgs: string[];
+  private readonly normalBinaryArgs: string[];
   private readonly autoRestart: boolean;
   private readonly restartDelayMs: number;
   private readonly maxRestarts: number;
@@ -99,6 +100,8 @@ export class BackendProcessManager {
     binaryArgs: string[],
   ) => ManagedProcess;
   private child: ManagedProcess | null = null;
+  private hasLaunched = false;
+  private newWorldRestartPending = false;
   private subscribers = new Set<Subscriber>();
   private stopping = false;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -131,7 +134,10 @@ export class BackendProcessManager {
     this.binaryPath = options.binaryPath
       ?? process.env.AUTOPOIESIS_BACKEND_PATH
       ?? resolve(this.projectRoot, "build/autopoiesis_backend");
-    this.binaryArgs = [...(options.binaryArgs ?? [])];
+    this.initialBinaryArgs = [...(options.binaryArgs ?? [])];
+    // L'option demandée au lancement n'est autorisée qu'une fois : une relance
+    // automatique après incident ne peut jamais recréer un monde.
+    this.normalBinaryArgs = this.initialBinaryArgs.filter((argument) => argument !== "--new-world");
     this.autoRestart = options.autoRestart ?? process.env.AUTOPOIESIS_BACKEND_RESTART !== "0";
     this.restartDelayMs = options.restartDelayMs ?? 1_500;
     this.maxRestarts = options.maxRestarts ?? 5;
@@ -139,6 +145,40 @@ export class BackendProcessManager {
   }
 
   async start(): Promise<boolean> {
+    return this.launch(this.hasLaunched ? this.normalBinaryArgs : this.initialBinaryArgs);
+  }
+
+  /**
+   * Seule entrée de redémarrage de civilisation. La preuve vient exclusivement
+   * du dernier instantané C++ ; aucun état React, IA ou disque n'est consulté.
+   */
+  requestNewWorldRestart(): boolean {
+    if (!this.hasExtinctionProof() || this.newWorldRestartPending) return false;
+    if (!this.child) {
+      if (this.engine.status !== "stopped") return false;
+      this.newWorldRestartPending = true;
+      this.clearWorldProjection();
+      void this.launchNewWorld();
+      return true;
+    }
+    if (this.engine.status !== "running") return false;
+
+    this.newWorldRestartPending = true;
+    this.updateEngine("restarting", null);
+    try {
+      // La sortie normale laisse au backend le temps de persister son
+      // checkpoint avant que --new-world n'en abandonne explicitement l'état.
+      this.child.stdin.write(`${JSON.stringify({ version: 1, command: "stop" })}\n`);
+      void this.child.stdin.flush();
+      return true;
+    } catch (error) {
+      this.newWorldRestartPending = false;
+      this.updateEngine("unavailable", error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }
+
+  private async launch(binaryArgs: string[]): Promise<boolean> {
     if (this.child) return true;
     this.stopping = false;
     if (!existsSync(this.binaryPath) && this.spawnProcess === bunSpawn) {
@@ -148,8 +188,9 @@ export class BackendProcessManager {
 
     this.updateEngine(this.engine.restarts > 0 ? "restarting" : "starting", null);
     try {
-      const child = this.spawnProcess(this.binaryPath, this.projectRoot, this.binaryArgs);
+      const child = this.spawnProcess(this.binaryPath, this.projectRoot, binaryArgs);
       this.child = child;
+      this.hasLaunched = true;
       this.engine = { ...this.engine, status: "running", pid: child.pid, last_error: null };
       this.publish({ type: "engine", payload: this.engine });
       void consumeLines(child.stdout, (line) => this.acceptStdout(line));
@@ -165,6 +206,7 @@ export class BackendProcessManager {
 
   stop(): void {
     this.stopping = true;
+    this.newWorldRestartPending = false;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = null;
     this.child?.kill("SIGTERM");
@@ -326,6 +368,16 @@ export class BackendProcessManager {
 
   private handleExit(code: number): void {
     this.child = null;
+    if (this.newWorldRestartPending) {
+      this.newWorldRestartPending = false;
+      if (code !== 0) {
+        this.updateEngine("unavailable", `Le moteur n’a pas pu s’arrêter proprement (code ${code}).`);
+        return;
+      }
+      this.clearWorldProjection();
+      void this.launchNewWorld();
+      return;
+    }
     if (this.stopping) {
       this.updateEngine("stopped", null);
       return;
@@ -355,6 +407,34 @@ export class BackendProcessManager {
       this.restartTimer = null;
       void this.start();
     }, backoff);
+  }
+
+  private hasExtinctionProof(): boolean {
+    const state = this.state;
+    const civilization = state?.civilization;
+    return civilization?.status === "extinct"
+      && civilization.extinction_day > 0
+      && civilization.restart_contract === "--new-world"
+      && state !== null
+      && state.agents.length > 0
+      && state.agents.every((agent) => !agent.alive);
+  }
+
+  private clearWorldProjection(): void {
+    // Projection volatile seulement : le contrat --new-world du C++ cible le
+    // checkpoint de simulation, sans supprimer journaux, demandes ou secrets.
+    this.state = null;
+    this.awaitingDawn = false;
+    this.activity = null;
+    this.validation = null;
+    this.evolution = null;
+    this.evolutionCompletion = null;
+    this.recompilation = null;
+  }
+
+  private async launchNewWorld(): Promise<void> {
+    const started = await this.launch([...this.normalBinaryArgs, "--new-world"]);
+    if (!started) this.updateEngine("unavailable", "Le nouveau monde n’a pas pu démarrer.");
   }
 
   private updateEngine(status: EngineInfo["status"], error: string | null): void {

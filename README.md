@@ -178,6 +178,13 @@ Le navigateur emploie `/bridge/*` afin de rester sur le port web dans les
 previews Nuagent, où `/api/*` est réservé au port API dédié. Les trois routes
 restent aussi exposées sous `/api/*` pour la compatibilité locale et Docker.
 
+La commande humaine `civilization.new_world` n’est acceptée par Elysia que si
+le dernier instantané C++ atteste `civilization.status: "extinct"`, le contrat
+`"--new-world"` et l’absence de personnage vivant. Le BFF demande alors
+l’arrêt propre du backend, puis le relance explicitement avec `--new-world`.
+Cette option ne cible que `data/simulation-state.json` ; ni le navigateur ni
+le BFF n’effacent les journaux, les demandes d’évolution ou des secrets.
+
 Les seules commandes filaires acceptées par le C++ sont pause/reprise/arrêt,
 vitesse, délai et texte de validation autorisé pour la garde courante. Les
 identifiants de carte sont résolus par Elysia vers les choix numériques de la

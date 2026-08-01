@@ -38,6 +38,7 @@ struct UiSnapshot {
   CalendarDate date;
   int simulation_cycle{};
   ClimateState climate;
+  CivilizationState civilization;
   EcologyState ecology;
   DayPhase phase{DayPhase::Day};
   int cycle_in_day{1};
@@ -109,7 +110,8 @@ UiSnapshot make_ui_snapshot(const CalendarDate& date, int simulation_cycle,
                             const std::vector<Agent>& agents,
                             const std::vector<std::string>& recent_events,
                             int cycle_in_day = 1, int cycles_per_day = 2400,
-                            const std::vector<DangerEvent>& dangers = {});
+                            const std::vector<DangerEvent>& dangers = {},
+                            const CivilizationState& civilization = {});
 std::optional<Position> map_position_at_pixel(const MapViewport& viewport, float pixel_x,
                                                float pixel_y, int map_width, int map_height);
 const UiAgent* agent_at_position(const UiSnapshot& snapshot, Position position);

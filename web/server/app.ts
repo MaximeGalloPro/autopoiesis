@@ -132,6 +132,20 @@ function mountTransportRoutes(
         set.status = 403;
         return { accepted: false, error: "L’approbation réelle est désactivée dans cette preview publique." };
       }
+      if (body.type === "civilization.new_world") {
+        if (safePreview) {
+          set.status = 403;
+          return { accepted: false, error: "La création d’un monde est désactivée dans cette preview publique." };
+        }
+        // Action humaine explicite contrôlée par le BFF : elle ne transite ni
+        // par un décideur IA ni par une écriture navigateur dans data/.
+        if (!manager.requestNewWorldRestart()) {
+          set.status = 409;
+          return { accepted: false, error: "La dernière preuve autoritaire ne permet pas de démarrer une nouvelle civilisation." };
+        }
+        set.status = 202;
+        return { accepted: true };
+      }
       if (!manager.send(body)) {
         set.status = 503;
         return { accepted: false, error: "Le moteur n’est pas disponible." };

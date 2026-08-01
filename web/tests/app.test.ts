@@ -10,6 +10,7 @@ import { worldSnapshot } from "./fixtures";
 
 class FakeManager {
   commands: EngineCommand[] = [];
+  newWorldRequests = 0;
   private subscribers = new Set<(event: BackendEvent) => void>();
   current: PublicState = {
     state: worldSnapshot(),
@@ -25,6 +26,13 @@ class FakeManager {
   };
   snapshot() { return this.current; }
   send(command: EngineCommand) { this.commands.push(command); return true; }
+  requestNewWorldRestart() {
+    this.newWorldRequests += 1;
+    const civilization = this.current.state?.civilization;
+    return civilization?.status === "extinct"
+      && civilization.extinction_day > 0
+      && civilization.restart_contract === "--new-world";
+  }
   subscribe(subscriber: (event: BackendEvent) => void) {
     this.subscribers.add(subscriber);
     return () => this.subscribers.delete(subscriber);
@@ -154,6 +162,39 @@ describe("BFF Elysia", () => {
     expect((await send({ type: "simulation.resume", injected: true })).status).toBe(422);
     expect((await send({ type: "validation.decision", request_id: "../secret", decision: "approve" })).status).toBe(422);
     expect(manager.commands).toEqual([{ type: "control.speed", multiplier: 2 }]);
+  });
+
+  test("ne redémarre un monde que sur une commande humaine d’extinction attestée", async () => {
+    const manager = new FakeManager();
+    const app = createApp(manager as unknown as BackendProcessManager, { serveStatic: false, passwordAuth: false });
+    const endpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`;
+    const send = () => app.handle(new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "civilization.new_world" }),
+    }));
+
+    expect((await send()).status).toBe(409);
+    expect(manager.newWorldRequests).toBe(1);
+    expect(manager.commands).toEqual([]);
+
+    manager.current = {
+      ...manager.current,
+      state: worldSnapshot({
+        agents: worldSnapshot().agents.map((agent) => ({ ...agent, alive: false })),
+        civilization: { status: "extinct", extinction_day: 124, restart_contract: "--new-world" },
+      }),
+    };
+    expect((await send()).status).toBe(202);
+    expect(manager.newWorldRequests).toBe(2);
+    expect(manager.commands).toEqual([]);
+
+    const malformed = await app.handle(new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "civilization.new_world", automated: true }),
+    }));
+    expect(malformed.status).toBe(422);
   });
 
   test("interdit l’approbation réelle dans une preview publique", async () => {

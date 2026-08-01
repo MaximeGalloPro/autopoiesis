@@ -1722,7 +1722,7 @@ bool Simulation::run_day(IUserInterface* interface){
     }
     if(interface){
       const auto snapshot=make_ui_snapshot(date_,simulation_cycle_,climate_,world_,agents_,
-                                           logger_.recent(),cycle_in_day_,cycles_per_day_,dangers_);
+                                           logger_.recent(),cycle_in_day_,cycles_per_day_,dangers_,civilization_);
       if(!interface->present(snapshot)){
         logger_.message("Interface utilisateur fermée par l'utilisateur.");
         return false;

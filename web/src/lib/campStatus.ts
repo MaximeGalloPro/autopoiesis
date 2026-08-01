@@ -16,7 +16,7 @@ export interface CampStatus {
     ages: CampCohort[];
     generations: CampCohort[];
   };
-  newCivilization: { available: false; reason: string };
+  newCivilization: { available: boolean; reason: string };
 }
 
 function validChest(cell: WorldCell): CampStatus["chest"] {
@@ -46,6 +46,12 @@ export function campStatusFromSnapshot(snapshot: WorldSnapshot): CampStatus {
   const ages = { children: 0, adults: 0, unknown: 0 };
   const generations = new Map<number, number>();
   let unknownGeneration = 0;
+  const civilization = snapshot.civilization;
+  const restartAvailable = civilization?.status === "extinct"
+    && civilization.extinction_day > 0
+    && civilization.restart_contract === "--new-world"
+    && snapshot.agents.length > 0
+    && residents.length === 0;
 
   for (const resident of residents) {
     if (typeof resident.age_days !== "number") ages.unknown += 1;
@@ -74,10 +80,11 @@ export function campStatusFromSnapshot(snapshot: WorldSnapshot): CampStatus {
         ...(unknownGeneration > 0 ? [{ label: "Génération non transmise", count: unknownGeneration }] : []),
       ],
     },
-    // Le BFF ne déclare aucune commande de réinitialisation : ne jamais en simuler une côté client.
     newCivilization: {
-      available: false,
-      reason: "Aucune commande validée ne permet encore de créer une civilisation.",
+      available: restartAvailable,
+      reason: restartAvailable
+        ? "L’extinction est attestée par le dernier instantané du moteur."
+        : "Aucune commande validée ne permet encore de créer une civilisation.",
     },
   };
 }

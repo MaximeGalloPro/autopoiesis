@@ -56,4 +56,20 @@ describe("statut observé du foyer", () => {
     expect(html).toContain("disabled");
     expect(html).toContain("Aucune commande validée");
   });
+
+  test("active la nouvelle civilisation uniquement avec la preuve d’extinction du moteur", () => {
+    const snapshot = worldSnapshot({
+      agents: [resident({ alive: false, age_days: 100, generation: 0 })],
+      civilization: { status: "extinct", extinction_day: 124, restart_contract: "--new-world" },
+    });
+    const status = campStatusFromSnapshot(snapshot);
+    const html = renderToStaticMarkup(
+      <Inspector snapshot={snapshot} selected={null} onSelect={() => undefined} view="camp" onNewCivilization={() => undefined} />,
+    );
+
+    expect(status.newCivilization).toMatchObject({ available: true });
+    expect(html).toContain("Nouvelle civilisation");
+    expect(html).toContain('<button type="button" aria-describedby="new-civilization-unavailable">Nouvelle civilisation</button>');
+    expect(html).not.toContain("disabled");
+  });
 });

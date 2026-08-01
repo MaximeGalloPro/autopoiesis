@@ -78,6 +78,7 @@ int main() {
   assert(snapshot.agents[0].state.name == "Ada");
   assert(snapshot.agents[0].state.family_id == "foyer-principal");
   assert(snapshot.agents[0].mood == "Tension liée à la soif");
+  assert(snapshot.civilization.status==CivilizationStatus::Active);
   assert(std::find(snapshot.agents[0].available_actions.begin(),
                    snapshot.agents[0].available_actions.end(), "move") !=
          snapshot.agents[0].available_actions.end());
@@ -108,6 +109,7 @@ int main() {
   assert(interface.last_snapshot.ecology.day==1);
   assert(interface.last_snapshot.simulation_cycle==4);
   assert(interface.last_snapshot.agents.size()==3);
+  assert(interface.last_snapshot.civilization.status==CivilizationStatus::Active);
 
   Logger closing_logger(data_directory+"-closing");
   std::mt19937 closing_rng(42);

@@ -125,6 +125,12 @@ int main() {
   assert(serialized.at("agents").at(0).at("state").at("age_days")==25);
   assert(serialized.at("agents").at(0).at("state").at("generation")==2);
   assert(serialized.at("animals").at(0).at("type")=="rabbit");
+  auto extinct_snapshot=snapshot;
+  extinct_snapshot.civilization={CivilizationStatus::Extinct,95,"--new-world"};
+  const auto extinct_serialized=web_snapshot_json(extinct_snapshot);
+  assert(extinct_serialized.at("civilization").at("status")=="extinct");
+  assert(extinct_serialized.at("civilization").at("extinction_day")==95);
+  assert(extinct_serialized.at("civilization").at("restart_contract")=="--new-world");
 
   std::istringstream runtime_input(
       R"({"version":1,"command":"set_speed","speed":4})" "\n"

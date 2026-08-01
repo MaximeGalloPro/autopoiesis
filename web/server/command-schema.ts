@@ -36,6 +36,7 @@ export function isEngineCommand(value: unknown): value is EngineCommand {
     case "validation.none":
     case "simulation.resume":
     case "simulation.stop":
+    case "civilization.new_world":
       return hasExactKeys(command, ["type"]);
     default:
       return false;
