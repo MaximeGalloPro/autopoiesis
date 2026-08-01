@@ -46,7 +46,11 @@ int main() {
   Simulation simulation(42,decider,logger,nullptr,checkpoint.string());
   auto& world=SimulationTestAccess::world(simulation);
   const Position camp{13,2};assert(world.place_campfire(camp));
-  assert(world.create_shelter({14,2}));stock_food(world,camp,40);
+  assert(world.create_shelter({14,2}));
+  assert(world.store_materials(camp,World::camp_chest_upgrade_wood_cost,
+                               World::camp_chest_upgrade_branch_cost));
+  assert(world.upgrade_camp_chest(camp));
+  stock_food(world,camp,40);
   for(const auto& agent:simulation.agents())assert(agent.family_id=="foyer-principal");
   for(std::size_t index=0;index<simulation.agents().size();++index){
     auto& agent=SimulationTestAccess::agent(simulation,index);agent.position={14,2};agent.age_days=25*360;
