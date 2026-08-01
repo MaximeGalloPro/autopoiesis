@@ -78,6 +78,10 @@ void assert_same_agents(const std::vector<Agent>& left,const std::vector<Agent>&
     assert(left[index].origin==right[index].origin);
     assert(left[index].arrival_day==right[index].arrival_day);
     assert(left[index].parent_ids==right[index].parent_ids);
+    assert(left[index].partner_id==right[index].partner_id);
+    assert(left[index].partnered_day==right[index].partnered_day);
+    assert(left[index].last_birth_day==right[index].last_birth_day);
+    assert(left[index].last_parental_learning_day==right[index].last_parental_learning_day);
     assert(left[index].departure_day==right[index].departure_day);
     assert(left[index].departure_reason==right[index].departure_reason);
     assert(left[index].death_cause==right[index].death_cause);
@@ -162,8 +166,13 @@ int main() {
   for(auto& agent:legacy_state["agents"]){
     agent.erase("family_id");
     agent.erase("generation");
+    agent.erase("partner_id");
+    agent.erase("partnered_day");
+    agent.erase("last_birth_day");
+    agent.erase("last_parental_learning_day");
     agent["age_days"]=agent.at("age_days").get<int>()*360;
   }
+  legacy_state.erase("civilization");
   const auto legacy_checkpoint=root/"legacy-state.json";
   {
     std::ofstream output(legacy_checkpoint);
@@ -173,10 +182,15 @@ int main() {
   LocalDecider legacy_decider(legacy_rng);
   Logger legacy_logger((root/"legacy").string());
   Simulation legacy(42,legacy_decider,legacy_logger,nullptr,legacy_checkpoint.string());
+  assert(legacy.civilization().status==CivilizationStatus::Active);
   for(std::size_t index=0;index<legacy.agents().size();++index){
     assert(legacy.agents()[index].family_id=="foyer-principal");
     assert(legacy.agents()[index].generation==0);
     assert(legacy.agents()[index].age_days==resumed.agents()[index].age_days);
+    assert(legacy.agents()[index].partner_id.empty());
+    assert(legacy.agents()[index].partnered_day==0);
+    assert(legacy.agents()[index].last_birth_day==0);
+    assert(legacy.agents()[index].last_parental_learning_day==0);
   }
 
   const auto pending_checkpoint=root/"pending-validation.json";
