@@ -125,16 +125,6 @@ void print_evolution_diagnostics(std::ostream& output, const path& data_director
   }
 }
 
-int god_max_corrections() {
-  const char* value = std::getenv("GOD_MAX_CORRECTIONS");
-  if (!value || !*value) return 2;
-  try {
-    return std::max(0, std::stoi(value));
-  } catch (...) {
-    return 2;
-  }
-}
-
 void append_jsonl(const path& file, const json& item) {
   std::ofstream output(file, std::ios::app);
   if (output) output << item.dump() << '\n';
@@ -213,215 +203,70 @@ HumanValidation::HumanValidation(std::string data_directory, std::istream& input
     : data_directory_(std::move(data_directory)), input_(input), output_(output),
       interface_(interface) {}
 
-bool HumanValidation::wait_for_evolution(const std::string& request_id) {
+ValidationWindowState HumanValidation::poll_evolution(const std::string& request_id) {
+  const auto now=std::chrono::steady_clock::now();
+  const auto monitor_it=evolution_monitors_.try_emplace(request_id,
+      EvolutionMonitor{now,std::nullopt,{}}).first;
+  auto& monitor=monitor_it->second;
   const path data_directory(data_directory_);
-  const path run_directory = data_directory / "evolution_runs" / request_id;
-  const auto queue_started_at = std::chrono::steady_clock::now();
-  const auto queue_deadline = queue_started_at + std::chrono::seconds(
-      timeout_seconds("GOD_QUEUE_TIMEOUT_SECONDS", 900));
-  auto work_started_at = queue_started_at;
-  auto work_deadline = queue_started_at;
-  auto last_heartbeat = queue_started_at;
-  bool work_started = false;
-  std::string phase;
-  std::string last_log;
-  std::string last_daemon_log;
-  std::string last_verification_status;
-  bool reported_result = false;
-
-  const auto progress_stage=[](const std::string& current_phase){
-    if(current_phase=="preparation")return EvolutionProgressStage::Preparing;
-    if(current_phase=="implementation")return EvolutionProgressStage::Implementing;
-    if(current_phase=="compte-rendu")return EvolutionProgressStage::Reporting;
-    if(current_phase=="verification")return EvolutionProgressStage::Verifying;
-    if(current_phase=="correction")return EvolutionProgressStage::Correcting;
-    if(current_phase=="activation")return EvolutionProgressStage::Activating;
-    if(current_phase=="activation-terminee")return EvolutionProgressStage::Complete;
-    if(current_phase=="echec"||current_phase=="activation-echec")return EvolutionProgressStage::Failed;
-    return EvolutionProgressStage::Queued;
-  };
-  const auto progress_message=[](EvolutionProgressStage stage){
-    switch(stage){
-      case EvolutionProgressStage::Queued:return "En attente du daemon d'évolution";
-      case EvolutionProgressStage::Preparing:return "Préparation de la demande pour Dieu";
-      case EvolutionProgressStage::Implementing:return "Dieu écrit le test rouge puis l'implémentation minimale";
-      case EvolutionProgressStage::Reporting:return "Compte rendu reçu, vérification en préparation";
-      case EvolutionProgressStage::Verifying:return "Compilation, tests et Docker en cours";
-      case EvolutionProgressStage::Correcting:return "Une correction est en cours";
-      case EvolutionProgressStage::Activating:return "Commit, push et activation de la version vérifiée";
-      case EvolutionProgressStage::Complete:return "La nouvelle évolution est active";
-      case EvolutionProgressStage::Failed:return "L'évolution n'a pas pu être activée";
-      case EvolutionProgressStage::TimedOut:return "Le délai de suivi est dépassé";
-    }
-    return "Traitement en cours";
-  };
-  const auto show_progress=[&](EvolutionProgressStage stage,const std::string& detail,bool successful){
-    if(!interface_)return true;
-    const auto now=std::chrono::steady_clock::now();
-    const auto reference=work_started?work_started_at:queue_started_at;
-    const auto elapsed=std::chrono::duration_cast<std::chrono::seconds>(now-reference).count();
-    return interface_->present_evolution_progress(
-        {stage,request_id,progress_message(stage),detail,elapsed,successful});
-  };
-  const auto finish_progress=[&](EvolutionProgressStage stage,const std::string& detail,
-                                 bool successful,bool can_continue){
-    if(!interface_)return can_continue;
-    const auto now=std::chrono::steady_clock::now();
-    const auto reference=work_started?work_started_at:queue_started_at;
-    const auto elapsed=std::chrono::duration_cast<std::chrono::seconds>(now-reference).count();
-    const EvolutionProgress progress{stage,request_id,progress_message(stage),detail,elapsed,successful};
-    if(!interface_->present_evolution_progress(progress))return false;
-    const auto command=interface_->request_evolution_completion(progress);
-    return can_continue&&command!="q"&&command!="Q";
-  };
-
-  output_ << "\n=== SUIVI DE DIEU ===\n"
-          << "Demande " << request_id << " approuvee."
-          << " Le daemon lance Dieu automatiquement.\n"
-          << "En attente des artefacts d'execution...\n" << std::flush;
-
-  while (true) {
-    const auto now = std::chrono::steady_clock::now();
-    const bool prompt_ready = std::filesystem::exists(run_directory / "god-prompt.txt");
-    const bool god_started = std::filesystem::exists(run_directory / "god-started");
-    const bool god_result_ready = std::filesystem::exists(run_directory / "god-result.txt");
-    const bool god_failed = std::filesystem::exists(run_directory / "god-failed");
-    const bool correction_failed = std::filesystem::exists(run_directory / "god-correction-failed");
-    const bool verification_started = std::filesystem::exists(run_directory / "verification-started");
-    const bool verification_ready = std::filesystem::exists(run_directory / "verification.json");
-    const bool activation_ready = std::filesystem::exists(run_directory / "activation.json");
-    std::string verification_status;
-    if (verification_ready) {
-      try { verification_status = json::parse(read_text(run_directory / "verification.json")).value("status", ""); }
-      catch (const json::parse_error&) { verification_status.clear(); }
-    }
-    const bool activation_failed = std::filesystem::exists(run_directory / "activation-failed");
-    if (god_started && !work_started) {
-      work_started = true;
-      work_started_at = now;
-      work_deadline = now + std::chrono::seconds(
-          timeout_seconds("GOD_WAIT_TIMEOUT_SECONDS", 900));
-      const auto queued_seconds = std::chrono::duration_cast<std::chrono::seconds>(
-          now - queue_started_at).count();
-      output_ << "[Orchestrateur] Dieu a demarre apres " << queued_seconds
-              << " seconde(s) en file d'attente.\n";
-    }
-    const std::string next_phase = god_failed || correction_failed ? "echec" : activation_failed ? "activation-echec" : activation_ready ? "activation-terminee" :
-                                   verification_status == "verified" ? "activation" :
-                                   verification_ready ? "correction" : verification_started ? "verification" :
-                                   god_result_ready ? "compte-rendu" :
-                                   god_started ? "implementation" :
-                                   prompt_ready ? "preparation" : "attente";
-    if (next_phase != phase) {
-      phase = next_phase;
-      if (phase == "attente") output_ << "[Dieu] En attente du runner d'evolution.\n";
-      if (phase == "preparation") output_ << "[Dieu] Prompt prepare, lancement de l'instance architecte.\n";
-      if (phase == "implementation") output_ << "[Dieu] Instance active : lecture, test rouge, implementation minimale.\n";
-      if (phase == "compte-rendu") output_ << "[Dieu] Compte rendu recu, passage a la verification.\n";
-      if (phase == "verification") output_ << "[Verifier] Compilation, tests et Docker en cours.\n";
-      if (phase == "correction") output_ << "[Verifier] Echec detecte : Dieu va recevoir le diagnostic pour correction.\n";
-      if (phase == "activation") output_ << "[Activation] Verification reussie, commit, push et activation en cours.\n";
-      if (phase == "activation-terminee") output_ << "[Activation] Version activee et poussee sur main.\n";
-      if (phase == "activation-echec") output_ << "[Activation] Echec du commit ou du push ; la version reste inactive.\n";
-      if (phase == "echec") output_ << "[Dieu] Le runner a echoue ; consultez les logs de cette execution.\n";
-    }
-
-    const auto stdout_line = last_non_empty_line(run_directory / "god.stdout.log");
-    const auto stderr_line = last_non_empty_line(run_directory / "god.stderr.log");
-    const auto current_log = stderr_line.empty() ? stdout_line : stderr_line;
-    if (!current_log.empty() && current_log != last_log) {
-      last_log = current_log;
-      output_ << "[Dieu] " << current_log << '\n';
-    }
-    const auto daemon_log = last_non_empty_line(data_directory / "evolution-daemon.log");
-    if (!daemon_log.empty() && daemon_log != last_daemon_log) {
-      last_daemon_log = daemon_log;
-      output_ << "[Orchestrateur] " << daemon_log << '\n';
-    }
-
-    if (god_result_ready && !reported_result) {
-      const auto result = read_text(run_directory / "god-result.txt");
-      if (!result.empty()) output_ << "[Dieu] Detail du compte rendu :\n" << result;
-      reported_result = true;
-    }
-
-    if (verification_ready) {
-      try {
-        const auto verification = json::parse(read_text(run_directory / "verification.json"));
-        const auto status = verification.value("status", "inconnu");
-        if (status != last_verification_status) {
-          last_verification_status = status;
-          output_ << "[Verifier] statut=" << status
-                  << " | cmake=" << verification.value("cmake", "inconnu")
-                  << " | tests=" << verification.value("tests", "inconnu")
-                  << " | docker=" << verification.value("docker", "inconnu") << '\n' << std::flush;
-        }
-        if (verification.value("status", "") == "verified" && activation_ready) {
-          try {
-            const auto activation = json::parse(read_text(run_directory / "activation.json"));
-            const bool activated=activation.value("status", "")=="activated";
-            output_ << "[Activation] statut=" << activation.value("status", "inconnu")
-                    << " | commit=" << activation.value("commit", "inconnu") << '\n'
-                    << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-            return finish_progress(activated?EvolutionProgressStage::Complete:EvolutionProgressStage::Failed,
-                                   "Commit "+activation.value("commit", "inconnu"),activated,activated);
-          } catch (const json::parse_error&) {
-            output_ << "[Activation] activation.json est encore en cours d'ecriture.\n";
-          }
-        } else if (verification.value("status", "") == "rejected") {
-          const auto count_text = read_text(run_directory / "correction-count");
-          try {
-            if (std::stoi(count_text) >= god_max_corrections()) {
-              output_ << "[Dieu] Limite de corrections atteinte.\n"
-                      << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-              return finish_progress(EvolutionProgressStage::Failed,
-                                     "La limite de corrections est atteinte.",false,false);
-            }
-          } catch (...) {
-          }
-        }
-      } catch (const json::parse_error&) {
-        output_ << "[Verifier] verification.json est encore en cours d'ecriture.\n";
-      }
-    }
-    if (god_failed || correction_failed || activation_failed) {
-      print_evolution_diagnostics(output_, data_directory, run_directory);
-      output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-      return finish_progress(EvolutionProgressStage::Failed,
-                             current_log.empty()?"Consultez les diagnostics dans le terminal.":current_log,
-                             false,false);
-    }
-
-    if (!work_started && now >= queue_deadline) {
-      std::ofstream(run_directory / "ui-queue-timeout") << timestamp() << '\n';
-      output_ << "[Orchestrateur] Delai de file d'attente depasse "
-              << "(GOD_QUEUE_TIMEOUT_SECONDS). Dieu n'a pas encore demarre ; "
-              << "le daemon peut poursuivre en arriere-plan.\n";
-      print_evolution_diagnostics(output_, data_directory, run_directory);
-      output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-      return finish_progress(EvolutionProgressStage::TimedOut,
-                             "Dieu peut encore démarrer dans le daemon.",false,true);
-    }
-    if (work_started && now >= work_deadline) {
-      std::ofstream(run_directory / "ui-work-timeout") << timestamp() << '\n';
-      output_ << "[Dieu] Delai de travail depasse (GOD_WAIT_TIMEOUT_SECONDS). "
-              << "L'instance a bien demarre et peut poursuivre dans le daemon.\n";
-      print_evolution_diagnostics(output_, data_directory, run_directory);
-      output_ << "=== FIN DU SUIVI DE DIEU ===\n" << std::flush;
-      return finish_progress(EvolutionProgressStage::TimedOut,
-                             "Le daemon peut poursuivre le travail en arrière-plan.",false,true);
-    }
-    if (now - last_heartbeat >= std::chrono::seconds(15)) {
-      const auto reference = work_started ? work_started_at : queue_started_at;
-      const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - reference).count();
-      output_ << "[Suivi] " << (work_started ? "Dieu travaille" : "attente du daemon")
-              << " depuis " << elapsed << " seconde(s).\n" << std::flush;
-      last_heartbeat = now;
-    }
-    const auto detail=!current_log.empty()?current_log:last_daemon_log;
-    if(!show_progress(progress_stage(phase),detail,phase=="activation-terminee"))return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  const path run_directory=data_directory/"evolution_runs"/request_id;
+  const bool prompt_ready=std::filesystem::exists(run_directory/"god-prompt.txt");
+  const bool god_started=std::filesystem::exists(run_directory/"god-started");
+  const bool god_failed=std::filesystem::exists(run_directory/"god-failed") ||
+                        std::filesystem::exists(run_directory/"god-correction-failed");
+  const bool activation_failed=std::filesystem::exists(run_directory/"activation-failed");
+  const bool verification_started=std::filesystem::exists(run_directory/"verification-started");
+  const bool verification_ready=std::filesystem::exists(run_directory/"verification.json");
+  const bool activation_ready=std::filesystem::exists(run_directory/"activation.json");
+  std::string verification_status;
+  if(verification_ready)try{verification_status=json::parse(read_text(run_directory/"verification.json")).value("status","");}catch(const json::parse_error&){}
+  if(god_started&&!monitor.started_at){
+    monitor.started_at=now;
+    output_ << "[Orchestrateur] Dieu a démarré pour " << request_id << ".\n";
   }
+  const std::string phase=god_failed?"echec":activation_failed?"activation-echec":activation_ready?"activation-terminee":
+      verification_status=="verified"?"activation":verification_ready?"correction":verification_started?"verification":
+      god_started?"implementation":prompt_ready?"preparation":"attente";
+  const auto stage=[&]{
+    if(phase=="preparation")return EvolutionProgressStage::Preparing;
+    if(phase=="implementation")return EvolutionProgressStage::Implementing;
+    if(phase=="verification")return EvolutionProgressStage::Verifying;
+    if(phase=="correction")return EvolutionProgressStage::Correcting;
+    if(phase=="activation")return EvolutionProgressStage::Activating;
+    if(phase=="activation-terminee")return EvolutionProgressStage::Complete;
+    if(phase=="echec"||phase=="activation-echec")return EvolutionProgressStage::Failed;
+    return EvolutionProgressStage::Queued;
+  }();
+  const auto reference=monitor.started_at.value_or(monitor.queued_at);
+  const auto elapsed=std::chrono::duration_cast<std::chrono::seconds>(now-reference).count();
+  const auto detail=[&]{const auto error=last_non_empty_line(run_directory/"god.stderr.log");return error.empty()?last_non_empty_line(run_directory/"god.stdout.log"):error;}();
+  if(phase!=monitor.last_phase){
+    monitor.last_phase=phase;
+    output_ << "[Dieu] " << request_id << " : " << phase << ".\n" << std::flush;
+  }
+  const auto notify=[&](EvolutionProgressStage current_stage,bool successful){
+    return !interface_||interface_->present_evolution_progress({current_stage,request_id,{},detail,elapsed,successful});
+  };
+  if(god_failed||activation_failed){
+    print_evolution_diagnostics(output_,data_directory,run_directory);
+    evolution_monitors_.erase(monitor_it);
+    return notify(EvolutionProgressStage::Failed,false)?ValidationWindowState::Resolved:ValidationWindowState::StopRequested;
+  }
+  if(activation_ready){
+    bool activated=false;
+    try{activated=json::parse(read_text(run_directory/"activation.json")).value("status","")=="activated";}catch(const json::parse_error&){}
+    evolution_monitors_.erase(monitor_it);
+    return notify(activated?EvolutionProgressStage::Complete:EvolutionProgressStage::Failed,activated)?
+        ValidationWindowState::Resolved:ValidationWindowState::StopRequested;
+  }
+  const auto deadline=monitor.started_at?*monitor.started_at+std::chrono::seconds(timeout_seconds("GOD_WAIT_TIMEOUT_SECONDS",900)):
+                                           monitor.queued_at+std::chrono::seconds(timeout_seconds("GOD_QUEUE_TIMEOUT_SECONDS",900));
+  if(now>=deadline){
+    std::ofstream(run_directory/(monitor.started_at?"ui-work-timeout":"ui-queue-timeout"))<<timestamp()<<'\n';
+    evolution_monitors_.erase(monitor_it);
+    return notify(EvolutionProgressStage::TimedOut,false)?ValidationWindowState::Resolved:ValidationWindowState::StopRequested;
+  }
+  return notify(stage,false)?ValidationWindowState::Pending:ValidationWindowState::StopRequested;
 }
 
 std::optional<std::string> HumanValidation::poll_command(const ValidationPrompt& prompt) {
@@ -434,6 +279,7 @@ std::optional<std::string> HumanValidation::poll_command(const ValidationPrompt&
 
 ValidationWindowState HumanValidation::advance_devil(ActiveWindow& window) {
   const auto& request=*window.devil_request;
+  const auto request_id=request.value("id","");
   const bool automatic=[](){const char* value=std::getenv("DEVIL_AUTO_APPROVE");return value&&std::string(value)=="1";}();
   const auto decide=[&](bool approve,const std::string& mode) {
     const path data_directory(data_directory_);
@@ -454,11 +300,8 @@ ValidationWindowState HumanValidation::advance_devil(ActiveWindow& window) {
     output_ << "Approbation automatique activée par DEVIL_AUTO_APPROVE=1.\n";
     decide(true,"devil_automatic");
     window.devil_request.reset();
+    window.evolution_request_id=request_id;
     window.prompt_dirty=true;
-    if(window.requests.empty()){
-      active_window_.reset();
-      return ValidationWindowState::Resolved;
-    }
     return ValidationWindowState::Pending;
   }
   const ValidationPrompt prompt{ValidationStage::Confirm,window.day,window.simulation_cycle,
@@ -486,6 +329,11 @@ ValidationWindowState HumanValidation::advance_devil(ActiveWindow& window) {
     return ValidationWindowState::Pending;
   }
   window.devil_request.reset();
+  if(*line=="a"||*line=="A"){
+    window.evolution_request_id=request_id;
+    window.prompt_dirty=true;
+    return ValidationWindowState::Pending;
+  }
   window.prompt_dirty=true;
   if(window.requests.empty()){
     active_window_.reset();
@@ -580,6 +428,11 @@ ValidationWindowState HumanValidation::advance_feature(ActiveWindow& window) {
                           approve?"Approbation explicite dans l'interface intégrée":"Refus explicite dans l'interface intégrée");
   output_ << (approve?"Demande approuvée : ":"Demande refusée : ") << request.value("id","unknown") << '\n'
           << "Statut enregistré : " << (approve?"approved":"rejected") << ".\n";
+  if(approve){
+    window.evolution_request_id=request.value("id","");
+    window.prompt_dirty=true;
+    return ValidationWindowState::Pending;
+  }
   active_window_.reset();
   return ValidationWindowState::Resolved;
 }
@@ -597,6 +450,11 @@ ValidationWindowState HumanValidation::advance_window(int day,int simulation_cyc
     window.requests=select_window_requests(
         current_requests(data_directory,day,simulation_cycle,output_,notices_),window_request_ids_,output_);
     active_window_=std::move(window);
+  }
+  if(active_window_->evolution_request_id){
+    const auto state=poll_evolution(*active_window_->evolution_request_id);
+    if(state!=ValidationWindowState::Pending)active_window_.reset();
+    return state;
   }
   if(active_window_->devil_request)return advance_devil(*active_window_);
   return advance_feature(*active_window_);

@@ -69,6 +69,7 @@ class WebInterface final : public IUserInterface, public IValidationInterface {
   std::size_t snapshot_count_{};
   std::optional<ValidationPrompt> active_validation_prompt_;
   std::optional<std::string> pending_validation_command_;
+  std::optional<EvolutionProgress> active_evolution_completion_;
 
   void emit(std::string_view type,json payload);
   void emit_status(std::string message,std::optional<bool> accepted=std::nullopt,

@@ -223,8 +223,9 @@ int main() {
   const auto result=restart_simulation.run(3,0,0,[](int,int,bool){
     return ValidationWindowState::Resolved;
   },&interface);
-  assert(result.restart_requested);
-  assert(result.remaining_days==2);
+  // A resolved validation no longer interrupts the current world for recompilation.
+  assert(!result.restart_requested);
+  assert(result.remaining_days==0);
   assert(std::filesystem::exists(restart_checkpoint));
 
   unsetenv("CYCLES_PER_DAY");

@@ -492,9 +492,23 @@ bool WebInterface::present_evolution_progress(const EvolutionProgress& progress)
 
 std::string WebInterface::request_evolution_completion(const EvolutionProgress& progress) {
   ValidationPrompt prompt{ValidationStage::Complete,0,0,{},0,ValidationPromptKind::Feature};
-  auto payload=evolution_progress_json(progress);
-  payload["allowed_commands"]={"o","q"};
-  const auto command=wait_for_validation(prompt,"evolution_completion",std::move(payload));
+  const bool changed=!active_evolution_completion_||
+      active_evolution_completion_->request_id!=progress.request_id||
+      active_evolution_completion_->stage!=progress.stage;
+  if(changed){
+    active_evolution_completion_=progress;
+    active_validation_prompt_=prompt;
+    pending_validation_command_.reset();
+    auto payload=evolution_progress_json(progress);
+    payload["allowed_commands"]={"o","q"};
+    emit("evolution_completion",std::move(payload));
+  }
+  if(!drain_runtime_commands())return "q";
+  if(!pending_validation_command_)return {};
+  const auto command=std::move(*pending_validation_command_);
+  pending_validation_command_.reset();
+  active_validation_prompt_.reset();
+  active_evolution_completion_.reset();
   restart_requested_=command=="o"&&progress.stage==EvolutionProgressStage::Complete&&
                      progress.successful;
   return command;

@@ -99,6 +99,7 @@ int main() {
   assert(reporter.events.empty());
 
   simulation.run(1, 0, 0);
+  simulation.wait_for_reporting_idle();
   assert(reporter.events.size() == 6);
   assert(reporter.events[0] == "report:a1:3:720");
   assert(reporter.events[1] == "request:a1:3:720");
@@ -111,6 +112,7 @@ int main() {
   assert(reporter.dates.front().month == 1);
 
   simulation.run(3, 0, 0);
+  simulation.wait_for_reporting_idle();
   assert(reporter.events.size() == 12);
   assert(reporter.events[6] == "report:a1:6:1440");
   assert(reporter.events[7] == "request:a1:6:1440");
@@ -130,6 +132,7 @@ int main() {
   std::ostringstream terminal;
   auto* previous_buffer = std::cout.rdbuf(terminal.rdbuf());
   failed.run(1, 0, 0);
+  failed.wait_for_reporting_idle();
   std::cout.rdbuf(previous_buffer);
   assert(terminal.str().find("Diagnostic API : HTTP 429") != std::string::npos);
 
@@ -146,6 +149,7 @@ int main() {
   ActivityInterface activity_interface;
   Simulation animated(42,decider,logger,&delayed_reporter);
   animated.run(1,0,0,{},&activity_interface);
+  animated.wait_for_reporting_idle(&activity_interface);
   assert(delayed_reporter.events.size()==6);
   assert(!activity_interface.activities.empty());
   std::size_t previous_call=1;

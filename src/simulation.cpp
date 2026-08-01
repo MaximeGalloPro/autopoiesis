@@ -3,13 +3,13 @@
 #include "autopoiesis/renderer.hpp"
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <queue>
@@ -19,36 +19,6 @@
 
 namespace apo {
 namespace {
-struct ActivityResult {
-  json payload;
-  bool interface_open{true};
-};
-
-template<typename Work>
-ActivityResult run_with_activity(IUserInterface* interface, UiActivity activity, Work work) {
-  if(!interface)return {work(),true};
-
-  std::atomic_bool finished{false};
-  json payload=nullptr;
-  std::exception_ptr failure;
-  std::thread worker([&]{
-    try{payload=work();}catch(...){failure=std::current_exception();}
-    finished.store(true,std::memory_order_release);
-  });
-  const auto started=std::chrono::steady_clock::now();
-  bool interface_open=true;
-  do{
-    activity.elapsed_ms=std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now()-started).count();
-    if(interface_open)interface_open=interface->present_activity(activity);
-    if(!finished.load(std::memory_order_acquire))
-      std::this_thread::sleep_for(std::chrono::milliseconds(16));
-  }while(!finished.load(std::memory_order_acquire));
-  worker.join();
-  if(failure)std::rethrow_exception(failure);
-  return {std::move(payload),interface_open};
-}
-
 std::string rng_checkpoint(const std::mt19937& rng) {
   std::ostringstream output;output<<rng;return output.str();
 }
@@ -1586,6 +1556,10 @@ bool Simulation::run_day(IUserInterface* interface){
         return false;
       }
     }
+    if(!advance_reporting(interface)){
+      logger_.message("Interface utilisateur fermée pendant le traitement IA.");
+      return false;
+    }
   }
   for(auto& agent:agents_) if(agent.alive){update_needs(agent);update_health_conditions(agent);update_emotions(agent);apply_climate_effects(agent,date_,climate_);}
   update_population();
@@ -1593,13 +1567,218 @@ bool Simulation::run_day(IUserInterface* interface){
   return true;
 }
 
+void Simulation::schedule_ai_window(bool requires_validation){
+  AiWindow window;
+  window.day=day_;
+  window.simulation_cycle=simulation_cycle_;
+  window.total_calls=agents_.size()*2;
+  window.requires_validation=requires_validation;
+  if(reporter_&&reporter_->enabled()){
+    std::size_t call_number=0;
+    for(const auto& agent:agents_){
+      auto history=std::move(action_history_[agent.id]);
+      action_history_[agent.id].clear();
+      ReporterTask task;
+      task.kind=ReporterTaskKind::PeriodReport;
+      task.day=day_;
+      task.simulation_cycle=simulation_cycle_;
+      task.date=date_;
+      task.climate=climate_;
+      task.agent=agent;
+      task.history=std::move(history);
+      task.period_context={date_,climate_,logger_.period_memories(agent.id,12)};
+      task.evolution_context={active_world_mechanisms(),logger_.evolution_memory(24),
+          available_actions(agent,world_,agents_,day_,day_phase_for(cycle_in_day_,cycles_per_day_))};
+      task.call_number=++call_number;
+      task.total_calls=window.total_calls;
+      window.initial_reports.push_back(std::move(task));
+      ++call_number;
+    }
+  }
+
+  if(!active_ai_window_){
+    activate_ai_window(std::move(window));
+    return;
+  }
+  if(!deferred_ai_window_){
+    deferred_ai_window_=std::move(window);
+    logger_.message("Fenêtre IA mise en file d'attente : le lot précédent est encore en cours.");
+    return;
+  }
+  logger_.message("Fenêtre IA non planifiée : la file bornée contient déjà un lot actif et un lot différé.");
+}
+
+void Simulation::activate_ai_window(AiWindow window){
+  active_ai_window_=std::move(window);
+  std::cout << "\n=== FENETRE IA EN FILE : " << calendar_label(date_from_absolute_day(active_ai_window_->day))
+            << " / Jour absolu " << active_ai_window_->day << " / Cycle elementaire "
+            << active_ai_window_->simulation_cycle << " ===\n" << std::flush;
+  if(active_ai_window_->initial_reports.empty()){
+    std::cout << "API désactivée : aucun appel à effectuer.\n" << std::flush;
+    complete_ai_window();
+    return;
+  }
+  for(auto it=active_ai_window_->initial_reports.rbegin();it!=active_ai_window_->initial_reports.rend();++it)
+    reporter_queue_.push_front(std::move(*it));
+  active_ai_window_->initial_reports.clear();
+}
+
+void Simulation::queue_validation_window(int day,int simulation_cycle){
+  const ValidationWindow window{day,simulation_cycle};
+  if(!validation_pending_){
+    validation_pending_=true;
+    validation_day_=window.day;
+    validation_cycle_=window.simulation_cycle;
+    validation_window_opening_=true;
+    return;
+  }
+  if(!deferred_validation_window_){
+    deferred_validation_window_=window;
+    logger_.message("Validation humaine différée : une fenêtre attend déjà une décision explicite.");
+    return;
+  }
+  logger_.message("Validation humaine non ouverte : une fenêtre active et une fenêtre différée existent déjà ; les demandes restent pending.");
+}
+
+void Simulation::complete_ai_window(){
+  if(!active_ai_window_)return;
+  const auto completed=*active_ai_window_;
+  const auto constraint=devil_.draw(completed.day,completed.simulation_cycle,world_,agents_,
+                                    logger_.known_evolution_keys());
+  if(constraint){
+    const auto id=logger_.devil_constraint(completed.simulation_cycle,completed.day,*constraint);
+    if(!id.empty())std::cout << "\n=== APPARITION DU DIABLE ===\n"
+                              << "Une contrainte réelle est proposée : "
+                              << constraint->value("title","sans titre") << "\n"
+                              << "Elle attend la validation prévue par la configuration.\n" << std::flush;
+  }else{
+    std::cout << "Tirage du Diable : aucune apparition cette fenêtre.\n" << std::flush;
+  }
+  std::cout << "Fenêtre IA terminée : " << completed.total_calls << " appels tentés.\n" << std::flush;
+  if(completed.requires_validation)
+    queue_validation_window(completed.day,completed.simulation_cycle);
+  active_ai_window_.reset();
+  if(deferred_ai_window_){
+    auto deferred=std::move(*deferred_ai_window_);
+    deferred_ai_window_.reset();
+    activate_ai_window(std::move(deferred));
+  }
+}
+
+void Simulation::start_next_reporter_task(){
+  if(active_reporter_future_||reporter_queue_.empty()||!reporter_)return;
+  active_reporter_task_=std::move(reporter_queue_.front());
+  reporter_queue_.pop_front();
+  const auto task=*active_reporter_task_;
+  auto* reporter=reporter_;
+  active_reporter_started_=std::chrono::steady_clock::now();
+  active_reporter_future_=std::async(std::launch::async,[reporter,task]() mutable {
+    ReporterResult result;
+    result.task=task;
+    try{
+      result.payload=task.kind==ReporterTaskKind::PeriodReport?
+          reporter->report_period(task.simulation_cycle,task.day,task.agent,task.history,task.period_context):
+          reporter->request_evolution(task.simulation_cycle,task.day,task.agent,task.history,task.report,
+                                      task.evolution_context);
+      if(result.payload.is_null())result.diagnostic=reporter->last_error();
+    }catch(const std::exception& exception){
+      result.diagnostic=exception.what();
+    }catch(...){
+      result.diagnostic="exception inconnue pendant l'appel IA";
+    }
+    return result;
+  });
+}
+
+void Simulation::complete_reporter_task(ReporterResult result){
+  const auto& task=result.task;
+  const auto label=task.kind==ReporterTaskKind::PeriodReport?"bilan de ":"demande d'évolution pour ";
+  std::cout << "Appel " << task.call_number << "/" << task.total_calls << " — " << label
+            << task.agent.name << (result.payload.is_null()?" indisponible":" terminé");
+  if(result.payload.is_null()&&!result.diagnostic.empty())
+    std::cout << "\n  Diagnostic API : " << result.diagnostic;
+  std::cout << "\n" << std::flush;
+
+  if(task.kind==ReporterTaskKind::PeriodReport){
+    if(!result.payload.is_null())
+      logger_.ai_report(task.simulation_cycle,task.day,task.agent,result.payload,task.date,task.climate);
+    ReporterTask evolution=task;
+    evolution.kind=ReporterTaskKind::EvolutionRequest;
+    evolution.call_number=task.call_number+1;
+    evolution.report=std::move(result.payload);
+    reporter_queue_.push_front(std::move(evolution));
+    if(active_ai_window_)++active_ai_window_->completed_calls;
+    return;
+  }
+
+  if(!result.payload.is_null())
+    logger_.ai_feature_request(task.simulation_cycle,task.day,task.agent,task.report,result.payload);
+  if(active_ai_window_)++active_ai_window_->completed_calls;
+  if(active_ai_window_&&active_ai_window_->completed_calls>=active_ai_window_->total_calls)
+    complete_ai_window();
+}
+
+bool Simulation::advance_reporting(IUserInterface* interface){
+  if(active_reporter_future_&&active_reporter_future_->wait_for(std::chrono::milliseconds(0))==std::future_status::ready){
+    auto result=active_reporter_future_->get();
+    active_reporter_future_.reset();
+    active_reporter_task_.reset();
+    complete_reporter_task(std::move(result));
+  }
+  start_next_reporter_task();
+  if(interface&&active_reporter_task_){
+    const auto& task=*active_reporter_task_;
+    const UiActivity activity{task.kind==ReporterTaskKind::PeriodReport?UiActivityKind::PeriodReport:
+                              UiActivityKind::EvolutionRequest,
+                              task.date,task.simulation_cycle,task.agent.id,task.agent.name,
+                              task.call_number,task.total_calls,
+                              std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::steady_clock::now()-active_reporter_started_).count()};
+    if(!interface->present_activity(activity))return false;
+  }
+  return true;
+}
+
+void Simulation::wait_for_reporting_idle(IUserInterface* interface){
+  while(active_reporter_future_||!reporter_queue_.empty()||active_ai_window_){
+    if(active_reporter_future_)active_reporter_future_->wait();
+    if(!advance_reporting(interface))return;
+  }
+}
+
+bool Simulation::advance_validation(const ValidationGate& validation_gate,IUserInterface* interface,
+                                    int& delay_ms){
+  if(!validation_gate||!validation_pending_)return true;
+  const auto validation_state=validation_gate(validation_day_,validation_cycle_,validation_window_opening_);
+  validation_window_opening_=false;
+  if(validation_state==ValidationWindowState::StopRequested){
+    logger_.message("Simulation arrêtée à la demande de la validation humaine.");
+    return false;
+  }
+  if(validation_state!=ValidationWindowState::Resolved)return true;
+  validation_pending_=false;
+  validation_day_=0;
+  validation_cycle_=0;
+  if(deferred_validation_window_){
+    const auto next=*deferred_validation_window_;
+    deferred_validation_window_.reset();
+    validation_pending_=true;
+    validation_day_=next.day;
+    validation_cycle_=next.simulation_cycle;
+    validation_window_opening_=true;
+  }
+  save_checkpoint();
+  if(interface)delay_ms=std::clamp(interface->simulation_delay_ms(delay_ms),0,10000);
+  return true;
+}
+
 SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
                                     const ValidationGate& validation_gate,
                                     IUserInterface* interface){
-  bool stop_requested=false;
   for(int i=0;i<days;++i){
+    if(!advance_reporting(interface))break;
     if(!run_day(interface))break;
-    bool period_complete=day_%report_every_days_==0;
+    const bool period_complete=day_%report_every_days_==0;
     bool all_dead=std::none_of(agents_.begin(),agents_.end(),[](const Agent&a){return a.alive;});
     if(all_dead){
       logger_.message("Simulation arrêtée : tous les personnages sont morts.");
@@ -1610,89 +1789,10 @@ SimulationRunResult Simulation::run(int days,int delay_ms,int render_every_days,
     if(!interface&&render_every_days>0&&day_%render_every_days==0)
       render(date_,simulation_cycle_,climate_,world_,agents_,logger_);
 
-    bool opening_validation_window=false;
-    if(period_complete&&!validation_pending_){
-      std::cout << "\n=== FENETRE IA : " << calendar_label(date_) << " / Jour absolu " << day_ << " / Cycle elementaire "
-                << simulation_cycle_ << " ===\n" << std::flush;
-      if(!reporter_||!reporter_->enabled()){
-        std::cout << "API désactivée : aucun appel à effectuer.\n" << std::flush;
-      } else {
-        const auto total_calls=agents_.size()*2;
-        std::size_t call_number=0;
-        for(auto& agent:agents_){
-          auto& history=action_history_[agent.id];
-          std::cout << "Appel " << ++call_number << "/" << total_calls
-                    << " — bilan de " << agent.name << " (en cours...)\n" << std::flush;
-          const PeriodContext period_context{date_,climate_,logger_.period_memories(agent.id,12)};
-          auto report_result=run_with_activity(interface,
-              {UiActivityKind::PeriodReport,date_,simulation_cycle_,agent.id,agent.name,
-               call_number,total_calls,0},
-              [&]{return reporter_->report_period(simulation_cycle_,day_,agent,history,period_context);});
-          auto report=std::move(report_result.payload);
-          std::cout << "Appel " << call_number << "/" << total_calls << " — bilan de "
-                    << agent.name << (report.is_null()?" indisponible":" terminé");
-          if(report.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
-          std::cout << "\n" << std::flush;
-          if(!report.is_null()) logger_.ai_report(simulation_cycle_,day_,agent,report,date_,climate_);
-          if(!report_result.interface_open){stop_requested=true;break;}
-
-          std::cout << "Appel " << ++call_number << "/" << total_calls
-                    << " — demande d'évolution pour " << agent.name << " (en cours...)\n" << std::flush;
-          const EvolutionContext evolution_context{active_world_mechanisms(),
-              logger_.evolution_memory(24),available_actions(agent,world_,agents_,day_,
-                  day_phase_for(cycle_in_day_,cycles_per_day_))};
-          auto request_result=run_with_activity(interface,
-              {UiActivityKind::EvolutionRequest,date_,simulation_cycle_,agent.id,agent.name,
-               call_number,total_calls,0},
-              [&]{return reporter_->request_evolution(simulation_cycle_,day_,agent,history,report,
-                                                       evolution_context);});
-          auto request=std::move(request_result.payload);
-          std::cout << "Appel " << call_number << "/" << total_calls << " — demande d'évolution pour "
-                    << agent.name << (request.is_null()?" indisponible":" terminée");
-          if(request.is_null()&&!reporter_->last_error().empty())std::cout << "\n  Diagnostic API : " << reporter_->last_error();
-          std::cout << "\n" << std::flush;
-          if(!request.is_null()) logger_.ai_feature_request(simulation_cycle_,day_,agent,report,request);
-          if(!request_result.interface_open){stop_requested=true;break;}
-          history.clear();
-        }
-        if(stop_requested)
-          logger_.message("Interface utilisateur fermée pendant la fenêtre IA.");
-        else
-          std::cout << "Fenêtre IA terminée : " << total_calls << " appels tentés.\n" << std::flush;
-      }
-      if(stop_requested)break;
-      const auto constraint=devil_.draw(day_,simulation_cycle_,world_,agents_,logger_.known_evolution_keys());
-      if(constraint){
-        const auto id=logger_.devil_constraint(simulation_cycle_,day_,*constraint);
-        if(!id.empty())std::cout << "\n=== APPARITION DU DIABLE ===\n"
-                                << "Une contrainte réelle est proposée : " << constraint->value("title","sans titre") << "\n"
-                                << "Elle attend la validation prévue par la configuration.\n" << std::flush;
-      }else{
-        std::cout << "Tirage du Diable : aucune apparition cette fenêtre.\n" << std::flush;
-      }
-      if(validation_gate){
-        validation_pending_=true;
-        validation_day_=day_;
-        validation_cycle_=simulation_cycle_;
-        opening_validation_window=true;
-      }
-    }
+    if(period_complete)schedule_ai_window(static_cast<bool>(validation_gate));
+    if(!advance_reporting(interface))break;
     save_checkpoint();
-    if(validation_gate&&validation_pending_){
-      const auto validation_state=validation_gate(validation_day_,validation_cycle_,opening_validation_window);
-      if(validation_state==ValidationWindowState::StopRequested){
-        logger_.message("Simulation arrêtée à la demande de la validation humaine.");
-        break;
-      }
-      if(validation_state==ValidationWindowState::Resolved){
-        validation_pending_=false;
-        validation_day_=0;
-        validation_cycle_=0;
-        save_checkpoint();
-        if(interface)delay_ms=std::clamp(interface->simulation_delay_ms(delay_ms),0,10000);
-        if(interface&&interface->restart_requested())return {true,days-i-1};
-      }
-    }
+    if(!advance_validation(validation_gate,interface,delay_ms))break;
     if(delay_ms>0){
       if(interface){if(!interface->idle_for(delay_ms)){logger_.message("Interface utilisateur fermée par l'utilisateur.");break;}}
       else std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));

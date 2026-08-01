@@ -112,12 +112,11 @@ int main() {
   assert(deferred.advance_window(4,960,false)==ValidationWindowState::Pending);
   assert(deferred_output.str().find("proposition(s) disponibles")!=std::string::npos);
 
-  setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
-  setenv("GOD_WAIT_TIMEOUT_SECONDS", "1", 1);
-  std::istringstream approval_input("1\na\no\n");
+  std::istringstream approval_input("1\na\n");
   std::ostringstream approval_output;
   HumanValidation approval(directory.string(), approval_input, approval_output);
-  assert(advance_until_resolved(approval,3,720)==ValidationWindowState::Resolved);
+  assert(approval.advance_window(3,720,true)==ValidationWindowState::Pending);
+  assert(approval.advance_window(3,720,false)==ValidationWindowState::Pending);
   assert(approval_output.str().find("doublon") != std::string::npos);
   std::ifstream approved(directory / "approved_feature_requests.jsonl");
   const std::string approved_content(std::istreambuf_iterator<char>(approved), {});
@@ -126,7 +125,7 @@ int main() {
   std::ifstream remaining(directory / "feature_requests.jsonl");
   assert(std::string(std::istreambuf_iterator<char>(remaining), {}).find("request-3") != std::string::npos);
   assert(std::filesystem::exists(directory / "evolution_runs/request-2/validation-record.json"));
-  assert(approval_output.str().find("=== SUIVI DE DIEU ===")==std::string::npos);
+  assert(approval.advance_window(3,720,false)==ValidationWindowState::Pending);
 
   std::filesystem::create_directories(directory / "evolution_runs/request-2");
   std::ofstream god_started(directory / "evolution_runs/request-2/god-started");
@@ -141,9 +140,8 @@ int main() {
   std::istringstream progress_input("");
   std::ostringstream progress_output;
   HumanValidation progress(directory.string(), progress_input, progress_output);
-  assert(progress.wait_for_evolution("request-2"));
+  assert(progress.poll_evolution("request-2")==ValidationWindowState::Pending);
   assert(progress_output.str().find("Dieu") != std::string::npos);
-  assert(progress_output.str().find("verified") != std::string::npos);
 
   std::ofstream activation(directory / "evolution_runs/request-2/activation.json");
   activation << R"({"status":"activated","commit":"abcdef"})" << '\n';
@@ -153,13 +151,11 @@ int main() {
   std::ostringstream graphical_output;
   HumanValidation graphical_progress(directory.string(), graphical_input, graphical_output,
                                      &tracking_interface);
-  assert(graphical_progress.wait_for_evolution("request-2"));
+  assert(graphical_progress.poll_evolution("request-2")==ValidationWindowState::Resolved);
   assert(!tracking_interface.updates.empty());
-  assert(tracking_interface.completion.stage==EvolutionProgressStage::Complete);
-  assert(tracking_interface.completion.successful);
-  assert(tracking_interface.completion.request_id=="request-2");
-  unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
-  unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
+  assert(tracking_interface.updates.back().stage==EvolutionProgressStage::Complete);
+  assert(tracking_interface.updates.back().successful);
+  assert(tracking_interface.updates.back().request_id=="request-2");
 
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory / "evolution_runs/graphical-approved");
@@ -185,27 +181,11 @@ int main() {
 
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory / "evolution_runs/queued-request");
-  setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
   std::istringstream queue_input("");
   std::ostringstream queue_output;
   HumanValidation queued(directory.string(), queue_input, queue_output);
-  assert(queued.wait_for_evolution("queued-request"));
-  assert(queue_output.str().find("file d'attente") != std::string::npos);
-  assert(queue_output.str().find("GOD_QUEUE_TIMEOUT_SECONDS") != std::string::npos);
-  assert(std::filesystem::exists(directory / "evolution_runs/queued-request/ui-queue-timeout"));
-  unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
-
-  std::filesystem::remove_all(directory);
-  std::filesystem::create_directories(directory / "evolution_runs/slow-request");
-  std::ofstream(directory / "evolution_runs/slow-request/god-started") << "started\n";
-  setenv("GOD_WAIT_TIMEOUT_SECONDS", "1", 1);
-  std::istringstream slow_input("");
-  std::ostringstream slow_output;
-  HumanValidation slow(directory.string(), slow_input, slow_output);
-  assert(slow.wait_for_evolution("slow-request"));
-  assert(slow_output.str().find("GOD_WAIT_TIMEOUT_SECONDS") != std::string::npos);
-  assert(std::filesystem::exists(directory / "evolution_runs/slow-request/ui-work-timeout"));
-  unsetenv("GOD_WAIT_TIMEOUT_SECONDS");
+  assert(queued.poll_evolution("queued-request")==ValidationWindowState::Pending);
+  assert(queue_output.str().find("attente") != std::string::npos);
 
   std::filesystem::remove_all(directory);
   const auto failed_run = directory / "evolution_runs/failed-request";
@@ -217,7 +197,7 @@ int main() {
   std::istringstream failed_input("");
   std::ostringstream failed_output;
   HumanValidation failed(directory.string(), failed_input, failed_output);
-  assert(!failed.wait_for_evolution("failed-request"));
+  assert(failed.poll_evolution("failed-request")==ValidationWindowState::Resolved);
   assert(failed_output.str().find("raison precise de l'echec") != std::string::npos);
   assert(failed_output.str().find("evolution_runs/failed-request") != std::string::npos);
 
@@ -280,9 +260,11 @@ int main() {
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory);
   std::ofstream(directory / "feature_requests.jsonl") << devil_request << '\n';
+  std::filesystem::create_directories(directory / "evolution_runs/devil-1");
+  std::ofstream(directory / "evolution_runs/devil-1/activation.json")
+      << R"({"status":"activated","commit":"abcdef"})" << '\n';
   setenv("DEVIL_AUTO_APPROVE", "1", 1);
-  setenv("GOD_QUEUE_TIMEOUT_SECONDS", "1", 1);
-  std::istringstream automatic_input("o\n");
+  std::istringstream automatic_input;
   std::ostringstream automatic_output;
   HumanValidation automatic(directory.string(), automatic_input, automatic_output);
   assert(advance_until_resolved(automatic,3,720)==ValidationWindowState::Resolved);
@@ -292,7 +274,6 @@ int main() {
   assert(devil_approved_content.find("devil-1") != std::string::npos);
   assert(devil_approved_content.find("devil_automatic") != std::string::npos);
   unsetenv("DEVIL_AUTO_APPROVE");
-  unsetenv("GOD_QUEUE_TIMEOUT_SECONDS");
 
   std::filesystem::remove_all(directory);
   std::filesystem::create_directories(directory);

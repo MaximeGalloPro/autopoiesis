@@ -13,9 +13,11 @@ Logger::Logger(const std::string& directory) : directory_(directory) {
   request_prefix_=(configured_run&&*configured_run?configured_run:std::string("run"))+"-"+std::to_string(now);
   std::error_code ec; std::filesystem::create_directories(directory,ec); readable_.open(directory+"/simulation.log",std::ios::app); structured_.open(directory+"/events.jsonl",std::ios::app);
 }
-void Logger::message(const std::string& line) { if(readable_) readable_<<line<<'\n'; recent_.push_back(line); if(recent_.size()>5) recent_.erase(recent_.begin()); }
+void Logger::message(const std::string& line) { std::lock_guard lock(mutex_); if(readable_) readable_<<line<<'\n'; recent_.push_back(line); if(recent_.size()>5) recent_.erase(recent_.begin()); }
+std::vector<std::string> Logger::recent() const { std::lock_guard lock(mutex_); return recent_; }
 void Logger::action_started(int simulation_cycle, int day, const Agent& agent,
                             const Decision& decision) {
+  std::lock_guard lock(mutex_);
   std::string reason=decision.reason;
   if(decision.type==DecisionType::Blocked) reason=decision.need+" : "+decision.obstacle;
   if(reason.empty()) reason="action "+(decision.type==DecisionType::Blocked?"bloquée":decision.action);
@@ -23,12 +25,14 @@ void Logger::action_started(int simulation_cycle, int day, const Agent& agent,
           " — "+agent.name+" : "+reason);
 }
 void Logger::feature_request(int simulation_cycle,int day,const Agent& agent,const Decision& decision) {
+  std::lock_guard lock(mutex_);
   std::string id=request_prefix_+"-day-"+std::to_string(day)+"-cycle-"+std::to_string(simulation_cycle)+"-"+agent.id+"-"+std::to_string(++request_counter_);
   json request={{"id",id},{"status","pending"},{"day",day},{"simulation_cycle",simulation_cycle},{"agent_id",agent.id},{"agent_name",agent.name},{"need",decision.need},{"obstacle",decision.obstacle},{"desired_result",decision.desired_result}};
   std::ofstream out(directory_+"/feature_requests.jsonl",std::ios::app); if(out) out<<request.dump()<<'\n';
   message("Demande humaine "+id+" — "+decision.desired_result);
 }
 void Logger::ai_report(int simulation_cycle,int day,const Agent& agent,const json& report,const CalendarDate& date,const ClimateState& climate) {
+  std::lock_guard lock(mutex_);
   json event={{"day",day},{"simulation_cycle",simulation_cycle},{"type","ai_period_report"},{"agent_id",agent.id},{"calendar",calendar_json(date)},{"climate",climate_json(climate)},{"report",report}};
   std::ofstream out(directory_+"/ai_reports.jsonl",std::ios::app); if(out) out<<event.dump()<<'\n';
   message("Bilan IA de "+agent.name+" : "+report.value("day_summary","indisponible"));
@@ -50,6 +54,7 @@ std::string compact_memory_sentence(const std::string& value) {
 }
 }
 json Logger::period_memories(const std::string& agent_id,std::size_t maximum) const {
+  std::lock_guard lock(mutex_);
   json memories=json::array();
   if(maximum==0)return memories;
   std::ifstream input(directory_+"/ai_reports.jsonl");
@@ -71,6 +76,7 @@ json Logger::period_memories(const std::string& agent_id,std::size_t maximum) co
   return memories;
 }
 json Logger::evolution_memory(std::size_t maximum) const {
+  std::lock_guard lock(mutex_);
   if(maximum==0)return json::array();
   const auto bounded=[](std::string value,std::size_t limit){
     if(value.size()<=limit)return value;
@@ -124,6 +130,7 @@ json Logger::evolution_memory(std::size_t maximum) const {
   return result;
 }
 void Logger::ai_feature_request(int simulation_cycle,int day,const Agent& agent,const json& report,const json& request) {
+  std::lock_guard lock(mutex_);
   std::string error;
   if(!validate_feature_request(request,error)) { message("Demande IA rejetee : "+error); return; }
   if(evolution_window_cycle_!=simulation_cycle){evolution_window_cycle_=simulation_cycle;evolution_keys_.clear();}
@@ -181,6 +188,7 @@ void Logger::ai_feature_request(int simulation_cycle,int day,const Agent& agent,
   message("Demande à Dieu à valider "+pending["id"].get<std::string>()+" : "+pending["title"].get<std::string>());
 }
 std::set<std::string> Logger::known_evolution_keys() const {
+  std::lock_guard lock(mutex_);
   std::set<std::string> keys;
   std::ifstream input(directory_+"/feature_requests.jsonl");
   std::string line;
@@ -190,6 +198,7 @@ std::set<std::string> Logger::known_evolution_keys() const {
   return keys;
 }
 std::string Logger::devil_constraint(int simulation_cycle,int day,const json& request) {
+  std::lock_guard lock(mutex_);
   std::string error;
   if(!validate_feature_request(request,error)){message("Contrainte du Diable rejetee : "+error);return {};}
   const auto evolution_key=request.value("evolution_key","");
@@ -207,6 +216,7 @@ std::string Logger::devil_constraint(int simulation_cycle,int day,const json& re
 }
 void Logger::event(int simulation_cycle,int day,const Agent& before,const Decision& d,
                    const std::string& result, bool succeeded) {
+  std::lock_guard lock(mutex_);
   std::string reason=d.reason;
   if(d.type==DecisionType::Blocked) reason=d.need+" : "+d.obstacle;
   json j={{"day",day},{"simulation_cycle",simulation_cycle},{"type","agent_action"},
