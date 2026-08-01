@@ -1,6 +1,8 @@
 #include "autopoiesis/simulation.hpp"
 #include <cassert>
+#include <condition_variable>
 #include <cstdlib>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -16,9 +18,21 @@ struct TimingDecider final : IDecider {
 
 struct TimingReporter final : ICycleReporter {
   std::vector<std::string> events;
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool first_call_started{};
+  bool release_first_call{};
 
   json report_period(int simulation_cycle, int day, const Agent& agent,
                      const std::vector<std::string>&) override {
+    {
+      std::unique_lock lock(mutex);
+      if(!first_call_started){
+        first_call_started=true;
+        condition.notify_all();
+        condition.wait(lock,[&]{return release_first_call;});
+      }
+    }
     events.push_back("report:" + agent.id + ":" + std::to_string(day) + ":" +
                      std::to_string(simulation_cycle));
     return {{"character_voice", agent.name},
@@ -35,71 +49,70 @@ struct TimingReporter final : ICycleReporter {
                      std::to_string(simulation_cycle));
     return nullptr;
   }
+
+  void wait_until_first_call_starts() {
+    std::unique_lock lock(mutex);
+    condition.wait(lock,[&]{return first_call_started;});
+  }
+
+  void release() {
+    std::lock_guard lock(mutex);
+    release_first_call=true;
+    condition.notify_all();
+  }
 };
 
 int main() {
-  setenv("CYCLES_PER_DAY", "240", 1);
-  setenv("REPORT_EVERY_DAYS", "3", 1);
+  setenv("CYCLES_PER_DAY", "4", 1);
+  setenv("REPORT_EVERY_DAYS", "1", 1);
 
   TimingDecider decider;
   Logger logger("/tmp/autopoiesis-timing-tests");
   TimingReporter reporter;
   Simulation simulation(42, decider, logger, &reporter);
 
-  simulation.run(2, 0, 0);
-  assert(reporter.events.empty());
-  assert(decider.calls["a1"] == 120);
-  assert(decider.calls["a2"] == 120);
-  assert(decider.calls["a3"] == 120);
-
   simulation.run(1, 0, 0);
-  assert(reporter.events.size() == 6);
-  assert(decider.calls["a1"] == 180);
-  assert(decider.calls["a2"] == 180);
-  assert(decider.calls["a3"] == 180);
-  assert(reporter.events[0] == "report:a1:3:720");
-  assert(reporter.events[1] == "request:a1:3:720");
-  assert(reporter.events[2] == "report:a2:3:720");
-  assert(reporter.events[3] == "request:a2:3:720");
-  assert(reporter.events[4] == "report:a3:3:720");
-  assert(reporter.events[5] == "request:a3:3:720");
+  reporter.wait_until_first_call_starts();
+
+  // The first report remains blocked, but day two and day three still execute all ticks.
+  simulation.run(2, 0, 0);
+  assert(simulation.date().absolute_day == 3);
+  assert(simulation.simulation_cycle() == 12);
+  assert(decider.calls["a1"] == 3);
+  assert(decider.calls["a2"] == 3);
+  assert(decider.calls["a3"] == 3);
+
+  reporter.release();
+  simulation.wait_for_reporting_idle();
+  assert(reporter.events.size() == 12);
+  assert(reporter.events[0] == "report:a1:1:4");
+  assert(reporter.events[1] == "request:a1:1:4");
+  assert(reporter.events[2] == "report:a2:1:4");
+  assert(reporter.events[3] == "request:a2:1:4");
+  assert(reporter.events[4] == "report:a3:1:4");
+  assert(reporter.events[5] == "request:a3:1:4");
+  assert(reporter.events[6] == "report:a1:2:8");
 
   int validation_opens = 0;
   int validation_polls = 0;
-  simulation.run(3, 0, 0, [&](int day, int simulation_cycle, bool open_window) {
+  Logger validation_logger("/tmp/autopoiesis-timing-validation-tests");
+  Simulation validation_simulation(42, decider, validation_logger);
+  validation_simulation.run(3, 0, 0, [&](int day, int simulation_cycle, bool open_window) {
     ++validation_polls;
-    assert(day == 6);
-    assert(simulation_cycle == 1440);
+    assert(day == 1);
+    assert(simulation_cycle == 4);
     if(open_window)++validation_opens;
     return ValidationWindowState::Pending;
   });
   assert(validation_opens == 1);
-  assert(validation_polls == 1);
-  assert(simulation.date().absolute_day == 6);
-  assert(reporter.events.size() == 12);
+  assert(validation_polls == 3);
+  assert(validation_simulation.date().absolute_day == 3);
+  assert(validation_simulation.simulation_cycle() == 12);
 
-  simulation.run(3, 0, 0, [&](int day, int simulation_cycle, bool open_window) {
-    ++validation_polls;
-    assert(day == 6);
-    assert(simulation_cycle == 1440);
-    assert(!open_window);
-    return ValidationWindowState::Pending;
-  });
-  assert(simulation.date().absolute_day == 9);
-  assert(validation_opens == 1);
-  assert(validation_polls == 4);
-  assert(reporter.events.size() == 12);
-
-  simulation.run(1, 0, 0, [](int, int, bool) {
+  validation_simulation.run(1, 0, 0, [](int, int, bool) {
     return ValidationWindowState::Resolved;
   });
-  assert(simulation.date().absolute_day == 10);
-
-  simulation.run(2, 0, 0, [](int, int, bool) {
-    return ValidationWindowState::Resolved;
-  });
-  assert(simulation.date().absolute_day == 12);
-  assert(reporter.events.size() == 18);
+  assert(validation_simulation.date().absolute_day == 4);
 
   unsetenv("CYCLES_PER_DAY");
   unsetenv("REPORT_EVERY_DAYS");

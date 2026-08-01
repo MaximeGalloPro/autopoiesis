@@ -1,7 +1,9 @@
 #pragma once
 
 #include "types.hpp"
+#include <chrono>
 #include <iosfwd>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -51,7 +53,9 @@ class HumanValidation {
   HumanValidation(std::string data_directory, std::istream& input, std::ostream& output,
                   IValidationInterface* interface = nullptr);
   ValidationWindowState advance_window(int day, int simulation_cycle, bool open_window);
-  bool wait_for_evolution(const std::string& request_id);
+  // Samples filesystem artefacts once and returns immediately. The simulation keeps ticking
+  // while an approved evolution is queued, compiled, verified, or rejected.
+  ValidationWindowState poll_evolution(const std::string& request_id);
 
  private:
   std::string data_directory_;
@@ -65,10 +69,17 @@ class HumanValidation {
     int simulation_cycle{};
     std::vector<json> requests;
     std::optional<json> devil_request;
+    std::optional<std::string> evolution_request_id;
     std::size_t selected_index{};
     bool prompt_dirty{true};
   };
   std::optional<ActiveWindow> active_window_;
+  struct EvolutionMonitor {
+    std::chrono::steady_clock::time_point queued_at;
+    std::optional<std::chrono::steady_clock::time_point> started_at;
+    std::string last_phase;
+  };
+  std::map<std::string,EvolutionMonitor> evolution_monitors_;
   std::optional<std::string> poll_command(const ValidationPrompt& prompt);
   ValidationWindowState advance_devil(ActiveWindow& window);
   ValidationWindowState advance_feature(ActiveWindow& window);

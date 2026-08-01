@@ -190,16 +190,18 @@ La monotonie augmente lors des échecs, attentes et passages répétés, puis di
 
 ### Fenêtre IA
 
-Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 2400 = 7200` ticks élémentaires. À la fin de cette fenêtre, chaque personnage déclenche deux appels et seulement deux : un bilan, puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Pour un nouveau monde utilisant cette horloge, aucun appel n'est déclenché avant le tick élémentaire `7200` et aucun retry HTTP ne doit ajouter un appel au quota.
+Une fenêtre IA regroupe `REPORT_EVERY_DAYS` journées. La configuration de référence est `REPORT_EVERY_DAYS=3`, donc `3 × 2400 = 7200` ticks élémentaires. À son échéance, le moteur fige les perceptions nécessaires dans un lot borné : chaque personnage y reçoit deux appels et seulement deux, un bilan puis une demande d'évolution liée. Avec trois personnages, cela fait six appels. Pour un nouveau monde utilisant cette horloge, aucun lot n'est déclenché avant le tick élémentaire `7200` et aucun retry HTTP ne doit ajouter un appel au quota.
 
 Après ces six appels, le Diable effectue son tirage local. Ce tirage et la création éventuelle de sa contrainte n'ajoutent aucun appel API. La validation du Diable est une étape séparée et ne consomme pas le choix unique parmi les trois propositions des personnages.
 
-Le monde ne s'arrête pas à la fin d'une fenêtre. L'API ne peut générer un
-nouveau lot que si le lot précédent a été entièrement traité par la décision
-humaine et que `CARD_REQUEST_COOLDOWN` est écoulé. Un seul appel réseau est
-actif à la fois ; une erreur est journalisée et ne relance pas une boucle
-automatique. Le compteur d'appels est persistant et l'interface demande une
-confirmation supplémentaire à chaque multiple de dix appels.
+Une fenêtre IA n'est jamais une garde de l'horloge. Un seul appel réseau du lot
+est actif à la fois, mais il s'exécute hors du tick ; le moteur continue donc
+ses cycles, ses besoins et ses décisions locales pendant le bilan, la demande,
+une erreur réseau ou une validation humaine. La file conserve au plus un lot
+actif et un lot différé ; lorsque ces deux places sont prises, une nouvelle
+échéance est journalisée mais n'ajoute aucun appel différé non borné. Les
+résultats sont réintégrés par le moteur dans les journaux `pending` seulement :
+ils ne modifient jamais l'état autoritaire du monde.
 L'interface présente trois cartes au foyer principal lorsqu'une demande est
 ouverte. Cliquer sur le feu avec son alerte ouvre l'overlay ; choisir une carte
 la retire immédiatement et rend le contrôle au monde. Une carte refusée est
@@ -229,7 +231,7 @@ moteur et soumis aux coûts et préconditions de la capacité.
 
 1. Le décideur IA propose ; le moteur d'exécution dispose.
 2. Les cycles élémentaires sont exécutés localement et continuellement ; les cartes sont générées périodiquement par un appel borné, sans que l'IA décide les actions quotidiennes.
-3. Aucun nouveau lot de trois cartes ne peut être demandé tant que le lot précédent n'est pas traité et que le délai de refroidissement n'est pas écoulé. La confirmation humaine intervient dans l'interface du foyer principal.
+3. La production IA reste bornée à un lot actif et un lot différé ; une demande humaine non traitée reste `pending` sans interrompre le monde. La confirmation humaine intervient dans l'interface du foyer principal.
 4. Aucune réponse textuelle, justification ou demande IA ne peut modifier directement une variable du monde.
 5. Toute action est refusée par défaut si elle est inconnue, mal paramétrée ou indisponible.
 6. Une erreur IA ou réseau ne doit pas arrêter la simulation.
@@ -248,7 +250,7 @@ moteur et soumis aux coûts et préconditions de la capacité.
 19. L’interface web observe un instantané après chaque cycle élémentaire ; elle ne conserve aucun état du monde faisant autorité et ne contourne jamais le validateur d'action ou la validation humaine. Le rendu terminal peut rester journalier sans modifier la cadence réelle du moteur. Une partie continue tant qu'un personnage vivant existe ; elle passe en état terminal lorsque toute la population est morte.
 20. Le rendu animé d'une fenêtre IA ne modifie ni le nombre ni l'ordre des appels : un seul appel réseau est actif à la fois, puis l'étape suivante commence après son retour.
 21. L'IA demandeuse reçoit avant sa proposition le catalogue des mécanismes actifs et une mémoire bornée des évolutions antérieures. Une nouvelle `evolution_key` ne rend jamais nouveau un mécanisme déjà proposé ou actif.
-22. Après l'activation d'une évolution, l'ancien binaire ne peut pas exécuter la journée suivante : il doit sauvegarder, recompiler, transférer l'exécution à la version activée, puis restaurer le checkpoint.
+22. Après l'activation d'une évolution, le binaire courant peut terminer ses ticks sur son checkpoint compatible. Le transfert vers la version activée est une opération explicite, séparée de l'horloge ; il ne suspend ni ne rembobine le monde.
 23. Toute évolution qui modifie un état persistant doit conserver la lecture de la version précédente du checkpoint ou fournir une migration déterministe couverte par un test.
 24. Pause et vitesse graphique ne changent ni l'ordre ni le nombre des cycles élémentaires. L'accélération peut réduire les rendus intermédiaires, jamais les décisions ou validations du moteur.
 25. Une ressource transportée appartient à exactement un emplacement : monde, inventaire d'un personnage ou réserve. Chaque transfert est une action locale validée et persistante.
@@ -314,7 +316,7 @@ n'est autorisé qu'en fallback lorsque la mémoire ne permet aucun chemin.
 
 ### Évolution contrôlée
 
-Une demande suit le flux `pending → approved → implementation → tests → verification → nouvelle version`. Aucune transition ne doit être implicite. `approved` autorise Dieu à travailler sur la demande ; il n'autorise pas à ignorer les tests ni à activer un résultat non vérifié.
+Une demande suit le flux `pending → approved → implementation → tests → verification → nouvelle version`. Aucune transition ne doit être implicite. `approved` autorise Dieu à travailler sur la demande ; il n'autorise pas à ignorer les tests ni à activer un résultat non vérifié. La surveillance de Dieu, de la compilation, des tests et d'un éventuel échec est un sondage non bloquant : le monde actif continue sur sa version courante pendant ce suivi.
 
 Une recommandation `reformulate` crée une nouvelle demande liée à la précédente. Le nombre maximal de reformulations est `VALIDATOR_MAX_REFORMULATIONS` et vaut `3` par défaut. Une demande qui dépasse cette limite devient `rejected` et ne peut pas être transmise à Dieu.
 
@@ -340,13 +342,13 @@ Journal généré pour chaque exécution de Dieu. Il décrit la demande approuv�
 
 Dans l'interface web, React présente les trois demandes les plus récentes sous forme de cartes à jouer. Le premier clic sélectionne une carte ; un second écran demande explicitement d'approuver, refuser ou revenir. Le navigateur ne modifie aucun journal lui-même : il transmet une commande structurée à Elysia, puis au moteur C++, qui la revalide et la remet à `HumanValidation`. En mode `--terminal`, le protocole historique reste disponible.
 
-L'arrivée d'une garde ne masque jamais l'observatoire : elle apparaît d'abord sous forme de rappel compact et le panneau de décision reste réductible, notamment sur mobile. Réduire ou ignorer visuellement ce panneau ne vaut ni reprise ni décision ; le moteur reste en attente jusqu'à une commande humaine explicite. Une fenêtre sans proposition peut être reprise directement depuis le rappel compact.
+L'arrivée d'une garde ne masque jamais l'observatoire : elle apparaît d'abord sous forme de rappel compact et le panneau de décision reste réductible, notamment sur mobile. Réduire ou ignorer visuellement ce panneau ne vaut ni décision ni transition : la demande reste `pending`, tandis que le moteur continue ses ticks. Une fenêtre sans proposition peut être close directement depuis le rappel compact.
 
-Après une approbation, l'interface web observe les mêmes artefacts que le suivi terminal et affiche les phases `file d'attente → préparation → TDD → compte rendu → vérification → activation`. Elle montre la durée et le dernier retour utile sans interpréter ni modifier le résultat. Une activation réussie se termine par une confirmation explicite avant la reprise de la simulation ; cette confirmation remplace l'ancien second écran générique « Reprendre ».
+Après une approbation, l'interface web observe les mêmes artefacts que le suivi terminal et affiche les phases `file d'attente → préparation → TDD → compte rendu → vérification → activation`. Elle montre la durée et le dernier retour utile sans interpréter ni modifier le résultat. Cette observation est rafraîchie sans bloquer la simulation ; une activation réussie prépare une version future mais ne force ni pause, ni reprise, ni remplacement du processus courant.
 
 Tout écran web de reprise expose le délai entre journées sous forme de slider borné de `0` à `10000 ms`. La valeur initiale vient de `SIMULATION_DELAY_MS`, puis le choix local s'applique aux journées suivantes du run sans modifier `.env`, le nombre de cycles ou le calendrier.
 
-Après approbation, elle persiste la transition puis attend le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. L'attente est divisée en deux délais indépendants : `GOD_QUEUE_TIMEOUT_SECONDS` (900 secondes par défaut) avant le démarrage effectif, puis `GOD_WAIT_TIMEOUT_SECONDS` (900 secondes par défaut) pour le workflow de Dieu. L'interface affiche régulièrement la phase et la durée écoulée. En cas de dépassement ou d'erreur, elle montre les dernières lignes des journaux utiles et indique le dossier d'artefacts complet ; un timeout laisse le daemon continuer en arrière-plan.
+Après approbation, elle persiste la transition puis sonde le workflow de Dieu lancé par le daemon d'évolution du même `./run.sh`. Elle affiche les phases et les artefacts disponibles, puis le résultat de la vérification ; elle n'exécute aucune règle du moteur et ne fusionne aucun worktree. Les délais `GOD_QUEUE_TIMEOUT_SECONDS` et `GOD_WAIT_TIMEOUT_SECONDS` bornent seulement cette observation : un dépassement ou un échec journalise le diagnostic et laisse le daemon poursuivre en arrière-plan, sans geler le monde.
 
 ### Interface web
 
@@ -381,21 +383,18 @@ générateurs pseudo-aléatoires. Il est écrit après chaque journée complète
 qu'avant la garde de validation. Les journaux narratifs ne remplacent jamais ce
 checkpoint.
 
-Après une activation réussie, l'interface affiche explicitement la phase
-« Recompilation ». La compilation s'exécute dans un processus enfant et publie
-ses détails dans `data/recompilation.log`, tandis qu'Elysia et le navigateur
-restent réactifs. Une compilation réussie conduit à un remplacement du backend
-C++ par la version construite : le même `run.sh`, le daemon, la passerelle
-Elysia et l'identifiant de budget API restent en place, tandis que la nouvelle
-image du moteur recharge le checkpoint. Le délai choisi et le nombre de
-journées restantes sont transmis explicitement.
+Après une activation réussie, l'interface peut afficher la phase
+« Recompilation » et ses détails dans `data/recompilation.log`. La compilation
+et le transfert vers la version construite sont des opérations explicites,
+séparées du run actif : Elysia, le navigateur et surtout l'horloge du monde
+restent réactifs. Le checkpoint compatible est préparé pour un redémarrage
+ultérieur, jamais imposé à la frontière d'une fenêtre IA.
 
-Le transfert reprend au premier cycle élémentaire de la journée suivante ; il
-ne rejoue ni la fenêtre IA ni la validation déjà terminée. Un checkpoint
-inconnu, incomplet ou incompatible provoque un arrêt explicite, jamais une
-réinitialisation silencieuse. `--new-world` est la seule commande normale qui
-autorise l'abandon volontaire de cet état. Si la compilation échoue, aucune
-nouvelle version n'est exécutée et le checkpoint reste intact.
+Un checkpoint inconnu, incomplet ou incompatible provoque un arrêt explicite,
+jamais une réinitialisation silencieuse. `--new-world` est la seule commande
+normale qui autorise l'abandon volontaire de cet état. Si la compilation échoue,
+aucune nouvelle version n'est exécutée et le checkpoint reste intact, tandis
+que le monde courant continue jusqu'à son arrêt explicite ou sa fin normale.
 
 ### Protocole d'intervention
 

@@ -64,6 +64,7 @@ int main() {
   CountingReporter reporter;
   Simulation reported(42, fake, logger, &reporter);
   reported.run(2, 0, 0);
+  reported.wait_for_reporting_idle();
   assert(reporter.calls == 6);
   assert(reporter.simulation_cycles[0] == 2400);
   assert(reporter.simulation_cycles[3] == 4800);
@@ -84,6 +85,7 @@ int main() {
   CountingReporter every_three;
   Simulation configured(42, fake, logger, &every_three);
   configured.run(3, 0, 0);
+  configured.wait_for_reporting_idle();
   assert(every_three.calls == 3);
   assert(every_three.simulation_cycles[0] == 7200);
   unsetenv("REPORT_EVERY_DAYS");

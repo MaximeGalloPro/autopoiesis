@@ -3,6 +3,7 @@
 #include "types.hpp"
 #include "decision.hpp"
 #include <fstream>
+#include <mutex>
 #include <set>
 #include <string>
 
@@ -24,8 +25,9 @@ class Logger {
   std::string devil_constraint(int simulation_cycle, int day, const json& request);
   std::set<std::string> known_evolution_keys() const;
   void message(const std::string& line);
-  const std::vector<std::string>& recent() const { return recent_; }
+  std::vector<std::string> recent() const;
  private:
+  mutable std::recursive_mutex mutex_;
   std::ofstream readable_, structured_; std::vector<std::string> recent_; std::string directory_, request_prefix_; unsigned long request_counter_{0};
   std::set<std::string> evolution_keys_;
   int evolution_window_cycle_{-1};

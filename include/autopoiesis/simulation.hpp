@@ -7,7 +7,10 @@
 #include "logger.hpp"
 #include "ui_model.hpp"
 #include "validation.hpp"
+#include <chrono>
+#include <deque>
 #include <functional>
+#include <future>
 
 namespace apo {
 struct PeriodContext {
@@ -86,8 +89,43 @@ class Simulation {
   bool feature_active(const std::string& key, int version = 0) const;
   bool activate_feature(const std::string& key, int version = 0);
   void save_checkpoint() const;
+  // Deliberately explicit: normal simulation ticks never wait for reporting work.
+  // It is useful to drain the bounded queue in deterministic tests or at a controlled shutdown.
+  void wait_for_reporting_idle(IUserInterface* interface = nullptr);
   friend struct SimulationTestAccess;
  private:
+  enum class ReporterTaskKind { PeriodReport, EvolutionRequest };
+  struct ReporterTask {
+    ReporterTaskKind kind{ReporterTaskKind::PeriodReport};
+    int day{};
+    int simulation_cycle{};
+    CalendarDate date;
+    ClimateState climate;
+    Agent agent;
+    std::vector<std::string> history;
+    PeriodContext period_context;
+    EvolutionContext evolution_context;
+    json report{nullptr};
+    std::size_t call_number{};
+    std::size_t total_calls{};
+  };
+  struct ReporterResult {
+    ReporterTask task;
+    json payload{nullptr};
+    std::string diagnostic;
+  };
+  struct AiWindow {
+    int day{};
+    int simulation_cycle{};
+    std::vector<ReporterTask> initial_reports;
+    std::size_t total_calls{};
+    std::size_t completed_calls{};
+    bool requires_validation{};
+  };
+  struct ValidationWindow {
+    int day{};
+    int simulation_cycle{};
+  };
   World world_; Group group_; std::vector<Agent> agents_; IDecider& decider_; Logger& logger_; ICycleReporter* reporter_; std::mt19937 rng_; Devil devil_;
   CalendarDate date_{date_from_absolute_day(1)};
   ClimateState climate_{climate_for(date_)};
@@ -104,7 +142,24 @@ class Simulation {
   bool validation_pending_{};
   int validation_day_{};
   int validation_cycle_{};
+  bool validation_window_opening_{};
+  std::optional<ValidationWindow> deferred_validation_window_;
+  std::optional<AiWindow> active_ai_window_;
+  std::optional<AiWindow> deferred_ai_window_;
+  std::deque<ReporterTask> reporter_queue_;
+  std::optional<ReporterTask> active_reporter_task_;
+  std::optional<std::future<ReporterResult>> active_reporter_future_;
+  std::chrono::steady_clock::time_point active_reporter_started_{};
   bool run_day(IUserInterface* interface);
+  void schedule_ai_window(bool requires_validation);
+  void activate_ai_window(AiWindow window);
+  void complete_ai_window();
+  bool advance_reporting(IUserInterface* interface);
+  void start_next_reporter_task();
+  void complete_reporter_task(ReporterResult result);
+  void queue_validation_window(int day, int simulation_cycle);
+  bool advance_validation(const ValidationGate& validation_gate, IUserInterface* interface,
+                          int& delay_ms);
   void load_checkpoint();
   Perception perceive(Agent&); void update_needs(Agent&); void advance_action_needs(Agent&, int action_index); std::string execute(Agent&, const Decision&);
   void update_health_conditions(Agent&);

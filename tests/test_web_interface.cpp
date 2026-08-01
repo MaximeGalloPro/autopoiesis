@@ -201,6 +201,12 @@ int main() {
   const auto completion_events=emitted_events(completion_output.str());
   assert(completion_events.at(1).at("type")=="evolution_completion");
 
+  std::istringstream deferred_completion_input;
+  std::ostringstream deferred_completion_output;
+  WebInterface deferred_completion(deferred_completion_input,deferred_completion_output,500,0);
+  assert(deferred_completion.request_evolution_completion(completed).empty());
+  assert(!deferred_completion.restart_requested());
+
   std::istringstream progress_input;
   std::ostringstream progress_output;
   WebInterface progress(progress_input,progress_output,500,0);
