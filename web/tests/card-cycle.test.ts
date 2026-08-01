@@ -362,4 +362,44 @@ describe("cycle de cartes", () => {
     const restored = new CardCycleCoordinator({ now: () => now, cooldownMs: 500, store });
     expect(await restored.snapshot()).toMatchObject({ call_count: 1, current_batch: { id: expect.any(String) } });
   });
+
+  test("reprend un checkpoint en pleine activation sans doubler l’appel ni l’activation", async () => {
+    let now = 20_000;
+    const store = new MemoryCardCycleStore();
+    const cycle = new CardCycleCoordinator({ now: () => now, cooldownMs: 500, store });
+
+    expect(await cycle.recordObservedCall("7200:period_report:a1:1")).toBe(true);
+    expect(await cycle.ingestEngineBatch("engine-7200", cards("milieu-cycle"))).toMatchObject({
+      kind: "generated",
+    });
+    expect(await cycle.recordEngineSelection("milieu-cycle-1")).toBe(true);
+    expect(await cycle.recordEngineDecision("milieu-cycle-1", "approve")).toBe(true);
+    expect(await cycle.beginActivation("milieu-cycle-1")).toBe(true);
+    expect(await cycle.snapshot()).toMatchObject({
+      stage: "activating",
+      call_count: 1,
+      current_batch: { id: "engine-7200", status: "activating" },
+    });
+
+    now = 20_100;
+    const restored = new CardCycleCoordinator({ now: () => now, cooldownMs: 500, store });
+    expect(await restored.snapshot()).toMatchObject({
+      stage: "activating",
+      call_count: 1,
+      current_batch: { id: "engine-7200", status: "activating" },
+    });
+    expect(await restored.recordObservedCall("7200:period_report:a1:1")).toBe(false);
+    expect(await restored.completeActivation("milieu-cycle-1", true)).toBe(true);
+    expect(await restored.completeActivation("milieu-cycle-1", true)).toBe(false);
+
+    const finished = await restored.snapshot();
+    expect(finished).toMatchObject({
+      stage: "ready",
+      call_count: 1,
+      phase: "cooldown",
+      current_batch: { id: "engine-7200", status: "activated" },
+    });
+    expect(finished.current_batch?.cards.filter((card) => card.status === "activated"))
+      .toHaveLength(1);
+  });
 });
