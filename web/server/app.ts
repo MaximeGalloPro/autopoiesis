@@ -196,6 +196,8 @@ function mountCardCycleRoutes(
       }
       const accepted = body.type === "acknowledge_call_alert"
         ? await cycle.acknowledgeCallAlert()
+        : body.type === "acknowledge_failure"
+          ? await cycle.acknowledgeFailure()
         : await cycle.recordCardDecision(body.card_id, body.decision);
       if (!accepted) {
         set.status = 409;

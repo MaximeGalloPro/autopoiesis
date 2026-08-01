@@ -3,6 +3,7 @@ import type {
   CardDecision,
   EngineCommand,
   EvolutionCard,
+  EvolutionProgress,
   EvolutionRequest,
   ValidationPrompt,
 } from "../src/protocol";
@@ -131,7 +132,32 @@ export class BackendCardCycleBridge {
         await this.cycle.recordEngineSelection(event.payload.selected_request_id);
       }
     }
+    if (event.type === "evolution_progress" && event.payload) {
+      await this.observeActivation(event.payload);
+    }
+    if (event.type === "evolution_completion" && event.payload) {
+      await this.observeActivation(event.payload);
+    }
     await this.publishSnapshot();
+  }
+
+  /** Le pont observe le verdict moteur ; il ne démarre ni ne stoppe le monde. */
+  private async observeActivation(progress: EvolutionProgress): Promise<void> {
+    switch (progress.stage) {
+      case "activating":
+        await this.cycle.beginActivation(progress.request_id);
+        break;
+      case "complete":
+        await this.cycle.completeActivation(progress.request_id, progress.successful, progress.detail);
+        break;
+      case "failed":
+      case "timed_out":
+        await this.cycle.completeActivation(progress.request_id, false, progress.detail || progress.message);
+        break;
+      default:
+        // queued → vérification est précisément l'étape persistante "validation".
+        break;
+    }
   }
 
   private async publishSnapshot(): Promise<void> {

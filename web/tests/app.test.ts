@@ -212,6 +212,30 @@ describe("BFF Elysia", () => {
     expect(manager.commands).toEqual([]);
   });
 
+  test("n’autorise la reprise après échec du cycle que par une commande humaine stricte", async () => {
+    const manager = new FakeManager();
+    const cycle = new CardCycleCoordinator({ cooldownMs: 0 });
+    await cycle.requestNextBatch(async () => {
+      throw new Error("fournisseur indisponible");
+    });
+    const app = createApp(manager as unknown as BackendProcessManager, {
+      serveStatic: false,
+      passwordAuth: false,
+      cardCycle: cycle,
+    });
+    const endpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/card-cycle/commands`;
+    const send = (body: unknown) => app.handle(new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }));
+
+    expect((await send({ type: "acknowledge_failure", extra: true })).status).toBe(422);
+    expect((await send({ type: "acknowledge_failure" })).status).toBe(202);
+    expect(await cycle.snapshot()).toMatchObject({ stage: "ready", failure: null });
+    expect(manager.commands).toEqual([]);
+  });
+
   test("raccorde les trois cartes du moteur aux routes réelles et persiste leur décision", async () => {
     const manager = new FakeManager();
     const cycle = new CardCycleCoordinator({ cooldownMs: 100 });
@@ -313,6 +337,93 @@ describe("BFF Elysia", () => {
     expect(manager.commands).toEqual([
       { type: "validation.select", request_id: "b" },
       { type: "validation.decision", request_id: "b", decision: "reject" },
+    ]);
+    bridge.stop();
+  });
+
+  test("observe l’activation sans jamais envoyer une commande de pause au monde", async () => {
+    const manager = new FakeManager();
+    const cycle = new CardCycleCoordinator({ cooldownMs: 100 });
+    const bridge = new BackendCardCycleBridge(manager as unknown as BackendProcessManager, cycle);
+    const app = createApp(manager as unknown as BackendProcessManager, {
+      serveStatic: false,
+      passwordAuth: false,
+      cardCycle: cycle,
+      cardCycleBridge: bridge,
+    });
+    const cards = ["a", "b", "c"].map((id) => ({
+      request_id: id,
+      title: `Carte ${id}`,
+      need: "Besoin observé",
+      obstacle: "Obstacle concret",
+      proposed_change: "Changement proposé",
+      mechanism: "Mécanisme déterministe",
+      acceptance_tests: ["Test exécutable"],
+      status: "pending" as const,
+    }));
+    manager.emit({
+      type: "validation",
+      payload: {
+        kind: "feature",
+        stage: "choose",
+        day: 3,
+        simulation_cycle: 7200,
+        requests: cards,
+        allowed_commands: ["1", "2", "3", "n", "q"],
+      },
+    });
+    await bridge.flush();
+
+    const endpoint = `http://localhost${BROWSER_TRANSPORT_PREFIX}/commands`;
+    for (const body of [
+      { type: "validation.select", request_id: "a" },
+      { type: "validation.decision", request_id: "a", decision: "approve" },
+    ]) {
+      expect((await app.handle(new Request(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }))).status).toBe(202);
+    }
+    await bridge.flush();
+    expect(await cycle.snapshot()).toMatchObject({ stage: "validating", phase: "validating" });
+
+    manager.emit({
+      type: "evolution_progress",
+      payload: {
+        stage: "activating",
+        request_id: "a",
+        message: "Activation en cours",
+        detail: "Commit prêt",
+        elapsed_seconds: 1,
+        successful: false,
+      },
+    });
+    await bridge.flush();
+    expect(await cycle.snapshot()).toMatchObject({ stage: "activating", phase: "activating" });
+
+    manager.emit({
+      type: "evolution_progress",
+      payload: {
+        stage: "complete",
+        request_id: "a",
+        message: "Activation terminée",
+        detail: "Version active",
+        elapsed_seconds: 2,
+        successful: true,
+      },
+    });
+    await bridge.flush();
+    const activated = await cycle.snapshot();
+    expect(activated).toMatchObject({
+      stage: "ready",
+      phase: "cooldown",
+      current_batch: { status: "activated" },
+    });
+    expect(activated.current_batch?.cards[0]).toMatchObject({ id: "a", status: "activated" });
+    expect(manager.commands).toEqual([
+      { type: "validation.select", request_id: "a" },
+      { type: "validation.decision", request_id: "a", decision: "approve" },
     ]);
     bridge.stop();
   });
