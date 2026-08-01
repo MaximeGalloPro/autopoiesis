@@ -62,9 +62,71 @@ bool World::take_iron_ore(Position p) { if(!in_bounds(p))return false;auto found
 bool World::campfire(Position p) const { if(!in_bounds(p))return false;const auto found=construction_cells_.find({p.x,p.y});return found!=construction_cells_.end()&&found->second.campfire; }
 bool World::adjacent_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return true;return false; }
 std::optional<Position> World::nearby_campfire(Position p) const { for(const auto neighbor:neighbors(p))if(campfire(neighbor))return neighbor;return std::nullopt; }
-bool World::place_campfire(Position p) { if(!in_bounds(p)||!passable(p)||campfire(p)||primary_campfire_)return false;construction_cells_[{p.x,p.y}].campfire=true;primary_campfire_=p;return true; }
+std::optional<Position> World::available_camp_chest_position(Position campfire_position) const {
+  for(const auto candidate:neighbors(campfire_position)){
+    if(!passable(candidate)||campfire(candidate)||buildings_.contains({candidate.x,candidate.y}))continue;
+    const bool occupied=std::any_of(construction_cells_.begin(),construction_cells_.end(),[&](const auto& entry){
+      return entry.second.camp_chest_position&&*entry.second.camp_chest_position==candidate;
+    });
+    if(!occupied)return candidate;
+  }
+  return std::nullopt;
+}
+bool World::place_campfire(Position p) {
+  if(!in_bounds(p)||!passable(p)||campfire(p)||primary_campfire_)return false;
+  const auto chest=available_camp_chest_position(p);
+  if(!chest)return false;
+  auto& cell=construction_cells_[{p.x,p.y}];
+  cell.campfire=true;
+  cell.camp_chest_position=*chest;
+  cell.camp_chest_level=1;
+  primary_campfire_=p;
+  return true;
+}
+std::optional<Position> World::camp_chest_position(Position p) const {
+  if(!in_bounds(p))return std::nullopt;
+  const auto found=construction_cells_.find({p.x,p.y});
+  if(found==construction_cells_.end()||!found->second.campfire||!found->second.camp_chest_position)return std::nullopt;
+  return found->second.camp_chest_position;
+}
+int World::camp_chest_level(Position p) const {
+  if(!camp_chest_position(p))return 0;
+  const auto level=construction_cells_.at({p.x,p.y}).camp_chest_level;
+  return std::clamp(level,1,2);
+}
+int World::camp_chest_capacity(Position p) const {
+  switch(camp_chest_level(p)){
+    case 1:return initial_camp_chest_capacity;
+    case 2:return upgraded_camp_chest_capacity;
+    default:return 0;
+  }
+}
+int World::camp_chest_occupation(Position p) const {
+  if(!camp_chest_position(p))return 0;
+  const auto& cell=construction_cells_.at({p.x,p.y});
+  int occupation=cell.wood_stockpile+cell.branch_stockpile+cell.iron_ore_stockpile+
+                 static_cast<int>(cell.food_stockpile.size());
+  for(const auto&[_,amount]:cell.crafted_stockpile)occupation+=amount;
+  return occupation;
+}
+bool World::camp_chest_has_space(Position p,int amount) const {
+  if(amount<=0)return false;
+  const int capacity=camp_chest_capacity(p);
+  const int occupation=camp_chest_occupation(p);
+  return occupation<=capacity&&amount<=capacity-occupation;
+}
+bool World::upgrade_camp_chest(Position p) {
+  if(camp_chest_level(p)!=1)return false;
+  auto& cell=construction_cells_.at({p.x,p.y});
+  if(cell.wood_stockpile<camp_chest_upgrade_wood_cost||
+     cell.branch_stockpile<camp_chest_upgrade_branch_cost)return false;
+  cell.wood_stockpile-=camp_chest_upgrade_wood_cost;
+  cell.branch_stockpile-=camp_chest_upgrade_branch_cost;
+  cell.camp_chest_level=2;
+  return true;
+}
 int World::stored_food(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:static_cast<int>(found->second.food_stockpile.size()); }
-bool World::store_food(Position p,const FoodItem& food) { if(!in_bounds(p)||!campfire(p)||food.nutrition<=0)return false;FoodItem stored=food;if(stored.shelf_life_days<=0)stored.shelf_life_days=food_shelf_life(stored.type);stored.age_days=std::max(0,stored.age_days);construction_cells_[{p.x,p.y}].food_stockpile.push_back(stored);return true; }
+bool World::store_food(Position p,const FoodItem& food) { if(!in_bounds(p)||!campfire(p)||food.nutrition<=0||!camp_chest_has_space(p,1))return false;FoodItem stored=food;if(stored.shelf_life_days<=0)stored.shelf_life_days=food_shelf_life(stored.type);stored.age_days=std::max(0,stored.age_days);construction_cells_[{p.x,p.y}].food_stockpile.push_back(stored);return true; }
 bool World::take_stored_food(Position p,FoodItem* food,const std::vector<FoodType>& preferences) { if(!in_bounds(p))return false;auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire||found->second.food_stockpile.empty())return false;auto& stock=found->second.food_stockpile;auto selected=stock.begin();auto rank=[&](FoodType type){const auto match=std::find(preferences.begin(),preferences.end(),type);return match==preferences.end()?static_cast<int>(preferences.size()):static_cast<int>(std::distance(preferences.begin(),match));};for(auto candidate=stock.begin()+1;candidate!=stock.end();++candidate){const auto candidate_score=std::tuple{rank(candidate->type),candidate->shelf_life_days-candidate->age_days,candidate->cooked?0:1};const auto selected_score=std::tuple{rank(selected->type),selected->shelf_life_days-selected->age_days,selected->cooked?0:1};if(candidate_score<selected_score)selected=candidate;}if(food)*food=*selected;stock.erase(selected);return true; }
 int World::raw_stored_food(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;return static_cast<int>(std::count_if(found->second.food_stockpile.begin(),found->second.food_stockpile.end(),[](const FoodItem& food){return !food.cooked;})); }
 int World::cooked_stored_food(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;return static_cast<int>(std::count_if(found->second.food_stockpile.begin(),found->second.food_stockpile.end(),[](const FoodItem& food){return food.cooked;})); }
@@ -72,13 +134,13 @@ bool World::cook_stored_food(Position p) { if(!in_bounds(p))return false;auto fo
 int World::age_stored_food() { int spoiled=0;for(auto&[_,cell]:construction_cells_){for(auto& food:cell.food_stockpile)++food.age_days;const auto before=cell.food_stockpile.size();std::erase_if(cell.food_stockpile,[](const FoodItem& food){return food.age_days>=food.shelf_life_days;});spoiled+=static_cast<int>(before-cell.food_stockpile.size());}return spoiled; }
 int World::stored_wood(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.wood_stockpile; }
 int World::stored_branches(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.branch_stockpile; }
-bool World::store_materials(Position p,int wood_amount,int branch_amount,int iron_amount) { if(!in_bounds(p)||!campfire(p)||wood_amount<0||branch_amount<0||iron_amount<0||wood_amount+branch_amount+iron_amount==0)return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile+=wood_amount;cell.branch_stockpile+=branch_amount;cell.iron_ore_stockpile+=iron_amount;return true; }
+bool World::store_materials(Position p,int wood_amount,int branch_amount,int iron_amount) { const long long amount=static_cast<long long>(wood_amount)+branch_amount+iron_amount;if(!in_bounds(p)||!campfire(p)||wood_amount<0||branch_amount<0||iron_amount<0||amount<=0||amount>std::numeric_limits<int>::max()||!camp_chest_has_space(p,static_cast<int>(amount)))return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile+=wood_amount;cell.branch_stockpile+=branch_amount;cell.iron_ore_stockpile+=iron_amount;return true; }
 int World::stored_iron_ore(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});return found==construction_cells_.end()?0:found->second.iron_ore_stockpile; }
 bool World::consume_stored_wood(Position p,int amount) { if(!in_bounds(p))return false;auto found=construction_cells_.find({p.x,p.y});if(amount<=0||found==construction_cells_.end()||!found->second.campfire||found->second.wood_stockpile<amount)return false;found->second.wood_stockpile-=amount;return true; }
 int World::stored_item(Position p,CraftItem item) const { return stored_item(p,craft_item_name(item)); }
 int World::stored_item(Position p,const std::string& item) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;const auto stored=found->second.crafted_stockpile.find(item);return stored==found->second.crafted_stockpile.end()?0:stored->second; }
 int World::stored_crafted_items(Position p) const { if(!in_bounds(p))return 0;const auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end())return 0;int total=0;for(const auto&[_,amount]:found->second.crafted_stockpile)total+=amount;return total; }
-std::vector<std::string> World::craftable_recipes(Position p) const { std::vector<std::string> available;if(!in_bounds(p)||!campfire(p))return available;const auto& cell=construction_cells_.at({p.x,p.y});for(const auto& recipe:crafting_recipes()){bool possible=cell.wood_stockpile>=recipe.wood&&cell.branch_stockpile>=recipe.branches&&cell.iron_ore_stockpile>=recipe.iron_ore;for(const auto&[item,amount]:recipe.items)possible=possible&&stored_item(p,item)>=amount;if(possible)available.push_back(recipe.key);}return available; }
+std::vector<std::string> World::craftable_recipes(Position p) const { std::vector<std::string> available;if(!in_bounds(p)||!campfire(p))return available;const auto& cell=construction_cells_.at({p.x,p.y});for(const auto& recipe:crafting_recipes()){bool possible=cell.wood_stockpile>=recipe.wood&&cell.branch_stockpile>=recipe.branches&&cell.iron_ore_stockpile>=recipe.iron_ore;int consumed=recipe.wood+recipe.branches+recipe.iron_ore;for(const auto&[item,amount]:recipe.items){possible=possible&&stored_item(p,item)>=amount;consumed+=amount;}const int occupation_after=camp_chest_occupation(p)-consumed+recipe.output_count;possible=possible&&occupation_after>=0&&occupation_after<=camp_chest_capacity(p);if(possible)available.push_back(recipe.key);}return available; }
 bool World::craft(Position p,const std::string& recipe_key) { if(!in_bounds(p))return false;const auto* action=ActionRegistry::defaults().action("craft_camp_item");if(!action||action->operation!="craft_recipe"||!campfire(p))return false;const auto* recipe=CapabilityRegistry::defaults().recipe(recipe_key);if(!recipe)return false;const auto available=craftable_recipes(p);if(std::find(available.begin(),available.end(),recipe_key)==available.end())return false;auto& cell=construction_cells_[{p.x,p.y}];cell.wood_stockpile-=recipe->wood;cell.branch_stockpile-=recipe->branches;cell.iron_ore_stockpile-=recipe->iron_ore;for(const auto&[item,amount]:recipe->items)cell.crafted_stockpile[item]-=amount;cell.crafted_stockpile[recipe->output]+=recipe->output_count;return true; }
 bool World::take_stored_item(Position p,CraftItem item) { return take_stored_item(p,craft_item_name(item)); }
 bool World::take_stored_item(Position p,const std::string& item) { if(!in_bounds(p))return false;auto found=construction_cells_.find({p.x,p.y});if(found==construction_cells_.end()||!found->second.campfire)return false;auto stored=found->second.crafted_stockpile.find(item);if(stored==found->second.crafted_stockpile.end()||stored->second<=0)return false;--stored->second;return true; }
@@ -186,9 +248,13 @@ json World::checkpoint() const {
   for(const auto&[position,cell]:construction_cells_){
     json stored=json::array();for(const auto& food:cell.food_stockpile)stored.push_back({{"type",static_cast<int>(food.type)},{"nutrition",food.nutrition},{"cooked",food.cooked},{"age_days",food.age_days},{"shelf_life_days",food.shelf_life_days}});
     json crafted=json::array();for(const auto&[item,amount]:cell.crafted_stockpile)if(amount>0)crafted.push_back({{"item",item},{"amount",amount}});
+    const json chest=cell.camp_chest_position?json{{"x",cell.camp_chest_position->x},
+                                                    {"y",cell.camp_chest_position->y},
+                                                    {"level",cell.camp_chest_level}}:json(nullptr);
     construction.push_back({{"x",position.first},{"y",position.second},{"wood",cell.wood},
       {"fibers",cell.fibers},{"shelter_level",cell.shelter_level},
       {"loose_branches",cell.loose_branches},{"campfire",cell.campfire},
+      {"camp_chest",chest},
       {"stored_wood",cell.wood_stockpile},{"stored_branches",cell.branch_stockpile},
       {"stored_iron_ore",cell.iron_ore_stockpile},
       {"crafted_stockpile",std::move(crafted)},
@@ -244,10 +310,25 @@ void World::restore_checkpoint(const json& state) {
   bool has_branch_state=false;
   for(const auto& value:state.at("construction")){
     has_branch_state=has_branch_state||value.contains("loose_branches");
-    ConstructionCell cell{value.at("wood").get<int>(),value.at("fibers").get<int>(),
-        value.at("shelter_level").get<int>(),value.value("loose_branches",0),
-        value.value("campfire",false),value.value("stored_wood",0),
-        value.value("stored_branches",0),value.value("stored_iron_ore",0),{}, {}};
+    ConstructionCell cell;
+    cell.wood=value.at("wood").get<int>();
+    cell.fibers=value.at("fibers").get<int>();
+    cell.shelter_level=value.at("shelter_level").get<int>();
+    cell.loose_branches=value.value("loose_branches",0);
+    cell.campfire=value.value("campfire",false);
+    cell.wood_stockpile=value.value("stored_wood",0);
+    cell.branch_stockpile=value.value("stored_branches",0);
+    cell.iron_ore_stockpile=value.value("stored_iron_ore",0);
+    const auto chest=value.value("camp_chest",json(nullptr));
+    if(!chest.is_null()){
+      const Position camp{value.at("x").get<int>(),value.at("y").get<int>()};
+      const Position chest_position{chest.at("x").get<int>(),chest.at("y").get<int>()};
+      const int chest_level=chest.value("level",1);
+      if(!cell.campfire||!in_bounds(chest_position)||distance(camp,chest_position)!=1||
+         chest_level<1||chest_level>2)throw std::runtime_error("checkpoint camp chest is invalid");
+      cell.camp_chest_position=chest_position;
+      cell.camp_chest_level=chest_level;
+    }
     for(const auto& crafted:value.value("crafted_stockpile",json::array())) {
       const auto& item=crafted.at("item");
       const std::string key=item.is_string()?item.get<std::string>():craft_item_name(static_cast<CraftItem>(item.get<int>()));
@@ -266,6 +347,13 @@ void World::restore_checkpoint(const json& state) {
   iron_ore_resources_=std::move(restored_iron);
   construction_cells_=std::move(restored_construction);
   buildings_=std::move(restored_buildings);
+  for(auto&[coordinates,cell]:construction_cells_)if(cell.campfire&&!cell.camp_chest_position){
+    const Position campfire_position{coordinates.first,coordinates.second};
+    const auto chest=available_camp_chest_position(campfire_position);
+    if(!chest)throw std::runtime_error("legacy checkpoint has no room for the camp chest");
+    cell.camp_chest_position=*chest;
+    cell.camp_chest_level=camp_chest_occupation(campfire_position)>initial_camp_chest_capacity?2:1;
+  }
   const auto ecology=state.value("ecology",json::object());
   ecology_={ecology.value("day",0),ecology.value("births",0),ecology.value("predations",0),
             ecology.value("regrown_food",0),ecology.value("depleted_patches",0),
