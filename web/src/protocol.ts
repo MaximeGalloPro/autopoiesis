@@ -133,6 +133,9 @@ export interface CarriedFood {
 export interface AgentState {
   id: string;
   name: string;
+  /** Métadonnées optionnelles : les anciennes versions du moteur ne les publient pas encore. */
+  age_days?: number;
+  generation?: number;
   position: Position;
   health: number;
   hunger: number;
@@ -179,6 +182,8 @@ export interface WorldSnapshot {
   paused: boolean;
   speed: SimulationSpeed;
   delay_ms: number;
+  /** Libellé observé facultatif ; le rendu conserve un repli déterministe quand il manque. */
+  camp_stage?: string;
   /** Compteur persistant fourni par l'adaptateur web quand le cycle de cartes est actif. */
   total_api_calls?: number;
   /** Signal de présentation : aucune décision de monde n'est portée par ce champ. */
@@ -375,6 +380,27 @@ function normalizedSeason(value: unknown): Season | null {
   return typeof value === "string" ? seasons[value] ?? null : null;
 }
 
+function nonNegativeInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined;
+}
+
+function normalizedCampStage(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const stage = value.trim();
+  return stage.length > 0 && stage.length <= 96 ? stage : undefined;
+}
+
+function normalizeAgentPopulationMetadata(value: Record<string, unknown>): Record<string, unknown> {
+  const { age_days: rawAgeDays, generation: rawGeneration, ...state } = value;
+  const ageDays = nonNegativeInteger(rawAgeDays);
+  const generation = nonNegativeInteger(rawGeneration);
+  return {
+    ...state,
+    ...(ageDays === undefined ? {} : { age_days: ageDays }),
+    ...(generation === undefined ? {} : { generation }),
+  };
+}
+
 function normalizeSnapshot(value: unknown, runtime: RuntimeStatus): WorldSnapshot | null {
   if (!isRecord(value) || value.width !== WORLD_WIDTH || value.height !== WORLD_HEIGHT
     || !Array.isArray(value.cells) || !Array.isArray(value.agents)
@@ -389,14 +415,17 @@ function normalizeSnapshot(value: unknown, runtime: RuntimeStatus): WorldSnapsho
       || !Array.isArray(entry.available_actions)
       || !entry.available_actions.every((action) => typeof action === "string")) return null;
     agents.push({
-      ...(entry.state as unknown as Omit<AgentState, "mood" | "available_actions">),
+      ...(normalizeAgentPopulationMetadata(entry.state) as Omit<AgentState, "mood" | "available_actions">),
       mood: entry.mood,
       available_actions: entry.available_actions,
     });
   }
 
+  const { camp_stage: rawCampStage, ...snapshotWithoutCampStage } = value;
+  const campStage = normalizedCampStage(rawCampStage);
   const snapshot = {
-    ...value,
+    ...snapshotWithoutCampStage,
+    ...(campStage === undefined ? {} : { camp_stage: campStage }),
     date: { ...value.date, season },
     agents,
     paused: runtime.paused,
